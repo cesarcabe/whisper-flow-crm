@@ -1,13 +1,15 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { CRMLayout } from '@/components/crm/CRMLayout';
+import { Helmet } from 'react-helmet-async';
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <>
+      <Helmet>
+        <title>CRM WhatsApp - Gerenciamento de Conversas</title>
+        <meta name="description" content="Sistema CRM integrado com WhatsApp para gerenciamento de conversas e contatos. Envie e receba mensagens em tempo real." />
+      </Helmet>
+      <CRMLayout />
+    </>
   );
 };
 
