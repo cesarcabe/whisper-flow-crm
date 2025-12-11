@@ -34,7 +34,9 @@ interface CreateContactDialogProps {
   onSubmit: (contact: {
     name: string;
     phone: string;
-    email?: string;
+    email: string | null;
+    avatar_url: string | null;
+    notes: string | null;
     status: 'active' | 'inactive' | 'blocked';
     tags: string[];
   }) => Promise<void>;
