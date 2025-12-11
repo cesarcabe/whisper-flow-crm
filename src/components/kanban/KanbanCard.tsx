@@ -86,7 +86,7 @@ export function KanbanCard({ card, onClick, isDragging = false }: KanbanCardProp
         <div className="flex items-center gap-2 pt-2 border-t border-border/30">
           <Avatar
             name={card.contact.name}
-            imageUrl={card.contact.avatar_url || undefined}
+            src={card.contact.avatar_url || undefined}
             size="sm"
           />
           <div className="flex-1 min-w-0">
