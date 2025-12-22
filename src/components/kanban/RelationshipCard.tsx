@@ -1,10 +1,10 @@
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { ContactWithClass } from '@/hooks/useContactClasses';
-import { Avatar } from '@/components/crm/Avatar';
-import { cn } from '@/lib/utils';
-import { MessageSquare, Phone, Mail } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ContactWithClass } from "@/hooks/useContactClasses";
+import { Avatar } from "@/components/crm/Avatar";
+import { cn } from "@/lib/utils";
+import { MessageSquare, Phone, Mail } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface RelationshipCardProps {
   contact: ContactWithClass;
@@ -36,9 +36,9 @@ export function RelationshipCard({ contact, onClick, isDragging = false }: Relat
       {...attributes}
       {...listeners}
       className={cn(
-        'bg-card rounded-lg p-3 shadow-sm border border-border/50 cursor-grab active:cursor-grabbing',
-        'hover:shadow-md hover:border-primary/30 transition-all duration-200',
-        dragging && 'opacity-50 shadow-xl rotate-2 scale-105'
+        "bg-card rounded-lg p-3 shadow-sm border border-border/50 cursor-grab active:cursor-grabbing",
+        "hover:shadow-md hover:border-primary/30 transition-all duration-200",
+        dragging && "opacity-50 shadow-xl rotate-2 scale-105",
       )}
       onClick={(e) => {
         if (!dragging) {
@@ -49,16 +49,10 @@ export function RelationshipCard({ contact, onClick, isDragging = false }: Relat
     >
       {/* Contact Info */}
       <div className="flex items-center gap-3">
-        <Avatar
-          name={contact.name}
-          src={contact.avatar_url || undefined}
-          size="md"
-        />
+        <Avatar name={contact.name} src={contact.avatar_url || undefined} size="md" />
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm truncate">{contact.name}</p>
-          <p className="text-xs text-muted-foreground truncate">
-            {contact.phone}
-          </p>
+          <p className="text-xs text-muted-foreground truncate">{contact.phone}</p>
         </div>
       </div>
 
@@ -66,14 +60,15 @@ export function RelationshipCard({ contact, onClick, isDragging = false }: Relat
       <div className="flex items-center gap-1 mt-3 pt-2 border-t border-border/30">
         <Button
           variant="ghost"
-          size="icon"
-          className="h-7 w-7"
+          size="sm"
+          className="h-7 gap-1 text-xs"
           onClick={(e) => {
             e.stopPropagation();
-            // Open conversation
+            onClick();
           }}
         >
-          <MessageSquare className="h-3.5 w-3.5" />
+          <MessageSquare className="h-3 w-3" />
+          Abrir Chat
         </Button>
         <Button
           variant="ghost"
