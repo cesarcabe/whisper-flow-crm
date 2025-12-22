@@ -21,22 +21,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const fetchWorkspace = async () => {
     if (!user) {
+      console.log('[Workspace] No user, clearing workspace');
       setWorkspace(null);
       setWorkspaceMember(null);
       setLoading(false);
       return;
     }
 
+    console.log('[Workspace] Fetching workspace for user:', user.id);
+
     try {
-      // Get user's workspace membership
+      // First, get user's workspace membership
       const { data: memberData, error: memberError } = await supabase
         .from('workspace_members')
-        .select(`
-          *,
-          workspace:workspaces(*)
-        `)
+        .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
+
+      console.log('[Workspace] Member data:', memberData, 'Error:', memberError);
 
       if (memberError) {
         console.error('[Workspace] Error fetching workspace member:', memberError);
@@ -53,18 +55,28 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           created_at: memberData.created_at,
         });
         
-        if (memberData.workspace) {
-          const ws = memberData.workspace as any;
+        // Fetch workspace separately to avoid RLS join issues
+        const { data: workspaceData, error: workspaceError } = await supabase
+          .from('workspaces')
+          .select('*')
+          .eq('id', memberData.workspace_id)
+          .maybeSingle();
+
+        console.log('[Workspace] Workspace data:', workspaceData, 'Error:', workspaceError);
+
+        if (workspaceData) {
           setWorkspace({
-            id: ws.id,
-            name: ws.name,
-            city: ws.city,
-            state: ws.state,
-            created_by: ws.created_by,
-            created_at: ws.created_at,
-            updated_at: ws.updated_at,
+            id: workspaceData.id,
+            name: workspaceData.name,
+            city: workspaceData.city,
+            state: workspaceData.state,
+            created_by: workspaceData.created_by,
+            created_at: workspaceData.created_at,
+            updated_at: workspaceData.updated_at,
           });
         }
+      } else {
+        console.log('[Workspace] No workspace membership found for user');
       }
     } catch (err) {
       console.error('[Workspace] Exception fetching workspace:', err);
