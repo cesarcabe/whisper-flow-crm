@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Pipeline } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Settings, Pencil, Trash2, LayoutGrid, MessageSquare, LogOut, User } from 'lucide-react';
+import { Plus, Settings, Pencil, Trash2, LayoutGrid, MessageSquare, LogOut, User, Users } from 'lucide-react';
 
 interface PipelineHeaderProps {
   pipelines: Pipeline[];
@@ -140,6 +141,13 @@ export function PipelineHeader({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem asChild>
+            <Link to="/workspace/admin" className="flex items-center">
+              <Users className="h-4 w-4 mr-2" />
+              Gerenciar Equipe
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onSignOut}>
             <LogOut className="h-4 w-4 mr-2" />
             Sair
