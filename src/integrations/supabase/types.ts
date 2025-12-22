@@ -951,6 +951,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_workspace_member: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: boolean
+      }
       recalc_customer_recurrence: {
         Args: { p_contact: string; p_workspace: string }
         Returns: undefined
