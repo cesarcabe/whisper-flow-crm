@@ -12,6 +12,9 @@ export type SegmentType = 'broadcast' | 'filter';
 export type CatalogStatus = 'active' | 'inactive';
 export type CatalogSendStatus = 'queued' | 'sending' | 'sent' | 'failed';
 
+// Board view types
+export type BoardViewType = 'relationship' | 'stage';
+
 // Workspace types
 export interface Workspace {
   id: string;
@@ -54,6 +57,7 @@ export interface Pipeline {
   description: string | null;
   color: string;
   created_by: string | null;
+  owner_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -62,6 +66,16 @@ export interface Stage {
   id: string;
   pipeline_id: string;
   workspace_id: string | null;
+  name: string;
+  color: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContactClass {
+  id: string;
+  workspace_id: string;
   name: string;
   color: string;
   position: number;
@@ -80,6 +94,7 @@ export interface Contact {
   status: ContactStatus;
   tags: string[]; // deprecated, use contact_tags
   notes: string | null;
+  contact_class_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -122,6 +137,7 @@ export interface Conversation {
   contact_id: string;
   whatsapp_number_id: string | null;
   pipeline_id: string | null;
+  stage_id: string | null;
   last_message_at: string | null;
   unread_count: number;
   is_typing: boolean;
@@ -250,4 +266,9 @@ export interface StageWithCards extends Stage {
 
 export interface PipelineWithStages extends Pipeline {
   stages: StageWithCards[];
+}
+
+// Extended types for Contact Classes (Relationship Board)
+export interface ContactClassWithContacts extends ContactClass {
+  contacts: Contact[];
 }

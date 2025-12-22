@@ -258,6 +258,44 @@ export type Database = {
           },
         ]
       }
+      contact_classes: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          position: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_classes_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_tags: {
         Row: {
           contact_id: string
@@ -307,6 +345,7 @@ export type Database = {
       contacts: {
         Row: {
           avatar_url: string | null
+          contact_class_id: string | null
           created_at: string
           email: string | null
           id: string
@@ -321,6 +360,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          contact_class_id?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -335,6 +375,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          contact_class_id?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -347,7 +388,15 @@ export type Database = {
           user_id?: string
           workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contacts_contact_class_id_fkey"
+            columns: ["contact_class_id"]
+            isOneToOne: false
+            referencedRelation: "contact_classes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       conversations: {
         Row: {
@@ -357,6 +406,7 @@ export type Database = {
           is_typing: boolean | null
           last_message_at: string | null
           pipeline_id: string | null
+          stage_id: string | null
           unread_count: number | null
           updated_at: string
           whatsapp_number_id: string | null
@@ -369,6 +419,7 @@ export type Database = {
           is_typing?: boolean | null
           last_message_at?: string | null
           pipeline_id?: string | null
+          stage_id?: string | null
           unread_count?: number | null
           updated_at?: string
           whatsapp_number_id?: string | null
@@ -381,6 +432,7 @@ export type Database = {
           is_typing?: boolean | null
           last_message_at?: string | null
           pipeline_id?: string | null
+          stage_id?: string | null
           unread_count?: number | null
           updated_at?: string
           whatsapp_number_id?: string | null
@@ -399,6 +451,13 @@ export type Database = {
             columns: ["pipeline_id"]
             isOneToOne: false
             referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "stages"
             referencedColumns: ["id"]
           },
           {
@@ -530,6 +589,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          owner_user_id: string | null
           updated_at: string
           workspace_id: string | null
         }
@@ -540,6 +600,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          owner_user_id?: string | null
           updated_at?: string
           workspace_id?: string | null
         }
@@ -550,10 +611,19 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          owner_user_id?: string | null
           updated_at?: string
           workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pipelines_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
