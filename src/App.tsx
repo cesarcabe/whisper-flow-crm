@@ -9,6 +9,7 @@ import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import WorkspaceAdmin from "./pages/WorkspaceAdmin";
+import AcceptInvitation from "./pages/AcceptInvitation";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -92,6 +93,7 @@ function AppRoutes() {
           </PublicRoute>
         }
       />
+      <Route path="/invite/:token" element={<AcceptInvitation />} />
       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
       <Route path="*" element={<NotFound />} />
     </Routes>

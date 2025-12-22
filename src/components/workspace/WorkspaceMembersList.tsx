@@ -1,8 +1,11 @@
 import { Users, Loader2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspaceMembers } from '@/hooks/useWorkspaceMembers';
+import { useWorkspaceInvitations } from '@/hooks/useWorkspaceInvitations';
 import { MemberCard } from './MemberCard';
 import { AddMemberDialog } from './AddMemberDialog';
+import { InviteMemberDialog } from './InviteMemberDialog';
+import { PendingInvitations } from './PendingInvitations';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export function WorkspaceMembersList() {
@@ -16,6 +19,13 @@ export function WorkspaceMembersList() {
     updateMemberRole,
     removeMember,
   } = useWorkspaceMembers();
+
+  const {
+    invitations,
+    loading: invitationsLoading,
+    sendInvitation,
+    cancelInvitation,
+  } = useWorkspaceInvitations();
 
   if (loading) {
     return (
@@ -51,8 +61,22 @@ export function WorkspaceMembersList() {
           </div>
         </div>
 
-        {isAdmin && <AddMemberDialog onAddMember={addMember} />}
+        {isAdmin && (
+          <div className="flex gap-2">
+            <InviteMemberDialog onInvite={sendInvitation} />
+            <AddMemberDialog onAddMember={addMember} />
+          </div>
+        )}
       </div>
+
+      {/* Pending Invitations */}
+      {isAdmin && (
+        <PendingInvitations
+          invitations={invitations}
+          loading={invitationsLoading}
+          onCancel={cancelInvitation}
+        />
+      )}
 
       {members.length === 0 ? (
         <Card>
