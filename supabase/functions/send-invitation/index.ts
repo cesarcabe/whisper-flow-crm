@@ -163,7 +163,7 @@ serve(async (req: Request): Promise<Response> => {
     console.log("[send-invitation] Sending email to:", email);
     
     const { error: emailError } = await resend.emails.send({
-      from: "CRM <onboarding@resend.dev>",
+      from: "NewFlow CRM <noreply@crm.newflow.me>",
       to: [email],
       subject: `Convite para ${workspaceName}`,
       html: `
