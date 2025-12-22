@@ -72,12 +72,12 @@ export function StageColumn({
         className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin min-h-[100px]"
       >
         <SortableContext
-          items={stage.conversations.map(c => c.id)}
+          items={stage.conversations.map(c => c.contact_id)}
           strategy={verticalListSortingStrategy}
         >
           {stage.conversations.map((conversation) => (
             <StageCard
-              key={conversation.id}
+              key={conversation.contact_id}
               conversation={conversation}
               onClick={() => onConversationClick(conversation)}
             />

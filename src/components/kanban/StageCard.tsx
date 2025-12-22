@@ -22,7 +22,7 @@ export function StageCard({ conversation, onClick, isDragging = false }: StageCa
     transform,
     transition,
     isDragging: isSortableDragging,
-  } = useSortable({ id: conversation.id });
+  } = useSortable({ id: conversation.contact_id });
 
   const style = {
     transform: CSS.Transform.toString(transform),

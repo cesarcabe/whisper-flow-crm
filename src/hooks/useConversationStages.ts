@@ -6,13 +6,13 @@ import { toast } from 'sonner';
 import { Stage, Pipeline } from '@/types/database';
 
 export interface ConversationWithStage {
-  id: string;
+  id: string | null; // null if no conversation exists yet
   contact_id: string;
   stage_id: string | null;
   pipeline_id: string | null;
   last_message_at: string | null;
   unread_count: number;
-  contact?: {
+  contact: {
     id: string;
     name: string;
     phone: string;
@@ -94,18 +94,21 @@ export function useConversationStages() {
         return;
       }
 
+      // Fetch ALL contacts (not just those with conversations)
+      const { data: contactsData, error: contactsError } = await supabase
+        .from('contacts')
+        .select('id, name, phone, email, avatar_url')
+        .eq('workspace_id', workspaceId);
+
+      if (contactsError) {
+        console.error('[ConversationStages] Error fetching contacts:', contactsError);
+        return;
+      }
+
       // Fetch conversations for this pipeline
       const { data: conversationsData, error: conversationsError } = await supabase
         .from('conversations')
-        .select(`
-          id,
-          contact_id,
-          stage_id,
-          pipeline_id,
-          last_message_at,
-          unread_count,
-          contact:contacts(id, name, phone, email, avatar_url)
-        `)
+        .select('id, contact_id, stage_id, pipeline_id, last_message_at, unread_count')
         .eq('workspace_id', workspaceId)
         .eq('pipeline_id', pipelineId);
 
@@ -114,29 +117,39 @@ export function useConversationStages() {
         return;
       }
 
-      // Build stages with conversations
+      // Create a map of contact_id -> conversation for quick lookup
+      const conversationsByContact = new Map<string, typeof conversationsData[0]>();
+      (conversationsData || []).forEach(conv => {
+        conversationsByContact.set(conv.contact_id, conv);
+      });
+
+      // Build contact entries with LEFT JOIN logic
+      const contactEntries: ConversationWithStage[] = (contactsData || []).map(contact => {
+        const conversation = conversationsByContact.get(contact.id);
+        return {
+          id: conversation?.id || null,
+          contact_id: contact.id,
+          stage_id: conversation?.stage_id || null,
+          pipeline_id: conversation?.pipeline_id || null,
+          last_message_at: conversation?.last_message_at || null,
+          unread_count: conversation?.unread_count || 0,
+          contact: contact,
+        };
+      });
+
+      // Build stages with contacts
       const stagesWithConversations: StageWithConversations[] = (stagesData || []).map(stage => ({
         ...stage,
-        conversations: (conversationsData || [])
-          .filter(conv => conv.stage_id === stage.id)
-          .map(conv => ({
-            ...conv,
-            contact: Array.isArray(conv.contact) ? conv.contact[0] : conv.contact,
-          })) as ConversationWithStage[],
+        conversations: contactEntries.filter(entry => entry.stage_id === stage.id),
       }));
 
-      // Add unassigned conversations (those without stage_id)
-      const unassignedConversations = (conversationsData || [])
-        .filter(conv => !conv.stage_id)
-        .map(conv => ({
-          ...conv,
-          contact: Array.isArray(conv.contact) ? conv.contact[0] : conv.contact,
-        })) as ConversationWithStage[];
+      // Add unassigned contacts (those without stage_id) to a virtual first position
+      const unassignedContacts = contactEntries.filter(entry => !entry.stage_id);
 
-      // If there are unassigned conversations, add them to the first stage or create a virtual "Sem Estágio" column
-      if (unassignedConversations.length > 0 && stagesWithConversations.length > 0) {
+      // If there are unassigned contacts, add them to the first stage
+      if (unassignedContacts.length > 0 && stagesWithConversations.length > 0) {
         stagesWithConversations[0].conversations = [
-          ...unassignedConversations,
+          ...unassignedContacts,
           ...stagesWithConversations[0].conversations,
         ];
       }
@@ -150,19 +163,38 @@ export function useConversationStages() {
     }
   };
 
-  const moveConversation = async (conversationId: string, newStageId: string) => {
-    if (!activePipeline) return false;
+  const moveConversation = async (contactId: string, newStageId: string, existingConversationId: string | null) => {
+    if (!activePipeline || !workspaceId) return false;
 
     try {
-      const { error } = await supabase
-        .from('conversations')
-        .update({ stage_id: newStageId })
-        .eq('id', conversationId);
+      if (existingConversationId) {
+        // Update existing conversation
+        const { error } = await supabase
+          .from('conversations')
+          .update({ stage_id: newStageId })
+          .eq('id', existingConversationId);
 
-      if (error) {
-        console.error('[ConversationStages] Error moving conversation:', error);
-        toast.error('Erro ao mover conversa');
-        return false;
+        if (error) {
+          console.error('[ConversationStages] Error moving conversation:', error);
+          toast.error('Erro ao mover conversa');
+          return false;
+        }
+      } else {
+        // Create new conversation for this contact
+        const { error } = await supabase
+          .from('conversations')
+          .insert({
+            contact_id: contactId,
+            stage_id: newStageId,
+            pipeline_id: activePipeline.id,
+            workspace_id: workspaceId,
+          });
+
+        if (error) {
+          console.error('[ConversationStages] Error creating conversation:', error);
+          toast.error('Erro ao criar conversa');
+          return false;
+        }
       }
 
       await fetchPipelineWithConversations(activePipeline.id);

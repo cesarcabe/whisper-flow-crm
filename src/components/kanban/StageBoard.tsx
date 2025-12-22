@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 
 interface StageBoardProps {
   pipeline: PipelineWithConversations;
-  onMoveConversation: (conversationId: string, newStageId: string) => Promise<boolean>;
+  onMoveConversation: (contactId: string, newStageId: string, existingConversationId: string | null) => Promise<boolean>;
   onConversationClick: (conversation: ConversationWithStage) => void;
   onAddStage: () => void;
   onEditStage: (stageId: string) => void;
@@ -49,11 +49,11 @@ export function StageBoard({
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    const conversationId = active.id as string;
+    const contactId = active.id as string;
 
-    // Find the conversation
+    // Find the contact entry by contact_id
     for (const stage of pipeline.stages) {
-      const conversation = stage.conversations.find(c => c.id === conversationId);
+      const conversation = stage.conversations.find(c => c.contact_id === contactId);
       if (conversation) {
         setActiveConversation(conversation);
         break;
@@ -67,8 +67,18 @@ export function StageBoard({
 
     if (!over) return;
 
-    const conversationId = active.id as string;
+    const contactId = active.id as string;
     const overId = over.id as string;
+
+    // Find the active conversation entry to get existing conversation id
+    let existingConversationId: string | null = null;
+    for (const stage of pipeline.stages) {
+      const entry = stage.conversations.find(c => c.contact_id === contactId);
+      if (entry) {
+        existingConversationId = entry.id;
+        break;
+      }
+    }
 
     // Determine target stage
     let targetStageId: string | null = null;
@@ -78,18 +88,18 @@ export function StageBoard({
     if (overStage) {
       targetStageId = overStage.id;
     } else {
-      // Check if dropped on a conversation
+      // Check if dropped on a contact entry
       for (const stage of pipeline.stages) {
-        const overConversation = stage.conversations.find(c => c.id === overId);
-        if (overConversation) {
+        const overEntry = stage.conversations.find(c => c.contact_id === overId);
+        if (overEntry) {
           targetStageId = stage.id;
           break;
         }
       }
     }
 
-    if (targetStageId && conversationId !== overId) {
-      await onMoveConversation(conversationId, targetStageId);
+    if (targetStageId && contactId !== overId) {
+      await onMoveConversation(contactId, targetStageId, existingConversationId);
     }
   };
 
