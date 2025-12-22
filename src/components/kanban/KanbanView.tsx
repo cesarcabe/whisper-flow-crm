@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useContacts } from '@/hooks/useContacts';
+import { useContactClasses } from '@/hooks/useContactClasses';
+import { useConversationStages } from '@/hooks/useConversationStages';
 import { useAuth } from '@/contexts/AuthContext';
 import { PipelineHeader } from './PipelineHeader';
 import { KanbanBoard } from './KanbanBoard';
+import { RelationshipBoard } from './RelationshipBoard';
+import { StageBoard } from './StageBoard';
 import { CRMLayout } from '@/components/crm/CRMLayout';
 import { CreatePipelineDialog } from './dialogs/CreatePipelineDialog';
 import { CreateStageDialog } from './dialogs/CreateStageDialog';
 import { CreateCardDialog } from './dialogs/CreateCardDialog';
 import { CreateContactDialog } from './dialogs/CreateContactDialog';
-import { Card } from '@/types/database';
-import { Loader2 } from 'lucide-react';
+import { Card, BoardViewType } from '@/types/database';
+import { Loader2, Users, TrendingUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,8 +43,25 @@ export function KanbanView() {
   } = usePipelines();
   
   const { contacts, createContact } = useContacts();
+  
+  const {
+    contactClasses,
+    contactsByClass,
+    unclassifiedContacts,
+    loading: classesLoading,
+    moveContact,
+    createContactClass,
+    deleteContactClass,
+  } = useContactClasses();
+
+  const {
+    activePipeline: stagePipeline,
+    loading: stagesLoading,
+    moveConversation,
+  } = useConversationStages();
 
   const [currentView, setCurrentView] = useState<'kanban' | 'chat'>('kanban');
+  const [boardType, setBoardType] = useState<BoardViewType>('relationship');
   
   // Dialog states
   const [showCreatePipeline, setShowCreatePipeline] = useState(false);
@@ -48,6 +70,7 @@ export function KanbanView() {
   const [showCreateContact, setShowCreateContact] = useState(false);
   const [showDeletePipeline, setShowDeletePipeline] = useState(false);
   const [showDeleteStage, setShowDeleteStage] = useState(false);
+  const [showCreateClass, setShowCreateClass] = useState(false);
   
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [stageToDelete, setStageToDelete] = useState<string | null>(null);
@@ -58,7 +81,6 @@ export function KanbanView() {
   };
 
   const handleEditStage = (stageId: string) => {
-    // TODO: Implement edit stage dialog
     console.log('[CRM Kanban] Edit stage:', stageId);
   };
 
@@ -68,16 +90,17 @@ export function KanbanView() {
   };
 
   const handleCardClick = (card: Card) => {
-    // TODO: Open card detail/conversation panel
     console.log('[CRM Kanban] Card clicked:', card);
   };
 
-  if (pipelinesLoading) {
+  const loading = pipelinesLoading || classesLoading || stagesLoading;
+
+  if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Carregando pipelines...</p>
+          <p className="text-muted-foreground">Carregando...</p>
         </div>
       </div>
     );
@@ -118,30 +141,53 @@ export function KanbanView() {
         onSignOut={signOut}
       />
 
+      {/* Board Type Toggle */}
+      <div className="px-4 py-2 border-b border-border flex items-center gap-2">
+        <span className="text-sm text-muted-foreground mr-2">Visualizar:</span>
+        <Button
+          variant={boardType === 'relationship' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setBoardType('relationship')}
+          className="gap-2"
+        >
+          <Users className="h-4 w-4" />
+          Relacionamento
+        </Button>
+        <Button
+          variant={boardType === 'stage' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setBoardType('stage')}
+          className="gap-2"
+        >
+          <TrendingUp className="h-4 w-4" />
+          Estágios de Venda
+        </Button>
+      </div>
+
       <main className="flex-1 overflow-hidden">
-        {activePipeline ? (
-          <KanbanBoard
-            pipeline={activePipeline}
-            onMoveCard={moveCard}
-            onCardClick={handleCardClick}
+        {boardType === 'relationship' ? (
+          <RelationshipBoard
+            contactClasses={contactClasses}
+            contactsByClass={contactsByClass}
+            unclassifiedContacts={unclassifiedContacts}
+            onMoveContact={moveContact}
+            onContactClick={(contact) => console.log('Contact clicked:', contact)}
+            onAddClass={() => setShowCreateClass(true)}
+            onEditClass={(id) => console.log('Edit class:', id)}
+            onDeleteClass={deleteContactClass}
+          />
+        ) : stagePipeline ? (
+          <StageBoard
+            pipeline={stagePipeline}
+            onMoveConversation={moveConversation}
+            onConversationClick={(conv) => console.log('Conversation clicked:', conv)}
             onAddStage={() => setShowCreateStage(true)}
             onEditStage={handleEditStage}
             onDeleteStage={handleDeleteStage}
-            onAddCard={handleAddCard}
           />
         ) : (
           <div className="h-full flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-muted-foreground mb-4">
-                Nenhum pipeline selecionado
-              </p>
-              <button
-                onClick={() => setShowCreatePipeline(true)}
-                className="text-primary hover:underline"
-              >
-                Criar novo pipeline
-              </button>
-            </div>
+            <p className="text-muted-foreground">Nenhum pipeline selecionado</p>
           </div>
         )}
       </main>
@@ -156,10 +202,15 @@ export function KanbanView() {
       />
 
       <CreateStageDialog
-        open={showCreateStage}
-        onOpenChange={setShowCreateStage}
+        open={showCreateStage || showCreateClass}
+        onOpenChange={(open) => {
+          setShowCreateStage(open);
+          setShowCreateClass(open);
+        }}
         onSubmit={async (name, color) => {
-          if (activePipeline) {
+          if (showCreateClass) {
+            await createContactClass(name, color);
+          } else if (activePipeline) {
             await createStage(activePipeline.id, name, color);
           }
         }}
@@ -190,13 +241,12 @@ export function KanbanView() {
         }}
       />
 
-      {/* Delete Pipeline Confirmation */}
       <AlertDialog open={showDeletePipeline} onOpenChange={setShowDeletePipeline}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deletar Pipeline?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. Todos os estágios e cards deste pipeline serão permanentemente deletados.
+              Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -215,13 +265,12 @@ export function KanbanView() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Stage Confirmation */}
       <AlertDialog open={showDeleteStage} onOpenChange={setShowDeleteStage}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deletar Estágio?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. Todos os cards neste estágio serão permanentemente deletados.
+              Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
