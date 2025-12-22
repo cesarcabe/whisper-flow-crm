@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -14,9 +15,10 @@ const queryClient = new QueryClient();
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { workspaceId, loading: workspaceLoading } = useWorkspace();
 
-  if (loading) {
+  if (authLoading || workspaceLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -26,6 +28,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  // If user has no workspace, show a message
+  if (!workspaceId) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-foreground mb-2">Sem Workspace</h2>
+          <p className="text-muted-foreground">Você precisa ser adicionado a um workspace para continuar.</p>
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;
@@ -83,7 +97,9 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-            <AppRoutes />
+            <WorkspaceProvider>
+              <AppRoutes />
+            </WorkspaceProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
