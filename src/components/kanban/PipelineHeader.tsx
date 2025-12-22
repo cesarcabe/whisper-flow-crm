@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Pipeline } from '@/types/database';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Plus, Settings, Pencil, Trash2, LayoutGrid, MessageSquare, LogOut, User, Users } from 'lucide-react';
+import { usePipelines } from '@/hooks/usePipelines';
 
 interface PipelineHeaderProps {
   pipelines: Pipeline[];
@@ -42,6 +53,27 @@ export function PipelineHeader({
   userName,
   onSignOut,
 }: PipelineHeaderProps) {
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const { updatePipeline } = usePipelines();
+
+  const handleOpenEditDialog = () => {
+    if (activePipeline) {
+      setEditName(activePipeline.name);
+      setEditDialogOpen(true);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!activePipeline || !editName.trim()) return;
+    setIsSaving(true);
+    await updatePipeline(activePipeline.id, { name: editName.trim() });
+    setIsSaving(false);
+    setEditDialogOpen(false);
+    onEditPipeline();
+  };
+
   return (
     <header className="h-16 bg-card border-b border-border flex items-center justify-between px-4 gap-4">
       {/* Left: Pipeline Selector */}
@@ -92,7 +124,7 @@ export function PipelineHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={onEditPipeline}>
+              <DropdownMenuItem onClick={handleOpenEditDialog}>
                 <Pencil className="h-4 w-4 mr-2" />
                 Editar Pipeline
               </DropdownMenuItem>
@@ -105,6 +137,34 @@ export function PipelineHeader({
           </DropdownMenu>
         )}
       </div>
+
+      {/* Edit Pipeline Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Pipeline</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="pipeline-name">Nome</Label>
+              <Input
+                id="pipeline-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Nome do pipeline"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={isSaving || !editName.trim()}>
+              {isSaving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Center: View Toggle */}
       <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
