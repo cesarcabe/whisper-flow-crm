@@ -2,22 +2,24 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Pipeline, Stage, Card, PipelineWithStages, StageWithCards } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
 
 export function usePipelines() {
   const { user } = useAuth();
+  const { workspaceId } = useWorkspace();
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [activePipeline, setActivePipeline] = useState<PipelineWithStages | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchPipelines = useCallback(async () => {
-    if (!user) return;
+    if (!user || !workspaceId) return;
 
     try {
       const { data, error } = await supabase
         .from('pipelines')
         .select('*')
-        .eq('created_by', user.id)
+        .eq('workspace_id', workspaceId)
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -37,10 +39,10 @@ export function usePipelines() {
     } finally {
       setLoading(false);
     }
-  }, [user, activePipeline]);
+  }, [user, workspaceId, activePipeline]);
 
   const fetchPipelineWithStages = async (pipelineId: string) => {
-    if (!user) return;
+    if (!user || !workspaceId) return;
 
     try {
       // Fetch pipeline
@@ -48,6 +50,7 @@ export function usePipelines() {
         .from('pipelines')
         .select('*')
         .eq('id', pipelineId)
+        .eq('workspace_id', workspaceId)
         .single();
 
       if (pipelineError) {
@@ -104,7 +107,7 @@ export function usePipelines() {
   };
 
   const createPipeline = async (name: string, description?: string) => {
-    if (!user) return null;
+    if (!user || !workspaceId) return null;
 
     try {
       const { data, error } = await supabase
@@ -112,6 +115,7 @@ export function usePipelines() {
         .insert({
           name,
           description,
+          workspace_id: workspaceId,
           created_by: user.id,
         })
         .select()
@@ -133,11 +137,14 @@ export function usePipelines() {
   };
 
   const updatePipeline = async (id: string, updates: Partial<Pipeline>) => {
+    if (!workspaceId) return false;
+
     try {
       const { error } = await supabase
         .from('pipelines')
         .update(updates)
-        .eq('id', id);
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
 
       if (error) {
         console.error('[CRM Kanban] Error updating pipeline:', error);
@@ -158,11 +165,14 @@ export function usePipelines() {
   };
 
   const deletePipeline = async (id: string) => {
+    if (!workspaceId) return false;
+
     try {
       const { error } = await supabase
         .from('pipelines')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
 
       if (error) {
         console.error('[CRM Kanban] Error deleting pipeline:', error);
@@ -184,6 +194,8 @@ export function usePipelines() {
 
   // Stage operations
   const createStage = async (pipelineId: string, name: string, color?: string) => {
+    if (!workspaceId) return false;
+
     try {
       // Get max position
       const maxPosition = activePipeline?.stages.reduce(
@@ -195,6 +207,7 @@ export function usePipelines() {
         .from('stages')
         .insert({
           pipeline_id: pipelineId,
+          workspace_id: workspaceId,
           name,
           color: color || '#6B7280',
           position: maxPosition + 1,
@@ -290,7 +303,7 @@ export function usePipelines() {
   };
 
   const createCard = async (stageId: string, contactId: string, title: string, description?: string) => {
-    if (!activePipeline) return null;
+    if (!activePipeline || !workspaceId) return null;
 
     try {
       // Get max position in stage
@@ -301,6 +314,7 @@ export function usePipelines() {
         .from('cards')
         .insert({
           stage_id: stageId,
+          workspace_id: workspaceId,
           contact_id: contactId,
           title,
           description,
@@ -372,10 +386,10 @@ export function usePipelines() {
   };
 
   useEffect(() => {
-    if (user) {
+    if (user && workspaceId) {
       fetchPipelines();
     }
-  }, [user, fetchPipelines]);
+  }, [user, workspaceId, fetchPipelines]);
 
   return {
     pipelines,

@@ -2,21 +2,23 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Contact } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
 
 export function useContacts() {
   const { user } = useAuth();
+  const { workspaceId } = useWorkspace();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchContacts = useCallback(async () => {
-    if (!user) return;
+    if (!user || !workspaceId) return;
 
     try {
       const { data, error } = await supabase
         .from('contacts')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .order('name', { ascending: true });
 
       if (error) {
@@ -31,10 +33,10 @@ export function useContacts() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, workspaceId]);
 
-  const createContact = async (contact: Omit<Contact, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
-    if (!user) return null;
+  const createContact = async (contact: Omit<Contact, 'id' | 'user_id' | 'workspace_id' | 'created_at' | 'updated_at'>) => {
+    if (!user || !workspaceId) return null;
 
     try {
       const { data, error } = await supabase
@@ -42,6 +44,7 @@ export function useContacts() {
         .insert({
           ...contact,
           user_id: user.id,
+          workspace_id: workspaceId,
         })
         .select()
         .single();
@@ -62,11 +65,14 @@ export function useContacts() {
   };
 
   const updateContact = async (id: string, updates: Partial<Contact>) => {
+    if (!workspaceId) return false;
+
     try {
       const { error } = await supabase
         .from('contacts')
         .update(updates)
-        .eq('id', id);
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
 
       if (error) {
         console.error('[CRM Kanban] Error updating contact:', error);
@@ -84,11 +90,14 @@ export function useContacts() {
   };
 
   const deleteContact = async (id: string) => {
+    if (!workspaceId) return false;
+
     try {
       const { error } = await supabase
         .from('contacts')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('workspace_id', workspaceId);
 
       if (error) {
         console.error('[CRM Kanban] Error deleting contact:', error);
@@ -106,10 +115,10 @@ export function useContacts() {
   };
 
   useEffect(() => {
-    if (user) {
+    if (user && workspaceId) {
       fetchContacts();
     }
-  }, [user, fetchContacts]);
+  }, [user, workspaceId, fetchContacts]);
 
   return {
     contacts,
