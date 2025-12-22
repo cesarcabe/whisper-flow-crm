@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import WorkspaceAdmin from "./pages/WorkspaceAdmin";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -72,6 +73,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Index />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/workspace/admin"
+        element={
+          <ProtectedRoute>
+            <WorkspaceAdmin />
           </ProtectedRoute>
         }
       />
