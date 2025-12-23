@@ -137,44 +137,45 @@ export function useWhatsappConnection() {
     }
   }, [workspaceId, user]);
 
-  const fetchQrCode = useCallback(async (): Promise<QrResponse> => {
+  const fetchQrCode = useCallback(async (whatsappNumberId?: string): Promise<QrResponse> => {
     if (!workspaceId) {
       return { ok: false, message: 'Workspace não encontrado' };
     }
+
+    console.log('[WhatsAppConnect] fetchQrCode:start', { workspaceId, whatsappNumberId });
 
     setLoadingQr(true);
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('whatsapp-get-qr', {
-        body: {},
-        method: 'GET',
-      });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
 
-      // Workaround: GET with query params
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-get-qr?workspace_id=${workspaceId}`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      const result = await response.json();
-
-      if (!result?.ok) {
-        throw new Error(result?.message || 'Erro ao obter QR Code');
+      if (!accessToken) {
+        throw new Error('Sessão expirada. Faça login novamente.');
       }
 
-      setQrCode(result.code || null);
-      setPairingCode(result.pairingCode || null);
+      // Use supabase.functions.invoke with POST and body
+      const { data, error: fnError } = await supabase.functions.invoke('whatsapp-get-qr', {
+        body: { workspace_id: workspaceId, whatsapp_number_id: whatsappNumberId },
+      });
 
-      return result as QrResponse;
+      console.log('[WhatsAppConnect] fetchQrCode:response', { data, error: fnError });
+
+      if (fnError) {
+        throw new Error(fnError.message || 'Erro ao obter QR Code');
+      }
+
+      if (!data?.ok) {
+        throw new Error(data?.message || 'Erro ao obter QR Code');
+      }
+
+      setQrCode(data.code || null);
+      setPairingCode(data.pairingCode || null);
+
+      return data as QrResponse;
     } catch (err: any) {
-      console.error('[useWhatsappConnection]', 'fetch_qr_error', err);
+      console.error('[WhatsAppConnect] fetchQrCode:error', err);
       setError(err.message || 'Erro ao obter QR Code');
       return { ok: false, message: err.message };
     } finally {
@@ -188,42 +189,24 @@ export function useWhatsappConnection() {
     }
 
     try {
-      // Try to call whatsapp-connection-status if exists
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-connection-status?workspace_id=${workspaceId}&whatsapp_number_id=${whatsappNumberId}`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      // Check database status directly
+      const { data, error } = await supabase
+        .from('whatsapp_numbers')
+        .select('status')
+        .eq('id', whatsappNumberId)
+        .single();
 
-      if (!response.ok) {
-        // Fallback: check database status
-        const { data, error } = await supabase
-          .from('whatsapp_numbers')
-          .select('status')
-          .eq('id', whatsappNumberId)
-          .single();
-
-        if (error || !data) {
-          return { status: 'DISCONNECTED' };
-        }
-
-        const s = (data.status || '').toLowerCase();
-        if (s === 'connected' || s === 'open') return { status: 'CONNECTED' };
-        if (s === 'pairing' || s === 'connecting' || s === 'qrcode') return { status: 'PAIRING' };
-        if (s === 'error' || s === 'close' || s === 'refused') return { status: 'ERROR' };
+      if (error || !data) {
         return { status: 'DISCONNECTED' };
       }
 
-      const result = await response.json();
-      return result as ConnectionStatus;
+      const s = (data.status || '').toLowerCase();
+      if (s === 'connected' || s === 'open') return { status: 'CONNECTED' };
+      if (s === 'pairing' || s === 'connecting' || s === 'qrcode') return { status: 'PAIRING' };
+      if (s === 'error' || s === 'close' || s === 'refused') return { status: 'ERROR' };
+      return { status: 'DISCONNECTED' };
     } catch (err: any) {
-      console.error('[useWhatsappConnection]', 'check_status_error', err);
-      // Fallback to DB check
+      console.error('[WhatsAppConnect] checkConnectionStatus:error', err);
       return { status: 'DISCONNECTED', message: err.message };
     }
   }, [workspaceId]);
