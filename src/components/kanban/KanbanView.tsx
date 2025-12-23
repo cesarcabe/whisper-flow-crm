@@ -444,12 +444,15 @@ export function KanbanView() {
             <Button
               onClick={async () => {
                 if (editClassId) {
-                  await updateContactClass(editClassId, {
-                    name: editClassName,
-                    color: editClassColor,
-                  });
+                  const { error } = await supabase
+                    .from('contact_classes')
+                    .update({ name: editClassName, color: editClassColor })
+                    .eq('id', editClassId);
+                  if (!error) {
+                    setShowEditClass(false);
+                    window.location.reload(); // TEMP: refresh to reload classes
+                  }
                 }
-                setShowEditClass(false);
               }}
             >
               Salvar

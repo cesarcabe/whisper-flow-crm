@@ -3,7 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { ContactWithClass } from "@/hooks/useContactClasses";
 import { Avatar } from "@/components/crm/Avatar";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Phone, Mail } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface RelationshipCardProps {
@@ -56,44 +56,22 @@ export function RelationshipCard({ contact, onClick, isDragging = false }: Relat
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="flex items-center gap-1 mt-3 pt-2 border-t border-border/30">
+      {/* Quick Action */}
+      <div className="flex justify-end mt-3 pt-2 border-t border-border/30">
         <Button
           variant="ghost"
           size="sm"
           className="h-7 gap-1 text-xs"
           onClick={(e) => {
             e.stopPropagation();
-            onClick();
+            window.dispatchEvent(new CustomEvent('crm:open-chat', {
+              detail: { contactId: contact.id, conversationId: null }
+            }));
           }}
         >
           <MessageSquare className="h-3 w-3" />
           Abrir Chat
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={(e) => {
-            e.stopPropagation();
-            window.open(`tel:${contact.phone}`);
-          }}
-        >
-          <Phone className="h-3.5 w-3.5" />
-        </Button>
-        {contact.email && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={(e) => {
-              e.stopPropagation();
-              window.open(`mailto:${contact.email}`);
-            }}
-          >
-            <Mail className="h-3.5 w-3.5" />
-          </Button>
-        )}
       </div>
     </div>
   );

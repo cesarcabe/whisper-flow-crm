@@ -79,16 +79,15 @@ export function StageCard({ conversation, onClick, isDragging = false }: StageCa
         </div>
       )}
 
-      {/* Last Message Time */}
-      {lastMessageTime && (
-        <div className="flex items-center gap-1 mt-3 pt-2 border-t border-border/30 text-xs text-muted-foreground">
-          <Clock className="h-3 w-3" />
-          {lastMessageTime}
-        </div>
-      )}
-
-      {/* Quick Action */}
-      <div className="flex justify-end mt-2">
+      {/* Last Message Time + Quick Action */}
+      <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/30">
+        {lastMessageTime && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            {lastMessageTime}
+          </div>
+        )}
+        <div className="flex-1" />
         <Button
           variant="ghost"
           size="sm"
