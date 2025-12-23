@@ -95,28 +95,37 @@ Deno.serve(async (req) => {
 
   const payload = await resp.json().catch(async () => ({ raw: await resp.text() }));
   
-  console.log('[Edge:whatsapp-get-qr] evolution response', { ok: resp.ok, status: resp.status });
+  // Log full response to debug
+  console.log('[Edge:whatsapp-get-qr] evolution FULL response', JSON.stringify(payload));
+  console.log('[Edge:whatsapp-get-qr] evolution status', { ok: resp.ok, status: resp.status });
 
   if (!resp.ok) {
     console.error('[Edge:whatsapp-get-qr] evolution error', payload);
     return json({ ok: false, step: "get_qr", status: resp.status, response: payload }, 500);
   }
 
-  // Save last QR
-  const qrCode = payload?.code ?? null;
+  // Evolution API may return QR in different formats:
+  // - payload.code (base64 image)
+  // - payload.base64 (base64 image)  
+  // - payload.qrcode.base64
+  // - payload.pairingCode (pairing code for linking)
+  const qrCode = payload?.code ?? payload?.base64 ?? payload?.qrcode?.base64 ?? null;
+  const pairingCode = payload?.pairingCode ?? payload?.qrcode?.pairingCode ?? null;
 
   await supabase
     .from("whatsapp_numbers")
     .update({ last_qr: qrCode ? String(qrCode) : null, updated_at: new Date().toISOString() })
     .eq("id", wa.id);
 
-  console.log('[Edge:whatsapp-get-qr] success', { hasQr: !!qrCode, hasPairingCode: !!payload?.pairingCode });
+  console.log('[Edge:whatsapp-get-qr] success', { hasQr: !!qrCode, hasPairingCode: !!pairingCode });
 
   return json({
     ok: true,
     instance_name: wa.instance_name,
-    pairingCode: payload?.pairingCode ?? null,
-    code: payload?.code ?? null,
+    pairingCode: pairingCode,
+    code: qrCode,
     count: payload?.count ?? null,
+    // Include raw response for debugging
+    _debug: payload,
   });
 });
