@@ -177,28 +177,24 @@ Deno.serve(async (req) => {
   }
 
   // 2) Persist mapping in Supabase and get the record ID
-  console.log('[Edge:whatsapp-create-instance] upserting whatsapp_number', { workspaceId, instanceName });
+  console.log('[Edge:whatsapp-create-instance] inserting whatsapp_number', { workspaceId, instanceName });
   
-  const { data: upsertData, error: upsertError } = await supabase.from("whatsapp_numbers").upsert(
-    {
-      workspace_id: workspaceId,
-      instance_name: instanceName,
-      internal_name: body?.internal_name || instanceName,
-      phone_number: phoneDigits || "",
-      status: "created",
-      user_id: body?.user_id || "system",
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "workspace_id,instance_name" },
-  ).select('id').single();
+  const { data: insertData, error: insertError } = await supabase.from("whatsapp_numbers").insert({
+    workspace_id: workspaceId,
+    instance_name: instanceName,
+    internal_name: body?.internal_name || instanceName,
+    phone_number: phoneDigits || "",
+    status: "created",
+    user_id: body?.user_id,
+  }).select('id').single();
 
-  if (upsertError) {
-    console.error('[Edge:whatsapp-create-instance] upsert error', upsertError.message);
-    return json({ ok: false, message: `Erro ao salvar conexão: ${upsertError.message}` }, 500);
+  if (insertError) {
+    console.error('[Edge:whatsapp-create-instance] insert error', insertError.message);
+    return json({ ok: false, message: `Erro ao salvar conexão: ${insertError.message}` }, 500);
   }
 
-  const whatsappNumberId = upsertData?.id;
-  console.log('[Edge:whatsapp-create-instance] upserted', { whatsappNumberId });
+  const whatsappNumberId = insertData?.id;
+  console.log('[Edge:whatsapp-create-instance] inserted', { whatsappNumberId });
 
   // 3) SET WEBHOOK (Evolution requires object "webhook" and property "enabled")
   const webhookPath = applyTemplate(PATH_SET_WEBHOOK, instanceName);
