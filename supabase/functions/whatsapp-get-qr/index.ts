@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
   // Otherwise, get the most recent one for the workspace
   let query = supabase
     .from("whatsapp_numbers")
-    .select("id, instance_name")
+    .select("id, instance_name, last_qr")
     .eq("workspace_id", workspaceId);
 
   if (whatsappNumberId) {
@@ -109,15 +109,24 @@ Deno.serve(async (req) => {
   // - payload.base64 (base64 image)  
   // - payload.qrcode.base64
   // - payload.pairingCode (pairing code for linking)
-  const qrCode = payload?.code ?? payload?.base64 ?? payload?.qrcode?.base64 ?? null;
-  const pairingCode = payload?.pairingCode ?? payload?.qrcode?.pairingCode ?? null;
+  let qrCode = payload?.code ?? payload?.base64 ?? payload?.qrcode?.base64 ?? null;
+  let pairingCode = payload?.pairingCode ?? payload?.qrcode?.pairingCode ?? null;
 
-  await supabase
-    .from("whatsapp_numbers")
-    .update({ last_qr: qrCode ? String(qrCode) : null, updated_at: new Date().toISOString() })
-    .eq("id", wa.id);
+  // If no QR from Evolution API, use the one saved from creation
+  if (!qrCode && wa.last_qr) {
+    console.log('[Edge:whatsapp-get-qr] using saved QR from database');
+    qrCode = wa.last_qr;
+  }
 
-  console.log('[Edge:whatsapp-get-qr] success', { hasQr: !!qrCode, hasPairingCode: !!pairingCode });
+  // Only update if we got a new QR from Evolution
+  if (payload?.code || payload?.base64 || payload?.qrcode?.base64) {
+    await supabase
+      .from("whatsapp_numbers")
+      .update({ last_qr: qrCode ? String(qrCode) : null, updated_at: new Date().toISOString() })
+      .eq("id", wa.id);
+  }
+
+  console.log('[Edge:whatsapp-get-qr] success', { hasQr: !!qrCode, hasPairingCode: !!pairingCode, fromDb: !!(wa.last_qr && !payload?.code) });
 
   return json({
     ok: true,

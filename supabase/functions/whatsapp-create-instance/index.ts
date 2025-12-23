@@ -176,6 +176,16 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Extract QR code from creation response (Evolution API returns it when qrcode: true)
+  const qrCode = createPayload?.qrcode?.base64 ?? createPayload?.qrcode?.code ?? createPayload?.base64 ?? createPayload?.code ?? null;
+  const pairingCode = createPayload?.qrcode?.pairingCode ?? createPayload?.pairingCode ?? null;
+  
+  console.log('[Edge:whatsapp-create-instance] creation response', { 
+    hasQr: !!qrCode, 
+    hasPairingCode: !!pairingCode,
+    responseKeys: Object.keys(createPayload || {})
+  });
+
   // 2) Persist mapping in Supabase and get the record ID
   console.log('[Edge:whatsapp-create-instance] inserting whatsapp_number', { workspaceId, instanceName });
   
@@ -186,6 +196,7 @@ Deno.serve(async (req) => {
     phone_number: phoneDigits || "",
     status: "disconnected",
     user_id: body?.user_id,
+    last_qr: qrCode ? String(qrCode) : null,
   }).select('id').single();
 
   if (insertError) {
@@ -224,6 +235,9 @@ Deno.serve(async (req) => {
     instance_name: instanceName,
     instance_token: token,
     phone_number: phoneDigits || null,
+    // Include QR code from creation response for immediate display
+    qr_code: qrCode,
+    pairing_code: pairingCode,
     webhook: {
       ok: webhookResp.ok,
       status: webhookResp.status,

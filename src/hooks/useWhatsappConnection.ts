@@ -19,6 +19,8 @@ interface CreateInstanceResponse {
   instance_name?: string;
   whatsapp_number_id?: string;
   message?: string;
+  qr_code?: string;
+  pairing_code?: string;
 }
 
 interface ConnectionStatus {
@@ -120,8 +122,18 @@ export function useWhatsappConnection() {
 
       console.log('[WhatsAppConnect] createInstance:success', { 
         instanceName: data.instance_name, 
-        whatsappNumberId: data.whatsapp_number_id 
+        whatsappNumberId: data.whatsapp_number_id,
+        hasQrCode: !!data.qr_code,
+        hasPairingCode: !!data.pairing_code
       });
+
+      // Store QR code from creation response if available
+      if (data.qr_code) {
+        setQrCode(data.qr_code);
+      }
+      if (data.pairing_code) {
+        setPairingCode(data.pairing_code);
+      }
 
       return data as CreateInstanceResponse;
     } catch (err: any) {
