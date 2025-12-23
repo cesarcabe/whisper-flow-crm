@@ -95,7 +95,9 @@ export function StageCard({ conversation, onClick, isDragging = false }: StageCa
           className="h-7 gap-1 text-xs"
           onClick={(e) => {
             e.stopPropagation();
-            onClick();
+            window.dispatchEvent(new CustomEvent('crm:open-chat', { 
+              detail: { contactId: conversation.contact_id, conversationId: conversation.id } 
+            }));
           }}
         >
           <MessageSquare className="h-3 w-3" />
