@@ -180,6 +180,20 @@ export function useConversationStages() {
           return false;
         }
       } else {
+        // Need a whatsapp_number_id to create a conversation - get first available
+        const { data: whatsappNumber } = await supabase
+          .from('whatsapp_numbers')
+          .select('id')
+          .eq('workspace_id', workspaceId)
+          .limit(1)
+          .maybeSingle();
+
+        if (!whatsappNumber) {
+          console.error('[ConversationStages] No WhatsApp number available');
+          toast.error('Configure um número WhatsApp primeiro');
+          return false;
+        }
+
         // Create new conversation for this contact
         const { error } = await supabase
           .from('conversations')
@@ -188,6 +202,7 @@ export function useConversationStages() {
             stage_id: newStageId,
             pipeline_id: activePipeline.id,
             workspace_id: workspaceId,
+            whatsapp_number_id: whatsappNumber.id,
           });
 
         if (error) {
