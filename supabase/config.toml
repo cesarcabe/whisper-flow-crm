@@ -5,3 +5,15 @@ verify_jwt = false
 
 [functions.accept-invitation]
 verify_jwt = false
+
+[functions.whatsapp-create-instance]
+verify_jwt = false
+
+[functions.evolution-webhook]
+verify_jwt = false
+
+[functions.provision-workspace]
+verify_jwt = false
+
+[functions.whatsapp-get-qr]
+verify_jwt = false
