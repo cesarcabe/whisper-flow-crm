@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAuth } from '@/contexts/AuthContext';
 
+const SUPABASE_URL = 'https://tiaojwumxgdnobknlyqp.supabase.co';
+
 interface QrResponse {
   ok: boolean;
   instance_name?: string;
@@ -51,14 +53,46 @@ export function useWhatsappConnection() {
   }, [stopPolling]);
 
   const createInstance = useCallback(async (internalName: string, phoneNumber?: string): Promise<CreateInstanceResponse> => {
-    if (!workspaceId || !user) {
-      return { ok: false, message: 'Workspace ou usuário não encontrado' };
+    console.log('[WhatsAppConnect] createInstance:start', { 
+      workspaceId, 
+      internalName, 
+      hasUser: !!user,
+      supabaseUrl: SUPABASE_URL 
+    });
+
+    if (!workspaceId) {
+      const errMsg = 'Workspace não encontrado. Faça login novamente.';
+      console.error('[WhatsAppConnect] createInstance:error', { reason: 'no_workspace_id' });
+      setError(errMsg);
+      return { ok: false, message: errMsg };
+    }
+
+    if (!user) {
+      const errMsg = 'Usuário não autenticado. Faça login novamente.';
+      console.error('[WhatsAppConnect] createInstance:error', { reason: 'no_user' });
+      setError(errMsg);
+      return { ok: false, message: errMsg };
     }
 
     setCreating(true);
     setError(null);
 
     try {
+      // Get current session for authorization
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !sessionData.session) {
+        console.error('[WhatsAppConnect] createInstance:session_error', { sessionError });
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+
+      const accessToken = sessionData.session.access_token;
+      console.log('[WhatsAppConnect] invoke:start', { 
+        functionName: 'whatsapp-create-instance',
+        hasAccessToken: !!accessToken,
+        payload: { workspace_id: workspaceId, internal_name: internalName, phone_number: phoneNumber || '' }
+      });
+
       const { data, error: fnError } = await supabase.functions.invoke('whatsapp-create-instance', {
         body: {
           workspace_id: workspaceId,
@@ -67,17 +101,36 @@ export function useWhatsappConnection() {
         },
       });
 
-      if (fnError) throw fnError;
+      console.log('[WhatsAppConnect] invoke:response', { data, error: fnError });
+
+      if (fnError) {
+        console.error('[WhatsAppConnect] invoke:error', { 
+          message: fnError.message, 
+          context: fnError.context,
+          name: fnError.name
+        });
+        throw new Error(fnError.message || 'Erro ao chamar Edge Function');
+      }
 
       if (!data?.ok) {
-        throw new Error(data?.message || 'Erro ao criar instância');
+        console.error('[WhatsAppConnect] invoke:api_error', { data });
+        throw new Error(data?.message || 'Erro ao criar instância WhatsApp');
       }
+
+      console.log('[WhatsAppConnect] createInstance:success', { 
+        instanceName: data.instance_name, 
+        whatsappNumberId: data.whatsapp_number_id 
+      });
 
       return data as CreateInstanceResponse;
     } catch (err: any) {
-      console.error('[useWhatsappConnection]', 'create_instance_error', err);
-      setError(err.message || 'Erro ao criar instância');
-      return { ok: false, message: err.message };
+      console.error('[WhatsAppConnect] createInstance:catch', { 
+        error: err.message, 
+        stack: err.stack 
+      });
+      const errorMsg = err.message || 'Erro ao criar instância. Verifique se a Edge Function está deployada.';
+      setError(errorMsg);
+      return { ok: false, message: errorMsg };
     } finally {
       setCreating(false);
     }
