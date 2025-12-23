@@ -98,6 +98,7 @@ export function useWhatsappConnection() {
           workspace_id: workspaceId,
           internal_name: internalName,
           phone_number: phoneNumber || '',
+          user_id: user.id,
         },
       });
 
