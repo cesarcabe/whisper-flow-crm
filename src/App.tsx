@@ -9,6 +9,7 @@ import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import WorkspaceAdmin from "./pages/WorkspaceAdmin";
+import WhatsappConversations from "./pages/WhatsappConversations";
 import AcceptInvitation from "./pages/AcceptInvitation";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
@@ -82,6 +83,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <WorkspaceAdmin />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/whatsapp/:whatsappNumberId/conversations"
+        element={
+          <ProtectedRoute>
+            <WhatsappConversations />
           </ProtectedRoute>
         }
       />
