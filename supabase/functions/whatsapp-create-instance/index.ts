@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
     instance_name: instanceName,
     internal_name: body?.internal_name || instanceName,
     phone_number: phoneDigits || "",
-    status: "created",
+    status: "disconnected",
     user_id: body?.user_id,
   }).select('id').single();
 
