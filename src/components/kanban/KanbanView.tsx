@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useContacts } from '@/hooks/useContacts';
@@ -102,6 +102,20 @@ export function KanbanView() {
   // Contact details dialog state
   const [showContactDetails, setShowContactDetails] = useState(false);
   const [selectedContact, setSelectedContact] = useState<any>(null);
+
+  // Listen for crm:open-chat event
+  useEffect(() => {
+    const handleOpenChat = (e: CustomEvent<{ contactId: string; conversationId: string | null }>) => {
+      console.log('crm:open-chat received', e.detail);
+      localStorage.setItem('crm:selectedContactId', e.detail.contactId);
+      if (e.detail.conversationId) {
+        localStorage.setItem('crm:selectedConversationId', e.detail.conversationId);
+      }
+      setCurrentView('chat');
+    };
+    window.addEventListener('crm:open-chat', handleOpenChat as EventListener);
+    return () => window.removeEventListener('crm:open-chat', handleOpenChat as EventListener);
+  }, []);
 
   const handleAddCard = (stageId: string) => {
     setSelectedStageId(stageId);
