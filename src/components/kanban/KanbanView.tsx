@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useContacts } from '@/hooks/useContacts';
 import { useContactClasses } from '@/hooks/useContactClasses';
@@ -377,10 +378,16 @@ export function KanbanView() {
             </Button>
             <Button
               onClick={async () => {
-                // TODO: Add updateStage to usePipelines hook if not available
-                // For now, stage updates would need to be added to the hook
-                console.log('Update stage:', editStageId, editStageName, editStageColor);
-                setShowEditStage(false);
+                if (editStageId) {
+                  const { error } = await supabase
+                    .from('stages')
+                    .update({ name: editStageName, color: editStageColor })
+                    .eq('id', editStageId);
+                  if (!error) {
+                    setShowEditStage(false);
+                    window.location.reload(); // TEMP: refresh to reload stages
+                  }
+                }
               }}
             >
               Salvar
