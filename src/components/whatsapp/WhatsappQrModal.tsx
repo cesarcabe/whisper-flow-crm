@@ -33,8 +33,13 @@ export function WhatsappQrModal({ open, onOpenChange, whatsappNumberId, onConnec
 
   useEffect(() => {
     if (open && whatsappNumberId) {
-      console.log('[WhatsappQrModal]', { whatsappNumberId, status: 'opening' });
-      fetchQrCode();
+      console.log('[WhatsappQrModal]', { whatsappNumberId, status: 'opening', hasQrCode: !!qrCode });
+      
+      // Only fetch QR if we don't already have one from creation
+      if (!qrCode) {
+        fetchQrCode(whatsappNumberId);
+      }
+      
       startPolling(whatsappNumberId, onConnected);
     }
 
@@ -43,7 +48,7 @@ export function WhatsappQrModal({ open, onOpenChange, whatsappNumberId, onConnec
         stopPolling();
       }
     };
-  }, [open, whatsappNumberId]);
+  }, [open, whatsappNumberId, qrCode]);
 
   const handleRetry = () => {
     setRetryCount(prev => prev + 1);
