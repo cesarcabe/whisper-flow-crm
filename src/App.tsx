@@ -14,6 +14,7 @@ import AcceptInvitation from "./pages/AcceptInvitation";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
+// QueryClient instance - stable reference
 const queryClient = new QueryClient();
 
 // Protected Route wrapper
