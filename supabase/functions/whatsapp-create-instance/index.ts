@@ -29,10 +29,15 @@ const PATH_CREATE = Deno.env.get("EVOLUTION_CREATE_INSTANCE_PATH") ?? "/instance
 const PATH_SET_WEBHOOK = Deno.env.get("EVOLUTION_SET_WEBHOOK_PATH") ?? "/webhook/set/{instanceName}";
 const WEBHOOK_URL = Deno.env.get("EVOLUTION_WEBHOOK_URL") ?? "";
 
-function json(data: unknown, status = 200) {
+function json(data: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+      ...extraHeaders 
+    },
   });
 }
 
@@ -78,15 +83,39 @@ async function safeJson(resp: Response) {
   }
 }
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 Deno.serve(async (req) => {
-  if (req.method !== "POST") return json({ ok: true });
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ ok: true }), { 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
+  }
+
+  console.log('[Edge:whatsapp-create-instance] start');
 
   // Basic config guards
   if (!EVO_BASE || !EVO_KEY) {
-    return json({ ok: false, message: "Missing EVOLUTION_BASE_URL or EVOLUTION_API_KEY secrets" }, 500);
+    console.error('[Edge:whatsapp-create-instance] missing secrets: EVO_BASE or EVO_KEY');
+    return new Response(JSON.stringify({ ok: false, message: "Configuração incompleta. Verifique as secrets da Evolution API." }), { 
+      status: 500, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
   }
   if (!WEBHOOK_URL) {
-    return json({ ok: false, message: "Missing EVOLUTION_WEBHOOK_URL secret" }, 500);
+    console.error('[Edge:whatsapp-create-instance] missing secret: WEBHOOK_URL');
+    return new Response(JSON.stringify({ ok: false, message: "Webhook URL não configurada. Verifique EVOLUTION_WEBHOOK_URL." }), { 
+      status: 500, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
   }
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
@@ -147,17 +176,29 @@ Deno.serve(async (req) => {
     );
   }
 
-  // 2) Persist mapping in Supabase
-  await supabase.from("whatsapp_numbers").upsert(
+  // 2) Persist mapping in Supabase and get the record ID
+  console.log('[Edge:whatsapp-create-instance] upserting whatsapp_number', { workspaceId, instanceName });
+  
+  const { data: upsertData, error: upsertError } = await supabase.from("whatsapp_numbers").upsert(
     {
       workspace_id: workspaceId,
       instance_name: instanceName,
-      phone_number: phoneDigits || null,
+      internal_name: body?.internal_name || instanceName,
+      phone_number: phoneDigits || "",
       status: "created",
+      user_id: body?.user_id || "system",
       updated_at: new Date().toISOString(),
     },
     { onConflict: "workspace_id,instance_name" },
-  );
+  ).select('id').single();
+
+  if (upsertError) {
+    console.error('[Edge:whatsapp-create-instance] upsert error', upsertError.message);
+    return json({ ok: false, message: `Erro ao salvar conexão: ${upsertError.message}` }, 500);
+  }
+
+  const whatsappNumberId = upsertData?.id;
+  console.log('[Edge:whatsapp-create-instance] upserted', { whatsappNumberId });
 
   // 3) SET WEBHOOK (Evolution requires object "webhook" and property "enabled")
   const webhookPath = applyTemplate(PATH_SET_WEBHOOK, instanceName);
@@ -167,22 +208,23 @@ Deno.serve(async (req) => {
     headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify({
       webhook: {
-        enabled: true, // ✅ required by your Evolution build
+        enabled: true,
         url: WEBHOOK_URL,
         webhook_by_events: true,
         webhook_base64: true,
         events: ["QRCODE_UPDATED", "MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE"],
-        // Some builds may ignore custom headers; we'll validate after first delivery.
         headers: { "x-api-key": wsKey.api_key },
       },
     }),
   });
 
   const webhookPayload = await safeJson(webhookResp);
+  console.log('[Edge:whatsapp-create-instance] webhook set', { ok: webhookResp.ok, status: webhookResp.status });
 
   return json({
     ok: true,
     workspace_id: workspaceId,
+    whatsapp_number_id: whatsappNumberId,
     instance_name: instanceName,
     instance_token: token,
     phone_number: phoneDigits || null,
