@@ -93,7 +93,7 @@ export function useConversations(whatsappNumberId: string | null) {
       supabase.removeChannel(channelRef.current);
     }
 
-    console.log('[RealtimeWhatsApp]', 'subscribed', { workspaceId, whatsappNumberId });
+    console.log('[Realtime]', 'subscribed', { workspaceId, whatsappNumberId });
 
     channelRef.current = supabase
       .channel(`conversations-${workspaceId}-${whatsappNumberId}`)
@@ -103,19 +103,21 @@ export function useConversations(whatsappNumberId: string | null) {
           event: '*',
           schema: 'public',
           table: 'conversations',
-          filter: `workspace_id=eq.${workspaceId}`,
+          filter: `whatsapp_number_id=eq.${whatsappNumberId}`,
         },
         (payload) => {
-          console.log('[RealtimeWhatsApp]', 'event', payload);
-          // Refetch on any conversation change
+          console.log('[Realtime]', 'event', { table: 'conversations', type: payload.eventType, id: (payload.new as any)?.id });
+          // Refetch on any conversation change (keeps preview in sync)
           fetchConversations();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[Realtime]', 'status', { channel: 'conversations', status, whatsappNumberId });
+      });
 
     return () => {
       if (channelRef.current) {
-        console.log('[RealtimeWhatsApp]', 'unsubscribed', { workspaceId, whatsappNumberId });
+        console.log('[Realtime]', 'unsubscribed', { workspaceId, whatsappNumberId });
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
