@@ -282,17 +282,46 @@ Deno.serve(async (req: Request) => {
   }
 
   // helper: upsert conversa 1:1 workspace+contact+whatsapp_number
-  async function upsertConversation(contactId: string, whatsappNumberId: string) {
-    // First check if conversation exists
-    const { data: existing } = await supabase
-      .from("conversations")
-      .select("id")
-      .eq("workspace_id", workspaceId)
-      .eq("contact_id", contactId)
-      .eq("whatsapp_number_id", whatsappNumberId)
-      .maybeSingle();
+  async function upsertConversation(contactId: string, whatsappNumberId: string, remoteJid: string | null) {
+    // Detect if it's a group chat
+    const isGroup = remoteJid ? remoteJid.endsWith('@g.us') : false;
+    
+    // First check if conversation exists by remote_jid (more accurate) or contact
+    let existing: any = null;
+    
+    if (remoteJid) {
+      const { data } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("workspace_id", workspaceId)
+        .eq("whatsapp_number_id", whatsappNumberId)
+        .eq("remote_jid", remoteJid)
+        .maybeSingle();
+      existing = data;
+    }
+    
+    if (!existing) {
+      const { data } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("workspace_id", workspaceId)
+        .eq("contact_id", contactId)
+        .eq("whatsapp_number_id", whatsappNumberId)
+        .maybeSingle();
+      existing = data;
+    }
 
-    if (existing) return existing.id as string;
+    if (existing) {
+      // Update remote_jid and is_group if not set
+      if (remoteJid) {
+        await supabase
+          .from("conversations")
+          .update({ remote_jid: remoteJid, is_group: isGroup })
+          .eq("id", existing.id)
+          .is("remote_jid", null);
+      }
+      return existing.id as string;
+    }
 
     const { data: conv, error } = await supabase
       .from("conversations")
@@ -300,6 +329,8 @@ Deno.serve(async (req: Request) => {
         workspace_id: workspaceId,
         contact_id: contactId,
         whatsapp_number_id: whatsappNumberId,
+        remote_jid: remoteJid,
+        is_group: isGroup,
       })
       .select("id")
       .single();
@@ -419,7 +450,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const contactId = await upsertContact(phone);
-      const conversationId = await upsertConversation(contactId, wa.id);
+      const conversationId = await upsertConversation(contactId, wa.id, remoteJid);
 
       // Auditoria (event log)
       await supabase.from("conversation_events").insert({

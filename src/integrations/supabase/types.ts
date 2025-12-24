@@ -461,9 +461,11 @@ export type Database = {
           contact_id: string
           created_at: string
           id: string
+          is_group: boolean | null
           is_typing: boolean | null
           last_message_at: string | null
           pipeline_id: string | null
+          remote_jid: string | null
           stage_id: string | null
           unread_count: number | null
           updated_at: string
@@ -474,9 +476,11 @@ export type Database = {
           contact_id: string
           created_at?: string
           id?: string
+          is_group?: boolean | null
           is_typing?: boolean | null
           last_message_at?: string | null
           pipeline_id?: string | null
+          remote_jid?: string | null
           stage_id?: string | null
           unread_count?: number | null
           updated_at?: string
@@ -487,9 +491,11 @@ export type Database = {
           contact_id?: string
           created_at?: string
           id?: string
+          is_group?: boolean | null
           is_typing?: boolean | null
           last_message_at?: string | null
           pipeline_id?: string | null
+          remote_jid?: string | null
           stage_id?: string | null
           unread_count?: number | null
           updated_at?: string

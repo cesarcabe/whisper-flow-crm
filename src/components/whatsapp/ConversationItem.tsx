@@ -4,6 +4,7 @@ import { ConversationWithContact } from '@/hooks/useConversations';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { Users } from 'lucide-react';
 
 interface ConversationItemProps {
   conversation: ConversationWithContact;
@@ -13,8 +14,11 @@ interface ConversationItemProps {
 
 export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
   const contact = conversation.contact;
+  const isGroup = (conversation as any).is_group === true;
   const name = contact?.name || 'Contato desconhecido';
-  const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const initials = isGroup 
+    ? 'GP' 
+    : name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   const lastMessageAt = conversation.last_message_at;
   const unreadCount = conversation.unread_count || 0;
 
@@ -27,15 +31,30 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
       onClick={onClick}
     >
       <Avatar className="h-12 w-12 flex-shrink-0">
-        <AvatarImage src={contact?.avatar_url || undefined} alt={name} />
-        <AvatarFallback className="bg-primary/10 text-primary">
-          {initials}
-        </AvatarFallback>
+        {isGroup ? (
+          <AvatarFallback className="bg-secondary/20 text-secondary">
+            <Users className="h-5 w-5" />
+          </AvatarFallback>
+        ) : (
+          <>
+            <AvatarImage src={contact?.avatar_url || undefined} alt={name} />
+            <AvatarFallback className="bg-primary/10 text-primary">
+              {initials}
+            </AvatarFallback>
+          </>
+        )}
       </Avatar>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
-          <h4 className="font-medium text-foreground truncate">{name}</h4>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <h4 className="font-medium text-foreground truncate">{name}</h4>
+            {isGroup && (
+              <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 shrink-0">
+                Grupo
+              </Badge>
+            )}
+          </div>
           {lastMessageAt && (
             <span className="text-xs text-muted-foreground flex-shrink-0">
               {formatDistanceToNow(new Date(lastMessageAt), { addSuffix: false, locale: ptBR })}

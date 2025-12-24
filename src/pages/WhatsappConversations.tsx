@@ -104,6 +104,7 @@ export default function WhatsappConversations() {
               <MessageThread
                 conversationId={selectedConversationId}
                 contact={selectedConversation?.contact}
+                isGroup={(selectedConversation as any)?.is_group}
               />
             ) : (
               <div className="flex-1 flex items-center justify-center bg-muted/30">
