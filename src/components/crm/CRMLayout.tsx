@@ -233,20 +233,18 @@ export function CRMLayout() {
         )}
       >
         {selectedConversationId ? (
-          <div className="flex flex-col h-full">
+          <>
             {/* Back button for mobile */}
-            <div className="md:hidden p-2 border-b">
+            <div className="md:hidden p-2 border-b flex-shrink-0">
               <Button variant="ghost" size="sm" onClick={() => setSelectedConversationId(null)}>
                 ← Voltar
               </Button>
             </div>
-            <div className="flex-1">
-              <MessageThread
-                conversationId={selectedConversationId}
-                contact={selectedConversation?.contact}
-              />
-            </div>
-          </div>
+            <MessageThread
+              conversationId={selectedConversationId}
+              contact={selectedConversation?.contact}
+            />
+          </>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-muted/30">
             <div className="text-center">

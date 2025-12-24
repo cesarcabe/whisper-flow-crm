@@ -66,9 +66,9 @@ export function MessageThread({ conversationId, contact, isGroup }: MessageThrea
   }
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
       {/* Contact Header */}
-      <div className="flex items-center gap-3 p-3 border-b bg-card">
+      <div className="flex items-center gap-3 p-3 border-b bg-card flex-shrink-0">
         <Avatar className="h-10 w-10">
           {isGroup ? (
             <AvatarFallback className="bg-secondary/20 text-secondary">
@@ -98,46 +98,52 @@ export function MessageThread({ conversationId, contact, isGroup }: MessageThrea
         </div>
       </div>
 
-      {/* Messages */}
-      <ScrollArea ref={scrollRef} className="flex-1 p-4 bg-[hsl(var(--chat-bg))]">
-        {hasMore && (
-          <div className="flex justify-center mb-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadMore}
-              disabled={loadingMore}
-            >
-              {loadingMore ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <ArrowDown className="h-4 w-4 mr-2" />
-                  Carregar mais
-                </>
-              )}
-            </Button>
-          </div>
-        )}
+      {/* Messages - scrollable area */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea ref={scrollRef} className="h-full">
+          <div className="p-4 bg-[hsl(var(--chat-bg))]">
+            {hasMore && (
+              <div className="flex justify-center mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <ArrowDown className="h-4 w-4 mr-2" />
+                      Carregar mais
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
 
-        {messages.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center h-full">
-            <p className="text-muted-foreground">Nenhuma mensagem ainda</p>
+            {messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full min-h-[200px]">
+                <p className="text-muted-foreground">Nenhuma mensagem ainda</p>
+              </div>
+            ) : (
+              <div className="flex flex-col-reverse gap-2">
+                {messages.map(message => (
+                  <MessageBubble key={message.id} message={message} />
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="flex flex-col-reverse gap-2">
-            {messages.map(message => (
-              <MessageBubble key={message.id} message={message} />
-            ))}
-          </div>
-        )}
-      </ScrollArea>
+        </ScrollArea>
+      </div>
 
-      {/* Message Input */}
-      <MessageInput 
-        conversationId={conversationId} 
-        onMessageSent={refetch}
-      />
+      {/* Message Input - fixed at bottom */}
+      <div className="flex-shrink-0 border-t">
+        <MessageInput 
+          conversationId={conversationId} 
+          onMessageSent={refetch}
+        />
+      </div>
     </div>
   );
 }
