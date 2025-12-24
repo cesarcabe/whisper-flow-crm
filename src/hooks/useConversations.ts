@@ -4,11 +4,22 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Tables } from '@/integrations/supabase/types';
 
 export type Conversation = Tables<'conversations'>;
-export type Contact = Tables<'contacts'>;
+export type Contact = Tables<'contacts'> & {
+  contact_class?: {
+    id: string;
+    name: string;
+    color: string | null;
+  } | null;
+};
 
 export interface ConversationWithContact extends Conversation {
   contact?: Contact | null;
   lastMessagePreview?: string;
+  stage?: {
+    id: string;
+    name: string;
+    color: string | null;
+  } | null;
 }
 
 export function useConversations(whatsappNumberId: string | null) {
@@ -45,14 +56,25 @@ export function useConversations(whatsappNumberId: string | null) {
         return;
       }
 
-      // Fetch contacts in batch
+      // Fetch contacts in batch with contact_class
       const contactIds = [...new Set(convData.map(c => c.contact_id))];
       const { data: contactsData } = await supabase
         .from('contacts')
-        .select('id, name, phone, avatar_url')
+        .select('id, name, phone, avatar_url, contact_class_id, contact_class:contact_classes(id, name, color)')
         .in('id', contactIds);
 
       const contactsMap = new Map(contactsData?.map(c => [c.id, c]) || []);
+
+      // Fetch stages for conversations that have stage_id
+      const stageIds = [...new Set(convData.filter(c => c.stage_id).map(c => c.stage_id!))];
+      let stagesMap = new Map<string, { id: string; name: string; color: string | null }>();
+      if (stageIds.length > 0) {
+        const { data: stagesData } = await supabase
+          .from('stages')
+          .select('id, name, color')
+          .in('id', stageIds);
+        stagesMap = new Map(stagesData?.map(s => [s.id, s]) || []);
+      }
 
       // Fetch last message preview for each conversation (efficient batch)
       const convIds = convData.map(c => c.id);
@@ -69,11 +91,21 @@ export function useConversations(whatsappNumberId: string | null) {
         }
       });
 
-      const conversationsWithData: ConversationWithContact[] = convData.map(conv => ({
-        ...conv,
-        contact: contactsMap.get(conv.contact_id) as Contact | null,
-        lastMessagePreview: lastMessageMap.get(conv.id) || '',
-      }));
+      const conversationsWithData: ConversationWithContact[] = convData.map(conv => {
+        const contactRaw = contactsMap.get(conv.contact_id);
+        const contact = contactRaw ? {
+          ...contactRaw,
+          contact_class: Array.isArray(contactRaw.contact_class) 
+            ? contactRaw.contact_class[0] 
+            : contactRaw.contact_class,
+        } as Contact : null;
+        return {
+          ...conv,
+          contact,
+          lastMessagePreview: lastMessageMap.get(conv.id) || '',
+          stage: conv.stage_id ? stagesMap.get(conv.stage_id) || null : null,
+        };
+      });
 
       setConversations(conversationsWithData);
     } catch (err: any) {

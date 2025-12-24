@@ -4,3 +4,5 @@ export { CreateWhatsappDialog } from './CreateWhatsappDialog';
 export { WhatsappQrModal } from './WhatsappQrModal';
 export { ConversationItem } from './ConversationItem';
 export { MessageThread } from './MessageThread';
+export { ConversationFilters, useConversationFilters } from './ConversationFilters';
+export type { FilterState, ConversationType } from './ConversationFilters';

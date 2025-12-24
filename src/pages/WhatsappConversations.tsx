@@ -1,20 +1,59 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { ArrowLeft, MessageSquare, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Loader2, AlertTriangle, RefreshCw, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 import { useConversations } from '@/hooks/useConversations';
+import { useContactClasses } from '@/hooks/useContactClasses';
+import { usePipelines } from '@/hooks/usePipelines';
 import { ConversationItem } from '@/components/whatsapp/ConversationItem';
 import { MessageThread } from '@/components/whatsapp/MessageThread';
+import { 
+  ConversationFilters, 
+  FilterState, 
+  useConversationFilters 
+} from '@/components/whatsapp/ConversationFilters';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 export default function WhatsappConversations() {
   const { whatsappNumberId } = useParams<{ whatsappNumberId: string }>();
   const { workspace } = useWorkspace();
   const { conversations, loading, error, refetch } = useConversations(whatsappNumberId || null);
+  const { contactClasses } = useContactClasses();
+  const { activePipeline } = usePipelines();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<FilterState>({
+    type: 'all',
+    contactClassIds: [],
+    stageIds: [],
+  });
+
+  // Get stages from active pipeline
+  const stages = useMemo(() => {
+    if (!activePipeline?.stages) return [];
+    return activePipeline.stages.map(s => ({
+      id: s.id,
+      name: s.name,
+      color: s.color,
+    }));
+  }, [activePipeline]);
+
+  // Apply filters client-side
+  const filteredConversations = useConversationFilters(conversations, filters);
+
+  // Apply search filter
+  const displayedConversations = useMemo(() => {
+    if (!searchQuery.trim()) return filteredConversations;
+    const query = searchQuery.toLowerCase();
+    return filteredConversations.filter(c => 
+      c.contact?.name?.toLowerCase().includes(query) ||
+      c.contact?.phone?.toLowerCase().includes(query)
+    );
+  }, [filteredConversations, searchQuery]);
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
 
@@ -44,7 +83,7 @@ export default function WhatsappConversations() {
                     Conversas WhatsApp
                   </h1>
                   <p className="text-sm text-muted-foreground">
-                    {conversations.length} conversas
+                    {displayedConversations.length} de {conversations.length} conversas
                   </p>
                 </div>
               </div>
@@ -56,6 +95,25 @@ export default function WhatsappConversations() {
         <div className="flex-1 flex overflow-hidden">
           {/* Conversations List */}
           <div className="w-80 border-r bg-card flex flex-col flex-shrink-0">
+            {/* Filtros */}
+            <ConversationFilters
+              contactClasses={contactClasses}
+              stages={stages}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
+
+            {/* Busca */}
+            <div className="px-3 py-2 border-b border-border/50">
+              <Input
+                type="text"
+                placeholder="Buscar contato..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+
             {loading ? (
               <div className="flex-1 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -73,20 +131,24 @@ export default function WhatsappConversations() {
                   </CardContent>
                 </Card>
               </div>
-            ) : conversations.length === 0 ? (
+            ) : displayedConversations.length === 0 ? (
               <div className="flex-1 flex items-center justify-center p-4">
                 <Card>
                   <CardHeader className="text-center">
-                    <CardTitle className="text-lg">Nenhuma conversa</CardTitle>
+                    <CardTitle className="text-lg">
+                      {conversations.length === 0 ? 'Nenhuma conversa' : 'Nenhum resultado'}
+                    </CardTitle>
                     <CardDescription>
-                      As conversas aparecerão aqui quando você receber mensagens.
+                      {conversations.length === 0 
+                        ? 'As conversas aparecerão aqui quando você receber mensagens.'
+                        : 'Tente ajustar os filtros ou a busca.'}
                     </CardDescription>
                   </CardHeader>
                 </Card>
               </div>
             ) : (
               <ScrollArea className="flex-1">
-                {conversations.map(conversation => (
+                {displayedConversations.map(conversation => (
                   <ConversationItem
                     key={conversation.id}
                     conversation={conversation}

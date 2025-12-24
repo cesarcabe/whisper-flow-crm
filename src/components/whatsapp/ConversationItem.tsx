@@ -22,15 +22,19 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
   const lastMessageAt = conversation.last_message_at;
   const unreadCount = conversation.unread_count || 0;
 
+  // Get contact class and stage for display
+  const contactClass = contact?.contact_class;
+  const stage = conversation.stage;
+
   return (
     <div
       className={cn(
-        'flex items-center gap-3 p-3 cursor-pointer transition-colors border-b border-border/50',
+        'flex items-start gap-3 p-3 cursor-pointer transition-colors border-b border-border/50',
         isActive ? 'bg-accent' : 'hover:bg-accent/50'
       )}
       onClick={onClick}
     >
-      <Avatar className="h-12 w-12 flex-shrink-0">
+      <Avatar className="h-12 w-12 flex-shrink-0 mt-0.5">
         {isGroup ? (
           <AvatarFallback className="bg-secondary/20 text-secondary">
             <Users className="h-5 w-5" />
@@ -61,7 +65,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
             </span>
           )}
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mt-0.5">
           <p className="text-sm text-muted-foreground truncate">
             {conversation.lastMessagePreview || 'Nenhuma mensagem'}
           </p>
@@ -71,6 +75,36 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
             </Badge>
           )}
         </div>
+        
+        {/* Tags de Relacionamento e Estágio */}
+        {(contactClass || stage) && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {contactClass && (
+              <Badge 
+                variant="outline" 
+                className="text-[10px] px-1.5 py-0 h-4"
+                style={{ 
+                  borderColor: contactClass.color || undefined,
+                  color: contactClass.color || undefined,
+                }}
+              >
+                {contactClass.name}
+              </Badge>
+            )}
+            {stage && (
+              <Badge 
+                variant="outline" 
+                className="text-[10px] px-1.5 py-0 h-4"
+                style={{ 
+                  borderColor: stage.color || undefined,
+                  color: stage.color || undefined,
+                }}
+              >
+                {stage.name}
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
