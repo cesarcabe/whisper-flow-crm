@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAuth } from '@/contexts/AuthContext';
 
+// Supabase URL for reference (not currently used)
 const SUPABASE_URL = 'https://tiaojwumxgdnobknlyqp.supabase.co';
 
 interface QrResponse {
