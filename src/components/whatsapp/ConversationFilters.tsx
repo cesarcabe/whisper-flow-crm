@@ -1,14 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
-import { X, MessageSquare } from 'lucide-react';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type ConversationType = 'all' | 'direct' | 'group';
@@ -72,38 +65,50 @@ export function ConversationFilters({
   };
 
   return (
-    <div className="px-3 py-2 border-b border-border/50 space-y-2">
-      {/* Header com título e filtro de tipo */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-primary" />
-          <span className="font-medium text-foreground text-sm">Mensagens</span>
-        </div>
-        <Select value={filters.type} onValueChange={(v) => setType(v as ConversationType)}>
-          <SelectTrigger className="h-7 w-[100px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="direct">Diretas</SelectItem>
-            <SelectItem value="group">Grupos</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+    <div className="px-4 py-2 border-b border-border/50">
+      {/* Filtros: Todos/Diretas/Grupos + Relacionamento + Estágio */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {/* Filtro Tipo: Todos, Diretas, Grupos */}
+        <Badge
+          variant={filters.type === 'all' ? 'default' : 'outline'}
+          className={cn(
+            'cursor-pointer text-xs px-3 py-1 transition-colors',
+            filters.type === 'all' 
+              ? 'bg-primary text-primary-foreground' 
+              : 'hover:bg-accent'
+          )}
+          onClick={() => setType('all')}
+        >
+          Todos
+        </Badge>
+        <Badge
+          variant={filters.type === 'direct' ? 'default' : 'outline'}
+          className={cn(
+            'cursor-pointer text-xs px-3 py-1 transition-colors',
+            filters.type === 'direct' 
+              ? 'bg-primary text-primary-foreground' 
+              : 'hover:bg-accent'
+          )}
+          onClick={() => setType('direct')}
+        >
+          Diretas
+        </Badge>
+        <Badge
+          variant={filters.type === 'group' ? 'default' : 'outline'}
+          className={cn(
+            'cursor-pointer text-xs px-3 py-1 transition-colors',
+            filters.type === 'group' 
+              ? 'bg-primary text-primary-foreground' 
+              : 'hover:bg-accent'
+          )}
+          onClick={() => setType('group')}
+        >
+          Grupos
+        </Badge>
 
-      {/* Pills de filtro */}
-      <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-        {/* Limpar filtros */}
-        {hasActiveFilters && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={clearFilters}
-            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-3 w-3 mr-1" />
-            Limpar
-          </Button>
+        {/* Separador se houver filtros de relacionamento/estágio */}
+        {(contactClasses.length > 0 || stages.length > 0) && (
+          <div className="w-px h-5 bg-border self-center mx-1" />
         )}
 
         {/* Filtros de Relacionamento (Contact Classes) */}
@@ -112,9 +117,9 @@ export function ConversationFilters({
             key={cc.id}
             variant={filters.contactClassIds.includes(cc.id) ? 'default' : 'outline'}
             className={cn(
-              'cursor-pointer text-xs px-2 py-0.5 transition-colors',
+              'cursor-pointer text-xs px-3 py-1 transition-colors',
               filters.contactClassIds.includes(cc.id) 
-                ? 'bg-primary text-primary-foreground' 
+                ? 'text-white' 
                 : 'hover:bg-accent'
             )}
             style={{
@@ -129,18 +134,13 @@ export function ConversationFilters({
           </Badge>
         ))}
 
-        {/* Separador visual se houver ambos */}
-        {contactClasses.length > 0 && stages.length > 0 && (
-          <div className="w-px h-5 bg-border self-center mx-1" />
-        )}
-
         {/* Filtros de Estágio (Stages) */}
         {stages.map((stage) => (
           <Badge
             key={stage.id}
             variant={filters.stageIds.includes(stage.id) ? 'default' : 'outline'}
             className={cn(
-              'cursor-pointer text-xs px-2 py-0.5 transition-colors',
+              'cursor-pointer text-xs px-3 py-1 transition-colors',
               filters.stageIds.includes(stage.id) 
                 ? 'text-white' 
                 : 'hover:bg-accent'
@@ -157,11 +157,17 @@ export function ConversationFilters({
           </Badge>
         ))}
 
-        {/* Fallback quando não há filtros disponíveis */}
-        {contactClasses.length === 0 && stages.length === 0 && (
-          <span className="text-xs text-muted-foreground">
-            Nenhum filtro disponível
-          </span>
+        {/* Botão Limpar filtros */}
+        {hasActiveFilters && (
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={clearFilters}
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground ml-1"
+          >
+            <X className="h-3 w-3 mr-1" />
+            Limpar
+          </Button>
         )}
       </div>
     </div>
