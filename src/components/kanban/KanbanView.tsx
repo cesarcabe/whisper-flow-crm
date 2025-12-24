@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useContacts } from '@/hooks/useContacts';
@@ -39,6 +40,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export function KanbanView() {
+  const [searchParams] = useSearchParams();
   const { profile, signOut } = useAuth();
   const {
     pipelines,
@@ -72,8 +74,17 @@ export function KanbanView() {
     moveConversation,
   } = useConversationStages();
 
-  const [currentView, setCurrentView] = useState<'kanban' | 'chat'>('kanban');
+  // Check if URL has whatsapp param to auto-switch to chat view
+  const whatsappFromUrl = searchParams.get('whatsapp');
+  const [currentView, setCurrentView] = useState<'kanban' | 'chat'>(whatsappFromUrl ? 'chat' : 'kanban');
   const [boardType, setBoardType] = useState<BoardViewType>('relationship');
+
+  // Auto-switch to chat view when whatsapp param is present
+  useEffect(() => {
+    if (whatsappFromUrl) {
+      setCurrentView('chat');
+    }
+  }, [whatsappFromUrl]);
   
   // Dialog states
   const [showCreatePipeline, setShowCreatePipeline] = useState(false);

@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useConversations, ConversationWithContact } from '@/hooks/useConversations';
 import { useWhatsappNumbers } from '@/hooks/useWhatsappNumbers';
 import { useContactClasses } from '@/hooks/useContactClasses';
@@ -18,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function CRMLayout() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { numbers, loading: numbersLoading } = useWhatsappNumbers();
   const { contactClasses } = useContactClasses();
   const { activePipeline } = usePipelines();
@@ -29,6 +31,22 @@ export function CRMLayout() {
     contactClassIds: [],
     stageIds: [],
   });
+
+  // Read whatsapp number from URL query param
+  const whatsappFromUrl = searchParams.get('whatsapp');
+  
+  // Set selected number from URL param when available
+  useEffect(() => {
+    if (whatsappFromUrl && numbers.length > 0) {
+      const numberExists = numbers.some(n => n.id === whatsappFromUrl);
+      if (numberExists) {
+        setSelectedNumberId(whatsappFromUrl);
+        // Clear the URL param after applying
+        searchParams.delete('whatsapp');
+        setSearchParams(searchParams, { replace: true });
+      }
+    }
+  }, [whatsappFromUrl, numbers, searchParams, setSearchParams]);
 
   // Auto-select first WhatsApp number if available
   const activeNumberId = selectedNumberId || (numbers.length > 0 ? numbers[0].id : null);
@@ -92,13 +110,28 @@ export function CRMLayout() {
           selectedConversationId ? 'hidden' : 'block'
         )}
       >
-        {/* Header: Ícone + Mensagens + Seletor Todos/Diretas/Grupos */}
+        {/* Header: Ícone + Mensagens + Seletor de Número + Seletor Todos/Diretas/Grupos */}
         <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-primary" />
             <h1 className="text-lg font-semibold text-foreground">Mensagens</h1>
           </div>
           <div className="flex items-center gap-2">
+            {/* WhatsApp Number Selector */}
+            {numbers.length > 0 && (
+              <Select value={activeNumberId || ''} onValueChange={setSelectedNumberId}>
+                <SelectTrigger className="h-8 w-[140px] text-xs">
+                  <SelectValue placeholder="Conexão" />
+                </SelectTrigger>
+                <SelectContent>
+                  {numbers.map((num) => (
+                    <SelectItem key={num.id} value={num.id}>
+                      {num.internal_name || num.phone_number}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select 
               value={filters.type} 
               onValueChange={(value: 'all' | 'direct' | 'group') => 
@@ -120,23 +153,6 @@ export function CRMLayout() {
           </div>
         </div>
 
-        {/* WhatsApp Number Selector (se houver mais de um) */}
-        {numbers.length > 1 && (
-          <div className="px-4 py-2 border-b border-border/50">
-            <Select value={activeNumberId || ''} onValueChange={setSelectedNumberId}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Selecione uma conexão" />
-              </SelectTrigger>
-              <SelectContent>
-                {numbers.map((num) => (
-                  <SelectItem key={num.id} value={num.id}>
-                    {num.internal_name || num.phone_number}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
 
         {/* Barra de Busca */}
         <div className="px-4 py-2 border-b border-border/50">

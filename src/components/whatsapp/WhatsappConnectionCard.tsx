@@ -212,7 +212,7 @@ export function WhatsappConnectionCard({
             <Button
               variant="default"
               size="sm"
-              onClick={() => navigate(`/whatsapp/${number.id}/conversations`)}
+              onClick={() => navigate(`/?whatsapp=${number.id}`)}
             >
               <MessageSquare className="h-4 w-4 mr-2" />
               Conversas
