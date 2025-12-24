@@ -4,10 +4,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
+};
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
@@ -60,6 +65,36 @@ function normalizeEventType(ev: string | null) {
   return e;
 }
 
+// Normalize Evolution status to internal status
+function normalizeConnectionStatus(evolutionStatus: string | undefined | null): string {
+  if (!evolutionStatus) return 'disconnected';
+  
+  const s = evolutionStatus.toLowerCase().trim();
+  
+  // Connected states
+  if (s === 'open' || s === 'connected' || s === 'authenticated') {
+    return 'connected';
+  }
+  
+  // Pairing/connecting states  
+  if (s === 'connecting' || s === 'qrcode' || s === 'qr' || s === 'waiting' || s === 'pairing') {
+    return 'pairing';
+  }
+  
+  // Disconnected states
+  if (s === 'close' || s === 'closed' || s === 'logout' || s === 'disconnected') {
+    return 'disconnected';
+  }
+  
+  // Error states
+  if (s === 'refused' || s === 'conflict' || s === 'unauthorized' || s === 'error') {
+    return 'error';
+  }
+  
+  console.log('[Edge:evolution-webhook] unknown_status', { raw: s });
+  return 'disconnected';
+}
+
 async function sha256Hex(text: string) {
   const enc = new TextEncoder().encode(text);
   const hashBuf = await crypto.subtle.digest("SHA-256", enc);
@@ -80,10 +115,17 @@ async function makeDeliveryKey(
 }
 
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   // Health check
   if (req.method === "GET") return json({ ok: true });
 
   if (req.method !== "POST") return json({ ok: false, message: "Method not allowed" }, 405);
+
+  console.log('[Edge:evolution-webhook] start', { method: req.method });
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { persistSession: false },
@@ -91,7 +133,10 @@ Deno.serve(async (req: Request) => {
 
   // 1) Segurança por Workspace API Key
   const apiKey = getHeader(req, "x-api-key");
-  if (!apiKey) return json({ code: 401, message: "Missing x-api-key" }, 401);
+  if (!apiKey) {
+    console.log('[Edge:evolution-webhook] missing_api_key');
+    return json({ code: 401, message: "Missing x-api-key" }, 401);
+  }
 
   const bodyText = await req.text();
   let body: any;
@@ -106,6 +151,12 @@ Deno.serve(async (req: Request) => {
   const instanceName = extracted.instanceName;
   const data = extracted.data;
 
+  console.log('[Edge:evolution-webhook] event_received', { 
+    eventType, 
+    instanceName,
+    hasApiKey: !!apiKey 
+  });
+
   // resolve workspace_id pela api key
   const { data: wsKey, error: keyErr } = await supabase
     .from("workspace_api_keys")
@@ -114,8 +165,14 @@ Deno.serve(async (req: Request) => {
     .eq("is_active", true)
     .maybeSingle();
 
-  if (keyErr) return json({ code: 500, message: "Key lookup failed", details: keyErr.message }, 500);
-  if (!wsKey?.workspace_id) return json({ code: 401, message: "Invalid API key" }, 401);
+  if (keyErr) {
+    console.log('[Edge:evolution-webhook] key_lookup_error', { error: keyErr.message });
+    return json({ code: 500, message: "Key lookup failed", details: keyErr.message }, 500);
+  }
+  if (!wsKey?.workspace_id) {
+    console.log('[Edge:evolution-webhook] invalid_api_key');
+    return json({ code: 401, message: "Invalid API key" }, 401);
+  }
 
   const workspaceId = wsKey.workspace_id as string;
 
@@ -142,7 +199,6 @@ Deno.serve(async (req: Request) => {
       payload: body,
       headers: Object.fromEntries(req.headers.entries()),
       status: "received",
-      attempt_count: 1,
     })
     .select("id")
     .maybeSingle();
@@ -150,8 +206,10 @@ Deno.serve(async (req: Request) => {
   if (deliveryErr) {
     const msg = (deliveryErr.message ?? "").toLowerCase();
     if (msg.includes("duplicate") || msg.includes("unique") || msg.includes("conflict")) {
+      console.log('[Edge:evolution-webhook] idempotent_skip', { deliveryKey });
       return json({ ok: true, idempotent: true });
     }
+    console.log('[Edge:evolution-webhook] delivery_insert_error', { error: deliveryErr.message });
     return json({ code: 500, message: "Failed to insert webhook_deliveries", details: deliveryErr.message }, 500);
   }
 
@@ -173,59 +231,80 @@ Deno.serve(async (req: Request) => {
   async function ensureWhatsappNumber() {
     if (!instanceName) return null;
 
-    const { data: wa, error } = await supabase
+    // First try to find existing
+    const { data: existing } = await supabase
       .from("whatsapp_numbers")
-      .upsert(
-        {
-          workspace_id: workspaceId,
-          instance_name: instanceName,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "workspace_id,instance_name" },
-      )
-      .select("id, instance_name")
-      .single();
+      .select("id, instance_name, status")
+      .eq("workspace_id", workspaceId)
+      .eq("instance_name", instanceName)
+      .maybeSingle();
 
-    if (error) throw new Error("Failed to upsert whatsapp_numbers: " + error.message);
-    return wa;
+    if (existing) return existing;
+
+    // If not found, we can't create without required fields
+    console.log('[Edge:evolution-webhook] instance_not_found', { instanceName, workspaceId });
+    return null;
   }
 
   // helper: upsert contato por workspace+phone
   async function upsertContact(phone: string) {
+    // First check if contact exists
+    const { data: existing } = await supabase
+      .from("contacts")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("phone", phone)
+      .maybeSingle();
+
+    if (existing) return existing.id as string;
+
+    // Create new contact - need user_id (use a system user or first admin)
+    const { data: member } = await supabase
+      .from("workspace_members")
+      .select("user_id")
+      .eq("workspace_id", workspaceId)
+      .limit(1)
+      .maybeSingle();
+
     const { data: c, error } = await supabase
       .from("contacts")
-      .upsert(
-        {
-          workspace_id: workspaceId,
-          phone,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "workspace_id,phone" },
-      )
+      .insert({
+        workspace_id: workspaceId,
+        phone,
+        name: phone,
+        user_id: member?.user_id || workspaceId,
+      })
       .select("id")
       .single();
 
-    if (error) throw new Error("Failed to upsert contact: " + error.message);
+    if (error) throw new Error("Failed to create contact: " + error.message);
     return c.id as string;
   }
 
   // helper: upsert conversa 1:1 workspace+contact+whatsapp_number
   async function upsertConversation(contactId: string, whatsappNumberId: string) {
+    // First check if conversation exists
+    const { data: existing } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("contact_id", contactId)
+      .eq("whatsapp_number_id", whatsappNumberId)
+      .maybeSingle();
+
+    if (existing) return existing.id as string;
+
     const { data: conv, error } = await supabase
       .from("conversations")
-      .upsert(
-        {
-          workspace_id: workspaceId,
-          contact_id: contactId,
-          whatsapp_number_id: whatsappNumberId,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "workspace_id,contact_id,whatsapp_number_id" },
-      )
+      .insert({
+        workspace_id: workspaceId,
+        contact_id: contactId,
+        whatsapp_number_id: whatsappNumberId,
+      })
       .select("id")
       .single();
 
-    if (error) throw new Error("Failed to upsert conversation: " + error.message);
+    if (error) throw new Error("Failed to create conversation: " + error.message);
     return conv.id as string;
   }
 
@@ -235,23 +314,86 @@ Deno.serve(async (req: Request) => {
     if (eventType === "connection.update") {
       const wa = await ensureWhatsappNumber();
       if (!wa) {
-        await markDelivery("ignored", "Missing instanceName");
+        await markDelivery("ignored", "Missing instanceName or instance not found");
         return json({ ok: true, ignored: true });
       }
 
-      const status = safeString(data?.state ?? data?.status ?? data?.connection ?? null) ?? "unknown";
+      const rawStatus = safeString(data?.state ?? data?.status ?? data?.connection ?? null) ?? "unknown";
+      const normalizedStatus = normalizeConnectionStatus(rawStatus);
       const phone = normalizePhone(safeString(data?.phone_number ?? data?.number ?? data?.me?.id ?? null));
       const lastQr = safeString(data?.qr ?? data?.last_qr ?? null);
 
+      console.log('[Edge:evolution-webhook] connection_update', { 
+        instanceName, 
+        rawStatus,
+        normalizedStatus,
+        oldStatus: wa.status
+      });
+
+      const updates: Record<string, unknown> = {
+        status: normalizedStatus,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (phone) updates.phone_number = phone;
+      if (lastQr) updates.last_qr = lastQr;
+
+      // If connected, update last_connected_at and is_active
+      if (normalizedStatus === 'connected') {
+        updates.last_connected_at = new Date().toISOString();
+        updates.is_active = true;
+      }
+      
+      // If disconnected/error, mark as inactive
+      if (normalizedStatus === 'disconnected' || normalizedStatus === 'error') {
+        updates.is_active = false;
+      }
+
       await supabase
         .from("whatsapp_numbers")
-        .update({
-          status,
-          phone_number: phone,
-          last_qr: lastQr,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updates)
         .eq("id", wa.id);
+
+      console.log('[Edge:evolution-webhook] status_updated', { 
+        instanceName, 
+        status: normalizedStatus,
+        updatedFields: Object.keys(updates)
+      });
+
+      await markDelivery("processed");
+      return json({ ok: true, status: normalizedStatus });
+    }
+
+    // --- qrcode.updated ---
+    if (eventType === "qrcode.updated") {
+      const wa = await ensureWhatsappNumber();
+      if (!wa) {
+        await markDelivery("ignored", "Missing instanceName or instance not found");
+        return json({ ok: true, ignored: true });
+      }
+
+      const qrBase64 = safeString(data?.qrcode?.base64 ?? data?.base64 ?? null);
+      const qrCode = safeString(data?.qrcode?.code ?? data?.code ?? null);
+      
+      // Prefer base64 image over code token
+      const qrValue = qrBase64 || qrCode;
+      
+      console.log('[Edge:evolution-webhook] qrcode_updated', { 
+        instanceName, 
+        hasBase64: !!qrBase64,
+        hasCode: !!qrCode 
+      });
+
+      if (qrValue) {
+        await supabase
+          .from("whatsapp_numbers")
+          .update({
+            last_qr: qrValue,
+            status: 'pairing',
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", wa.id);
+      }
 
       await markDelivery("processed");
       return json({ ok: true });
@@ -286,7 +428,6 @@ Deno.serve(async (req: Request) => {
         provider: "evolution",
         event_type: eventType,
         provider_event_id: providerEventId,
-        instance_name: instanceName,
         metadata: { raw: data },
       });
 
@@ -300,8 +441,6 @@ Deno.serve(async (req: Request) => {
             .from("messages")
             .update({
               status: newStatus,
-              metadata: data,
-              updated_at: new Date().toISOString(),
             })
             .eq("workspace_id", workspaceId)
             .eq("whatsapp_number_id", wa.id)
@@ -323,20 +462,17 @@ Deno.serve(async (req: Request) => {
             null,
         ) ?? "";
 
-      const direction =
-        safeString(data?.direction ?? (data?.key?.fromMe ? "out" : "in")) ?? (data?.key?.fromMe ? "out" : "in");
+      const isFromMe = data?.key?.fromMe === true;
 
       // insert: se existir unique e der conflito, a função não pode quebrar
       const { error: msgErr } = await supabase.from("messages").insert({
         workspace_id: workspaceId,
         conversation_id: conversationId,
         whatsapp_number_id: wa.id,
-        external_id: providerEventId, // pode ser null; ideal ter id
-        direction,
+        external_id: providerEventId,
+        is_outgoing: isFromMe,
         body: text,
-        metadata: data,
         status: "received",
-        created_at: new Date().toISOString(),
       });
 
       if (msgErr) {
@@ -346,12 +482,11 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Atualiza “last message” (se suas colunas existirem; se não, não quebra)
+      // Atualiza "last message"
       await supabase
         .from("conversations")
         .update({
           last_message_at: new Date().toISOString(),
-          last_message_preview: text.slice(0, 140),
           updated_at: new Date().toISOString(),
         })
         .eq("id", conversationId);
@@ -361,9 +496,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // evento desconhecido: não quebra
+    console.log('[Edge:evolution-webhook] unhandled_event', { eventType });
     await markDelivery("ignored", `Unhandled eventType: ${eventType ?? "null"}`);
     return json({ ok: true, ignored: true });
   } catch (e: any) {
+    console.log('[Edge:evolution-webhook] error', { error: e?.message });
     await markDelivery("failed", e?.message ?? "Unknown error");
     return json({ ok: false, error: e?.message ?? "Unknown error" }, 500);
   }

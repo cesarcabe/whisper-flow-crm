@@ -23,9 +23,43 @@ interface CreateInstanceResponse {
   pairing_code?: string;
 }
 
-interface ConnectionStatus {
-  status: 'DISCONNECTED' | 'PAIRING' | 'CONNECTED' | 'ERROR';
+export type ConnectionStatusType = 'DISCONNECTED' | 'PAIRING' | 'CONNECTED' | 'ERROR' | 'ERROR_TIMEOUT' | 'CONNECTED_THEN_DISCONNECTED';
+
+export interface ConnectionStatus {
+  status: ConnectionStatusType;
   message?: string;
+  rawStatus?: string;
+}
+
+// Map Evolution API status to internal status
+function normalizeEvolutionStatus(raw: string | null | undefined): ConnectionStatusType {
+  if (!raw) return 'DISCONNECTED';
+  
+  const s = raw.toLowerCase().trim();
+  
+  // Connected states
+  if (s === 'connected' || s === 'open' || s === 'authenticated') {
+    return 'CONNECTED';
+  }
+  
+  // Pairing/connecting states
+  if (s === 'pairing' || s === 'connecting' || s === 'qrcode' || s === 'qr' || s === 'waiting') {
+    return 'PAIRING';
+  }
+  
+  // Error states
+  if (s === 'error' || s === 'refused' || s === 'conflict' || s === 'unauthorized') {
+    return 'ERROR';
+  }
+  
+  // Disconnected states
+  if (s === 'disconnected' || s === 'close' || s === 'closed' || s === 'logout') {
+    return 'DISCONNECTED';
+  }
+  
+  // Default to disconnected for unknown states
+  console.log('[WA_CONNECT] unknown_status', { raw: s });
+  return 'DISCONNECTED';
 }
 
 export function useWhatsappConnection() {
@@ -39,14 +73,37 @@ export function useWhatsappConnection() {
   const [error, setError] = useState<string | null>(null);
   
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isPollingRef = useRef(false);
+  const wasConnectedRef = useRef(false);
+  const pollingStartTimeRef = useRef<number>(0);
+
+  const POLLING_TIMEOUT_MS = 90000; // 90 seconds
+  const POLLING_INTERVAL_MS = 2500; // 2.5 seconds
 
   const stopPolling = useCallback(() => {
+    console.log('[WA_CONNECT] stop_polling');
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
     isPollingRef.current = false;
+    wasConnectedRef.current = false;
+    pollingStartTimeRef.current = 0;
+  }, []);
+
+  // Reset state for new connection attempt
+  const resetState = useCallback(() => {
+    console.log('[WA_CONNECT] reset_state');
+    setQrCode(null);
+    setPairingCode(null);
+    setConnectionStatus({ status: 'DISCONNECTED' });
+    setError(null);
+    wasConnectedRef.current = false;
   }, []);
 
   // Cleanup on unmount
@@ -55,44 +112,41 @@ export function useWhatsappConnection() {
   }, [stopPolling]);
 
   const createInstance = useCallback(async (internalName: string, phoneNumber?: string): Promise<CreateInstanceResponse> => {
-    console.log('[WhatsAppConnect] createInstance:start', { 
+    console.log('[WA_CONNECT] createInstance:start', { 
       workspaceId, 
       internalName, 
-      hasUser: !!user,
-      supabaseUrl: SUPABASE_URL 
+      hasUser: !!user
     });
 
     if (!workspaceId) {
       const errMsg = 'Workspace não encontrado. Faça login novamente.';
-      console.error('[WhatsAppConnect] createInstance:error', { reason: 'no_workspace_id' });
+      console.log('[WA_CONNECT] createInstance:error', { reason: 'no_workspace_id' });
       setError(errMsg);
       return { ok: false, message: errMsg };
     }
 
     if (!user) {
       const errMsg = 'Usuário não autenticado. Faça login novamente.';
-      console.error('[WhatsAppConnect] createInstance:error', { reason: 'no_user' });
+      console.log('[WA_CONNECT] createInstance:error', { reason: 'no_user' });
       setError(errMsg);
       return { ok: false, message: errMsg };
     }
 
     setCreating(true);
     setError(null);
+    resetState();
 
     try {
-      // Get current session for authorization
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError || !sessionData.session) {
-        console.error('[WhatsAppConnect] createInstance:session_error', { sessionError });
+        console.log('[WA_CONNECT] createInstance:session_error', { error: sessionError?.message });
         throw new Error('Sessão expirada. Faça login novamente.');
       }
 
-      const accessToken = sessionData.session.access_token;
-      console.log('[WhatsAppConnect] invoke:start', { 
+      console.log('[WA_CONNECT] invoke:start', { 
         functionName: 'whatsapp-create-instance',
-        hasAccessToken: !!accessToken,
-        payload: { workspace_id: workspaceId, internal_name: internalName, phone_number: phoneNumber || '' }
+        payload: { workspace_id: workspaceId, internal_name: internalName }
       });
 
       const { data, error: fnError } = await supabase.functions.invoke('whatsapp-create-instance', {
@@ -104,32 +158,31 @@ export function useWhatsappConnection() {
         },
       });
 
-      console.log('[WhatsAppConnect] invoke:response', { data, error: fnError });
+      console.log('[WA_CONNECT] invoke:response', { 
+        ok: data?.ok, 
+        hasQr: !!data?.qr_code,
+        instanceName: data?.instance_name,
+        whatsappNumberId: data?.whatsapp_number_id
+      });
 
       if (fnError) {
-        console.error('[WhatsAppConnect] invoke:error', { 
-          message: fnError.message, 
-          context: fnError.context,
-          name: fnError.name
-        });
+        console.log('[WA_CONNECT] invoke:error', { message: fnError.message });
         throw new Error(fnError.message || 'Erro ao chamar Edge Function');
       }
 
       if (!data?.ok) {
-        console.error('[WhatsAppConnect] invoke:api_error', { data });
+        console.log('[WA_CONNECT] invoke:api_error', { message: data?.message });
         throw new Error(data?.message || 'Erro ao criar instância WhatsApp');
       }
 
-      console.log('[WhatsAppConnect] createInstance:success', { 
-        instanceName: data.instance_name, 
-        whatsappNumberId: data.whatsapp_number_id,
-        hasQrCode: !!data.qr_code,
-        hasPairingCode: !!data.pairing_code
-      });
-
       // Store QR code from creation response if available
       if (data.qr_code) {
+        console.log('[WA_CONNECT] qr_received', { 
+          connectionId: data.whatsapp_number_id, 
+          hasQr: true 
+        });
         setQrCode(data.qr_code);
+        setConnectionStatus({ status: 'PAIRING' });
       }
       if (data.pairing_code) {
         setPairingCode(data.pairing_code);
@@ -137,24 +190,22 @@ export function useWhatsappConnection() {
 
       return data as CreateInstanceResponse;
     } catch (err: any) {
-      console.error('[WhatsAppConnect] createInstance:catch', { 
-        error: err.message, 
-        stack: err.stack 
-      });
+      console.log('[WA_CONNECT] createInstance:catch', { error: err.message });
       const errorMsg = err.message || 'Erro ao criar instância. Verifique se a Edge Function está deployada.';
       setError(errorMsg);
+      setConnectionStatus({ status: 'ERROR', message: errorMsg });
       return { ok: false, message: errorMsg };
     } finally {
       setCreating(false);
     }
-  }, [workspaceId, user]);
+  }, [workspaceId, user, resetState]);
 
   const fetchQrCode = useCallback(async (whatsappNumberId?: string): Promise<QrResponse> => {
     if (!workspaceId) {
       return { ok: false, message: 'Workspace não encontrado' };
     }
 
-    console.log('[WhatsAppConnect] fetchQrCode:start', { workspaceId, whatsappNumberId });
+    console.log('[WA_CONNECT] fetchQrCode:start', { workspaceId, whatsappNumberId });
 
     setLoadingQr(true);
     setError(null);
@@ -167,12 +218,15 @@ export function useWhatsappConnection() {
         throw new Error('Sessão expirada. Faça login novamente.');
       }
 
-      // Use supabase.functions.invoke with POST and body
       const { data, error: fnError } = await supabase.functions.invoke('whatsapp-get-qr', {
         body: { workspace_id: workspaceId, whatsapp_number_id: whatsappNumberId },
       });
 
-      console.log('[WhatsAppConnect] fetchQrCode:response', { data, error: fnError });
+      console.log('[WA_CONNECT] fetchQrCode:response', { 
+        ok: data?.ok, 
+        hasCode: !!data?.code,
+        count: data?.count 
+      });
 
       if (fnError) {
         throw new Error(fnError.message || 'Erro ao obter QR Code');
@@ -182,12 +236,17 @@ export function useWhatsappConnection() {
         throw new Error(data?.message || 'Erro ao obter QR Code');
       }
 
-      setQrCode(data.code || null);
-      setPairingCode(data.pairingCode || null);
+      if (data.code) {
+        setQrCode(data.code);
+        setConnectionStatus({ status: 'PAIRING' });
+      }
+      if (data.pairingCode) {
+        setPairingCode(data.pairingCode);
+      }
 
       return data as QrResponse;
     } catch (err: any) {
-      console.error('[WhatsAppConnect] fetchQrCode:error', err);
+      console.log('[WA_CONNECT] fetchQrCode:error', { error: err.message });
       setError(err.message || 'Erro ao obter QR Code');
       return { ok: false, message: err.message };
     } finally {
@@ -201,7 +260,6 @@ export function useWhatsappConnection() {
     }
 
     try {
-      // Check database status directly
       const { data, error } = await supabase
         .from('whatsapp_numbers')
         .select('status')
@@ -209,16 +267,22 @@ export function useWhatsappConnection() {
         .single();
 
       if (error || !data) {
+        console.log('[WA_CONNECT] checkStatus:db_error', { error: error?.message });
         return { status: 'DISCONNECTED' };
       }
 
-      const s = (data.status || '').toLowerCase();
-      if (s === 'connected' || s === 'open') return { status: 'CONNECTED' };
-      if (s === 'pairing' || s === 'connecting' || s === 'qrcode') return { status: 'PAIRING' };
-      if (s === 'error' || s === 'close' || s === 'refused') return { status: 'ERROR' };
-      return { status: 'DISCONNECTED' };
+      const rawStatus = data.status || '';
+      const normalizedStatus = normalizeEvolutionStatus(rawStatus);
+
+      console.log('[WA_CONNECT] status_tick', { 
+        connectionId: whatsappNumberId, 
+        status: normalizedStatus, 
+        raw: rawStatus 
+      });
+
+      return { status: normalizedStatus, rawStatus };
     } catch (err: any) {
-      console.error('[WhatsAppConnect] checkConnectionStatus:error', err);
+      console.log('[WA_CONNECT] checkStatus:error', { error: err.message });
       return { status: 'DISCONNECTED', message: err.message };
     }
   }, [workspaceId]);
@@ -226,29 +290,87 @@ export function useWhatsappConnection() {
   const startPolling = useCallback((whatsappNumberId: string, onConnected: () => void) => {
     stopPolling();
     isPollingRef.current = true;
+    wasConnectedRef.current = false;
+    pollingStartTimeRef.current = Date.now();
+
+    console.log('[WA_CONNECT] start_polling', { 
+      connectionId: whatsappNumberId, 
+      timeoutMs: POLLING_TIMEOUT_MS 
+    });
+
+    // Set timeout for polling
+    timeoutRef.current = setTimeout(() => {
+      if (isPollingRef.current) {
+        console.log('[WA_CONNECT] polling_timeout', { connectionId: whatsappNumberId });
+        stopPolling();
+        setConnectionStatus({ 
+          status: 'ERROR_TIMEOUT', 
+          message: 'Tempo limite excedido. O QR Code expirou. Tente gerar um novo.' 
+        });
+        setError('Tempo limite excedido. Tente gerar um novo QR Code.');
+      }
+    }, POLLING_TIMEOUT_MS);
 
     const poll = async () => {
       if (!isPollingRef.current) return;
 
-      const status = await checkConnectionStatus(whatsappNumberId);
-      console.log('[WhatsappQrModal]', { whatsappNumberId, status: status.status });
-      setConnectionStatus(status);
+      const result = await checkConnectionStatus(whatsappNumberId);
+      
+      // Detect connected → disconnected pattern
+      if (wasConnectedRef.current && (result.status === 'DISCONNECTED' || result.status === 'ERROR')) {
+        console.log('[WA_CONNECT] connected_then_disconnected', { connectionId: whatsappNumberId });
+        stopPolling();
+        setConnectionStatus({ 
+          status: 'CONNECTED_THEN_DISCONNECTED', 
+          message: 'Conexão caiu logo após autenticar. Verifique se o número não está ativo em outro dispositivo/instância.',
+          rawStatus: result.rawStatus
+        });
+        setError('Conexão caiu logo após autenticar. Tente novamente.');
+        return;
+      }
 
-      if (status.status === 'CONNECTED') {
+      // Track if we ever reached connected state
+      if (result.status === 'CONNECTED') {
+        wasConnectedRef.current = true;
+      }
+
+      setConnectionStatus(result);
+
+      if (result.status === 'CONNECTED') {
+        console.log('[WA_CONNECT] done', { connectionId: whatsappNumberId, status: 'CONNECTED' });
         stopPolling();
         onConnected();
+      } else if (result.status === 'ERROR') {
+        console.log('[WA_CONNECT] error_status', { connectionId: whatsappNumberId, raw: result.rawStatus });
+        stopPolling();
+        setError(result.message || 'Erro na conexão WhatsApp');
       }
     };
 
     poll(); // Initial check
-    pollingRef.current = setInterval(poll, 2500);
+    pollingRef.current = setInterval(poll, POLLING_INTERVAL_MS);
   }, [checkConnectionStatus, stopPolling]);
 
   const disconnectInstance = useCallback(async (whatsappNumberId: string): Promise<boolean> => {
+    console.log('[WA_CONNECT] disconnect_instance', { whatsappNumberId });
     // TODO: Implement when whatsapp-disconnect-instance edge function exists
-    console.log('[useWhatsappConnection]', 'disconnect_instance', { whatsappNumberId, todo: true });
     return false;
   }, []);
+
+  const retryConnection = useCallback(async (whatsappNumberId: string): Promise<void> => {
+    console.log('[WA_CONNECT] retry_connection', { whatsappNumberId });
+    resetState();
+    setLoadingQr(true);
+    
+    try {
+      const result = await fetchQrCode(whatsappNumberId);
+      if (result.ok) {
+        setConnectionStatus({ status: 'PAIRING' });
+      }
+    } finally {
+      setLoadingQr(false);
+    }
+  }, [fetchQrCode, resetState]);
 
   return {
     creating,
@@ -263,6 +385,10 @@ export function useWhatsappConnection() {
     startPolling,
     stopPolling,
     disconnectInstance,
+    retryConnection,
+    resetState,
     setError,
+    setQrCode,
+    setConnectionStatus,
   };
 }
