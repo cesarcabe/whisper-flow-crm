@@ -9,7 +9,7 @@ import { CreateWhatsappDialog } from './CreateWhatsappDialog';
 import { WhatsappQrModal } from './WhatsappQrModal';
 
 export function WhatsappSettingsTab() {
-  const { numbers, loading, error, refetch, updatePipeline, updateInternalName } = useWhatsappNumbers();
+  const { numbers, loading, error, refetch, updatePipeline, updateInternalName, deleteNumber } = useWhatsappNumbers();
   const { pipelines } = usePipelines();
   const [createOpen, setCreateOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -98,6 +98,7 @@ export function WhatsappSettingsTab() {
               onUpdateName={updateInternalName}
               onShowQr={handleShowQr}
               onRefresh={refetch}
+              onDelete={deleteNumber}
             />
           ))}
         </div>
