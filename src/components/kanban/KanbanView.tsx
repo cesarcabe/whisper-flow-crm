@@ -185,7 +185,7 @@ export function KanbanView() {
 
   if (currentView === 'chat') {
     return (
-      <div className="h-screen flex flex-col">
+      <div className="h-screen flex flex-col overflow-hidden">
         <PipelineHeader
           pipelines={pipelines}
           activePipeline={activePipeline}
@@ -198,7 +198,9 @@ export function KanbanView() {
           userName={profile?.full_name || undefined}
           onSignOut={signOut}
         />
-        <CRMLayout />
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <CRMLayout />
+        </div>
       </div>
     );
   }
