@@ -1,56 +1,151 @@
 import { useState } from 'react';
-import { Conversation } from '@/types/crm';
-import { ContactList } from './ContactList';
-import { ChatView } from './ChatView';
-import { EmptyChat } from './EmptyChat';
-import { mockConversations } from '@/data/mockData';
+import { useConversations, ConversationWithContact } from '@/hooks/useConversations';
+import { useWhatsappNumbers } from '@/hooks/useWhatsappNumbers';
+import { MessageThread } from '@/components/whatsapp/MessageThread';
+import { ConversationItem } from '@/components/whatsapp/ConversationItem';
 import { cn } from '@/lib/utils';
+import { Loader2, MessageSquare, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function CRMLayout() {
-  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
-  const [conversations] = useState<Conversation[]>(mockConversations);
+  const { numbers, loading: numbersLoading } = useWhatsappNumbers();
+  const [selectedNumberId, setSelectedNumberId] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
 
-  const handleSelectConversation = (conversation: Conversation) => {
-    setActiveConversation(conversation);
-  };
+  // Auto-select first WhatsApp number if available
+  const activeNumberId = selectedNumberId || (numbers.length > 0 ? numbers[0].id : null);
+  
+  const { conversations, loading, error, refetch } = useConversations(activeNumberId);
+  
+  const selectedConversation = conversations.find(c => c.id === selectedConversationId);
 
-  const handleBackToList = () => {
-    setActiveConversation(null);
-  };
+  console.log('[Conversations]', 'load_conversations', { activeNumberId, count: conversations.length });
+
+  if (numbersLoading) {
+    return (
+      <div className="h-full flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (numbers.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center bg-background">
+        <div className="text-center p-6">
+          <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma conexão WhatsApp</h3>
+          <p className="text-sm text-muted-foreground">
+            Configure uma conexão WhatsApp nas configurações do workspace para ver as conversas.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-screen w-full flex bg-background overflow-hidden">
-      {/* Contact List - Hidden on mobile when chat is open */}
+    <div className="h-full w-full flex bg-background overflow-hidden">
+      {/* Conversations List */}
       <div
         className={cn(
-          'w-full md:w-[380px] lg:w-[420px] flex-shrink-0 border-r border-border',
+          'w-full md:w-[380px] lg:w-[420px] flex-shrink-0 border-r border-border flex flex-col',
           'md:block',
-          activeConversation ? 'hidden' : 'block'
+          selectedConversationId ? 'hidden' : 'block'
         )}
       >
-        <ContactList
-          conversations={conversations}
-          activeConversationId={activeConversation?.id || null}
-          onSelectConversation={handleSelectConversation}
-        />
+        {/* WhatsApp Number Selector */}
+        {numbers.length > 1 && (
+          <div className="p-3 border-b">
+            <Select value={activeNumberId || ''} onValueChange={setSelectedNumberId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione uma conexão" />
+              </SelectTrigger>
+              <SelectContent>
+                {numbers.map((num) => (
+                  <SelectItem key={num.id} value={num.id}>
+                    {num.internal_name || num.phone_number}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Conversation List */}
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : error ? (
+          <div className="flex-1 flex items-center justify-center p-4">
+            <div className="text-center">
+              <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-3" />
+              <p className="text-sm text-destructive mb-3">{error}</p>
+              <Button variant="outline" size="sm" onClick={refetch}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Tentar novamente
+              </Button>
+            </div>
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center p-4">
+            <div className="text-center">
+              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma conversa ainda</h3>
+              <p className="text-sm text-muted-foreground">
+                Envie ou receba uma mensagem no WhatsApp.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <ScrollArea className="flex-1">
+            {conversations.map(conversation => (
+              <ConversationItem
+                key={conversation.id}
+                conversation={conversation}
+                isActive={selectedConversationId === conversation.id}
+                onClick={() => setSelectedConversationId(conversation.id)}
+              />
+            ))}
+          </ScrollArea>
+        )}
       </div>
 
-      {/* Chat View - Full width on mobile, remaining space on desktop */}
+      {/* Message Thread */}
       <div
         className={cn(
-          'flex-1 min-w-0',
+          'flex-1 min-w-0 flex flex-col',
           'md:block',
-          !activeConversation ? 'hidden md:block' : 'block'
+          !selectedConversationId ? 'hidden md:flex' : 'flex'
         )}
       >
-        {activeConversation ? (
-          <ChatView
-            conversation={activeConversation}
-            onBack={handleBackToList}
-            showBackButton={true}
-          />
+        {selectedConversationId ? (
+          <div className="flex flex-col h-full">
+            {/* Back button for mobile */}
+            <div className="md:hidden p-2 border-b">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedConversationId(null)}>
+                ← Voltar
+              </Button>
+            </div>
+            <div className="flex-1">
+              <MessageThread
+                conversationId={selectedConversationId}
+                contact={selectedConversation?.contact}
+              />
+            </div>
+          </div>
         ) : (
-          <EmptyChat />
+          <div className="flex-1 flex items-center justify-center bg-muted/30">
+            <div className="text-center">
+              <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground">Selecione uma conversa</h3>
+              <p className="text-sm text-muted-foreground">
+                Escolha uma conversa para ver as mensagens
+              </p>
+            </div>
+          </div>
         )}
       </div>
     </div>
