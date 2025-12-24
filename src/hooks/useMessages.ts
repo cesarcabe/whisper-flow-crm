@@ -73,7 +73,7 @@ export function useMessages(conversationId: string | null) {
       supabase.removeChannel(channelRef.current);
     }
 
-    console.log('[RealtimeWhatsApp]', 'subscribed', { workspaceId, conversationId });
+    console.log('[Realtime]', 'subscribed', { workspaceId, conversationId });
 
     channelRef.current = supabase
       .channel(`messages-${conversationId}`)
@@ -86,9 +86,12 @@ export function useMessages(conversationId: string | null) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          console.log('[RealtimeWhatsApp]', 'event', payload);
           const newMessage = payload.new as Message;
-          setMessages(prev => [newMessage, ...prev]);
+          console.log('[Realtime]', 'event', { table: 'messages', type: payload.eventType, id: newMessage?.id });
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMessage.id)) return prev;
+            return [newMessage, ...prev];
+          });
         }
       )
       .on(
@@ -100,16 +103,18 @@ export function useMessages(conversationId: string | null) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          console.log('[RealtimeWhatsApp]', 'event', payload);
           const updated = payload.new as Message;
-          setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
+          console.log('[Realtime]', 'event', { table: 'messages', type: payload.eventType, id: updated?.id });
+          setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[Realtime]', 'status', { channel: 'messages', status, conversationId });
+      });
 
     return () => {
       if (channelRef.current) {
-        console.log('[RealtimeWhatsApp]', 'unsubscribed', { workspaceId, conversationId });
+        console.log('[Realtime]', 'unsubscribed', { workspaceId, conversationId });
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
