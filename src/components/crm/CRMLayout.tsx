@@ -191,16 +191,20 @@ export function CRMLayout() {
             </div>
           </div>
         ) : (
-          <ScrollArea className="flex-1">
-            {displayedConversations.map(conversation => (
-              <ConversationItem
-                key={conversation.id}
-                conversation={conversation}
-                isActive={selectedConversationId === conversation.id}
-                onClick={() => setSelectedConversationId(conversation.id)}
-              />
-            ))}
-          </ScrollArea>
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="flex flex-col">
+                {displayedConversations.map(conversation => (
+                  <ConversationItem
+                    key={conversation.id}
+                    conversation={conversation}
+                    isActive={selectedConversationId === conversation.id}
+                    onClick={() => setSelectedConversationId(conversation.id)}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
         )}
       </div>
 
