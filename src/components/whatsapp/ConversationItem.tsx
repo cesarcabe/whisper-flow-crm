@@ -29,7 +29,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
   return (
     <div
       className={cn(
-        'flex items-start gap-3 p-3 cursor-pointer transition-colors border-b border-border/50',
+        'flex items-start gap-3 p-3 w-full min-w-0 overflow-hidden cursor-pointer transition-colors border-b border-border/50',
         isActive ? 'bg-accent' : 'hover:bg-accent/50'
       )}
       onClick={onClick}
@@ -42,15 +42,13 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
         ) : (
           <>
             <AvatarImage src={contact?.avatar_url || undefined} alt={name} />
-            <AvatarFallback className="bg-primary/10 text-primary">
-              {initials}
-            </AvatarFallback>
+            <AvatarFallback className="bg-primary/10 text-primary">{initials}</AvatarFallback>
           </>
         )}
       </Avatar>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
             <h4 className="font-medium text-foreground truncate">{name}</h4>
             {isGroup && (
@@ -65,25 +63,29 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
             </span>
           )}
         </div>
-        <div className="flex items-center justify-between mt-0.5">
-          <p className="text-sm text-muted-foreground truncate">
+
+        <div className="flex items-center justify-between gap-2 mt-0.5 min-w-0">
+          <p className="text-sm text-muted-foreground truncate min-w-0">
             {conversation.lastMessagePreview || 'Nenhuma mensagem'}
           </p>
           {unreadCount > 0 && (
-            <Badge variant="default" className="ml-2 h-5 min-w-[20px] flex items-center justify-center text-xs">
+            <Badge
+              variant="default"
+              className="ml-2 h-5 min-w-[20px] shrink-0 flex items-center justify-center text-xs"
+            >
               {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>
           )}
         </div>
-        
+
         {/* Tags de Relacionamento e Estágio */}
         {(contactClass || stage) && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
+          <div className="flex flex-wrap gap-1 mt-1.5 min-w-0 overflow-hidden">
             {contactClass && (
-              <Badge 
-                variant="outline" 
-                className="text-[10px] px-1.5 py-0 h-4"
-                style={{ 
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-4 max-w-[200px] truncate"
+                style={{
                   borderColor: contactClass.color || undefined,
                   color: contactClass.color || undefined,
                 }}
@@ -92,10 +94,10 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
               </Badge>
             )}
             {stage && (
-              <Badge 
-                variant="outline" 
-                className="text-[10px] px-1.5 py-0 h-4"
-                style={{ 
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-4 max-w-[200px] truncate"
+                style={{
                   borderColor: stage.color || undefined,
                   color: stage.color || undefined,
                 }}
