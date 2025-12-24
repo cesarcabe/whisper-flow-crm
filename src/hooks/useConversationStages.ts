@@ -168,10 +168,13 @@ export function useConversationStages() {
 
     try {
       if (existingConversationId) {
-        // Update existing conversation
+        // Update existing conversation with stage and pipeline
         const { error } = await supabase
           .from('conversations')
-          .update({ stage_id: newStageId })
+          .update({ 
+            stage_id: newStageId,
+            pipeline_id: activePipeline.id,
+          })
           .eq('id', existingConversationId);
 
         if (error) {
@@ -180,35 +183,61 @@ export function useConversationStages() {
           return false;
         }
       } else {
-        // Need a whatsapp_number_id to create a conversation - get first available
-        const { data: whatsappNumber } = await supabase
-          .from('whatsapp_numbers')
+        // Check if there's ANY existing conversation for this contact (regardless of pipeline)
+        const { data: existingConversation } = await supabase
+          .from('conversations')
           .select('id')
           .eq('workspace_id', workspaceId)
+          .eq('contact_id', contactId)
           .limit(1)
           .maybeSingle();
 
-        if (!whatsappNumber) {
-          console.error('[ConversationStages] No WhatsApp number available');
-          toast.error('Configure um número WhatsApp primeiro');
-          return false;
-        }
+        if (existingConversation) {
+          // Update the existing conversation to this pipeline/stage
+          const { error } = await supabase
+            .from('conversations')
+            .update({ 
+              stage_id: newStageId,
+              pipeline_id: activePipeline.id,
+            })
+            .eq('id', existingConversation.id);
 
-        // Create new conversation for this contact
-        const { error } = await supabase
-          .from('conversations')
-          .insert({
-            contact_id: contactId,
-            stage_id: newStageId,
-            pipeline_id: activePipeline.id,
-            workspace_id: workspaceId,
-            whatsapp_number_id: whatsappNumber.id,
-          });
+          if (error) {
+            console.error('[ConversationStages] Error updating conversation:', error);
+            toast.error('Erro ao atualizar conversa');
+            return false;
+          }
+        } else {
+          // Need a whatsapp_number_id to create a conversation - get first available
+          const { data: whatsappNumber } = await supabase
+            .from('whatsapp_numbers')
+            .select('id')
+            .eq('workspace_id', workspaceId)
+            .limit(1)
+            .maybeSingle();
 
-        if (error) {
-          console.error('[ConversationStages] Error creating conversation:', error);
-          toast.error('Erro ao criar conversa');
-          return false;
+          if (!whatsappNumber) {
+            console.error('[ConversationStages] No WhatsApp number available');
+            toast.error('Configure um número WhatsApp primeiro');
+            return false;
+          }
+
+          // Create new conversation for this contact
+          const { error } = await supabase
+            .from('conversations')
+            .insert({
+              contact_id: contactId,
+              stage_id: newStageId,
+              pipeline_id: activePipeline.id,
+              workspace_id: workspaceId,
+              whatsapp_number_id: whatsappNumber.id,
+            });
+
+          if (error) {
+            console.error('[ConversationStages] Error creating conversation:', error);
+            toast.error('Erro ao criar conversa');
+            return false;
+          }
         }
       }
 
