@@ -101,22 +101,21 @@ export function CRMLayout() {
   }
 
   return (
-    <div className="h-full w-full flex bg-background overflow-hidden">
+    <div className="h-full w-full min-h-0 flex bg-background overflow-hidden">
       {/* Conversations List */}
       <div
         className={cn(
-          'w-full md:w-[380px] lg:w-[420px] flex-shrink-0 border-r border-border flex flex-col',
-          'md:block',
-          selectedConversationId ? 'hidden' : 'block'
+          'w-full md:w-[380px] lg:w-[420px] flex-shrink-0 border-r border-border flex flex-col min-h-0 overflow-hidden',
+          selectedConversationId ? 'hidden md:flex' : 'flex'
         )}
       >
         {/* Header: Ícone + Mensagens + Seletor de Número + Seletor Todos/Diretas/Grupos */}
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
             <MessageSquare className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-semibold text-foreground">Mensagens</h1>
+            <h1 className="text-lg font-semibold text-foreground truncate">Mensagens</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap justify-end">
             {/* WhatsApp Number Selector */}
             {numbers.length > 0 && (
               <Select value={activeNumberId || ''} onValueChange={setSelectedNumberId}>
@@ -132,11 +131,9 @@ export function CRMLayout() {
                 </SelectContent>
               </Select>
             )}
-            <Select 
-              value={filters.type} 
-              onValueChange={(value: 'all' | 'direct' | 'group') => 
-                setFilters({ ...filters, type: value })
-              }
+            <Select
+              value={filters.type}
+              onValueChange={(value: 'all' | 'direct' | 'group') => setFilters({ ...filters, type: value })}
             >
               <SelectTrigger className="h-8 w-[100px] text-xs">
                 <SelectValue />
@@ -153,9 +150,8 @@ export function CRMLayout() {
           </div>
         </div>
 
-
         {/* Barra de Busca */}
-        <div className="px-4 py-2 border-b border-border/50">
+        <div className="px-4 py-2 border-b border-border/50 flex-shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -169,20 +165,22 @@ export function CRMLayout() {
         </div>
 
         {/* Dropdowns: Relacionamento + Estágios de Vendas */}
-        <ConversationFilters
-          contactClasses={contactClasses}
-          stages={stages}
-          filters={filters}
-          onFiltersChange={setFilters}
-        />
+        <div className="flex-shrink-0">
+          <ConversationFilters
+            contactClasses={contactClasses}
+            stages={stages}
+            filters={filters}
+            onFiltersChange={setFilters}
+          />
+        </div>
 
         {/* Conversation List */}
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 min-h-0 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : error ? (
-          <div className="flex-1 flex items-center justify-center p-4">
+          <div className="flex-1 min-h-0 flex items-center justify-center p-4">
             <div className="text-center">
               <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-3" />
               <p className="text-sm text-destructive mb-3">{error}</p>
@@ -193,24 +191,24 @@ export function CRMLayout() {
             </div>
           </div>
         ) : displayedConversations.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center p-4">
+          <div className="flex-1 min-h-0 flex items-center justify-center p-4">
             <div className="text-center">
               <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">
                 {conversations.length === 0 ? 'Nenhuma conversa ainda' : 'Nenhum resultado'}
               </h3>
               <p className="text-sm text-muted-foreground">
-                {conversations.length === 0 
+                {conversations.length === 0
                   ? 'Envie ou receba uma mensagem no WhatsApp.'
                   : 'Tente ajustar os filtros ou a busca.'}
               </p>
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="flex flex-col">
-                {displayedConversations.map(conversation => (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <ScrollArea className="h-full w-full">
+              <div className="flex flex-col min-w-0">
+                {displayedConversations.map((conversation) => (
                   <ConversationItem
                     key={conversation.id}
                     conversation={conversation}
@@ -227,8 +225,7 @@ export function CRMLayout() {
       {/* Message Thread */}
       <div
         className={cn(
-          'flex-1 min-w-0 flex flex-col',
-          'md:block',
+          'flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden',
           !selectedConversationId ? 'hidden md:flex' : 'flex'
         )}
       >
@@ -240,19 +237,14 @@ export function CRMLayout() {
                 ← Voltar
               </Button>
             </div>
-            <MessageThread
-              conversationId={selectedConversationId}
-              contact={selectedConversation?.contact}
-            />
+            <MessageThread conversationId={selectedConversationId} contact={selectedConversation?.contact} />
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-muted/30">
+          <div className="flex-1 min-h-0 flex items-center justify-center bg-muted/30">
             <div className="text-center">
               <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground">Selecione uma conversa</h3>
-              <p className="text-sm text-muted-foreground">
-                Escolha uma conversa para ver as mensagens
-              </p>
+              <p className="text-sm text-muted-foreground">Escolha uma conversa para ver as mensagens</p>
             </div>
           </div>
         )}
