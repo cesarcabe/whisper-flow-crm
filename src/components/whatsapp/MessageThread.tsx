@@ -1,9 +1,11 @@
 import { useRef, useEffect } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, ArrowDown } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, ArrowDown, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMessages, Message } from '@/hooks/useMessages';
+import { MessageInput } from './MessageInput';
 import { Tables } from '@/integrations/supabase/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -14,15 +16,18 @@ type Contact = Tables<'contacts'>;
 interface MessageThreadProps {
   conversationId: string;
   contact?: Contact | null;
+  isGroup?: boolean;
 }
 
-export function MessageThread({ conversationId, contact }: MessageThreadProps) {
+export function MessageThread({ conversationId, contact, isGroup }: MessageThreadProps) {
   const { messages, loading, loadingMore, error, hasMore, loadMore, refetch } = useMessages(conversationId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef(true);
 
   const name = contact?.name || 'Contato desconhecido';
-  const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const initials = isGroup 
+    ? 'GP' 
+    : name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
   // Scroll to bottom on initial load
   useEffect(() => {
@@ -65,15 +70,30 @@ export function MessageThread({ conversationId, contact }: MessageThreadProps) {
       {/* Contact Header */}
       <div className="flex items-center gap-3 p-3 border-b bg-card">
         <Avatar className="h-10 w-10">
-          <AvatarImage src={contact?.avatar_url || undefined} alt={name} />
-          <AvatarFallback className="bg-primary/10 text-primary">
-            {initials}
-          </AvatarFallback>
+          {isGroup ? (
+            <AvatarFallback className="bg-secondary/20 text-secondary">
+              <Users className="h-5 w-5" />
+            </AvatarFallback>
+          ) : (
+            <>
+              <AvatarImage src={contact?.avatar_url || undefined} alt={name} />
+              <AvatarFallback className="bg-primary/10 text-primary">
+                {initials}
+              </AvatarFallback>
+            </>
+          )}
         </Avatar>
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-foreground">{name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-foreground">{name}</h3>
+            {isGroup && (
+              <Badge variant="secondary" className="text-xs">
+                Grupo
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground truncate">
-            {contact?.phone || 'Sem telefone'}
+            {isGroup ? 'Grupo do WhatsApp' : contact?.phone || 'Sem telefone'}
           </p>
         </div>
       </div>
@@ -113,12 +133,11 @@ export function MessageThread({ conversationId, contact }: MessageThreadProps) {
         )}
       </ScrollArea>
 
-      {/* Input placeholder - TODO: implement sending */}
-      <div className="p-3 border-t bg-card">
-        <div className="bg-muted/50 rounded-lg px-4 py-3 text-sm text-muted-foreground">
-          Envio de mensagens em breve...
-        </div>
-      </div>
+      {/* Message Input */}
+      <MessageInput 
+        conversationId={conversationId} 
+        onMessageSent={refetch}
+      />
     </div>
   );
 }
