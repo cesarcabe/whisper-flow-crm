@@ -7,7 +7,9 @@ import {
   MoreVertical,
   Check,
   X,
-  Pencil
+  Pencil,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,6 +33,17 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 import { WhatsappNumber, mapStatus } from '@/hooks/useWhatsappNumbers';
 import { Tables } from '@/integrations/supabase/types';
 import { useNavigate } from 'react-router-dom';
@@ -46,6 +59,7 @@ interface WhatsappConnectionCardProps {
   onUpdateName: (id: string, name: string) => Promise<void>;
   onShowQr: (id: string) => void;
   onRefresh: () => void;
+  onDelete: (id: string) => Promise<void>;
 }
 
 export function WhatsappConnectionCard({
@@ -55,11 +69,14 @@ export function WhatsappConnectionCard({
   onUpdateName,
   onShowQr,
   onRefresh,
+  onDelete,
 }: WhatsappConnectionCardProps) {
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(number.internal_name);
   const [saving, setSaving] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const status = mapStatus(number.status);
 
@@ -88,6 +105,20 @@ export function WhatsappConnectionCard({
   const handlePipelineChange = async (value: string) => {
     const pipelineId = value === 'none' ? null : value;
     await onUpdatePipeline(number.id, pipelineId);
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await onDelete(number.id);
+      toast.success('Conexão excluída com sucesso');
+    } catch (err) {
+      console.error('[WhatsappConnectionCard]', 'delete_error', err);
+      toast.error('Erro ao excluir conexão');
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+    }
   };
 
   const lastActivity = number.last_connected_at || number.updated_at;
@@ -210,11 +241,48 @@ export function WhatsappConnectionCard({
                     Exibir QR Code
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem 
+                  onClick={() => setDeleteDialogOpen(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir conexão
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
       </CardContent>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir conexão WhatsApp?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir a conexão "{number.internal_name}"? 
+              Esta ação não pode ser desfeita e todas as conversas associadas serão mantidas, 
+              mas você não poderá mais enviar ou receber mensagens por este número.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete} 
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                'Excluir'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

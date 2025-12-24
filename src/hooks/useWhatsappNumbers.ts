@@ -83,6 +83,23 @@ export function useWhatsappNumbers() {
     ));
   }, []);
 
+  const deleteNumber = useCallback(async (id: string) => {
+    console.log('[useWhatsappNumbers]', 'delete_start', { id });
+    
+    const { error: deleteError } = await supabase
+      .from('whatsapp_numbers')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error('[useWhatsappNumbers]', 'delete_error', deleteError);
+      throw deleteError;
+    }
+
+    console.log('[useWhatsappNumbers]', 'delete_success', { id });
+    setNumbers(prev => prev.filter(n => n.id !== id));
+  }, []);
+
   useEffect(() => {
     fetchNumbers();
   }, [fetchNumbers]);
@@ -94,5 +111,6 @@ export function useWhatsappNumbers() {
     refetch: fetchNumbers,
     updatePipeline,
     updateInternalName,
+    deleteNumber,
   };
 }
