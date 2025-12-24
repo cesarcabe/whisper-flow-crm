@@ -105,11 +105,14 @@ Deno.serve(async (req) => {
   }
 
   // Evolution API may return QR in different formats:
-  // - payload.code (base64 image)
-  // - payload.base64 (base64 image)  
-  // - payload.qrcode.base64
-  // - payload.pairingCode (pairing code for linking)
-  let qrCode = payload?.code ?? payload?.base64 ?? payload?.qrcode?.base64 ?? null;
+  // - payload.base64: usually a full data URI (data:image/png;base64,...)
+  // - payload.qrcode.base64: sometimes nested
+  // - payload.code / payload.qrcode.code: often a non-image token (ex: starts with "2@"), NOT renderable as an image
+  // We MUST prioritize image base64 when available.
+  const qrImage = payload?.base64 ?? payload?.qrcode?.base64 ?? null;
+  const qrToken = payload?.code ?? payload?.qrcode?.code ?? null;
+
+  let qrCode = qrImage ?? qrToken ?? null;
   let pairingCode = payload?.pairingCode ?? payload?.qrcode?.pairingCode ?? null;
 
   // If no QR from Evolution API, use the one saved from creation

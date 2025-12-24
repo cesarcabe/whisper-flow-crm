@@ -109,22 +109,25 @@ export function WhatsappQrModal({ open, onOpenChange, whatsappNumberId, onConnec
       );
     }
 
-    // Check if qrCode is base64 image or just a string
-    const isBase64 = qrCode.startsWith('data:image') || qrCode.length > 100;
+    // Check if qrCode is an image (data URI or raw base64). Evolution may also return a non-image token (ex: starts with "2@").
+    const trimmed = qrCode.trim();
+    const isDataImage = trimmed.startsWith('data:image');
+    const isRawBase64 = trimmed.length > 200 && /^[A-Za-z0-9+/=]+$/.test(trimmed);
+    const isImage = isDataImage || isRawBase64;
 
     return (
       <div className="flex flex-col items-center gap-4">
         <div className="bg-white p-4 rounded-lg">
-          {isBase64 ? (
+          {isImage ? (
             <img
-              src={qrCode.startsWith('data:image') ? qrCode : `data:image/png;base64,${qrCode}`}
+              src={isDataImage ? trimmed : `data:image/png;base64,${trimmed}`}
               alt="QR Code WhatsApp"
               className="w-64 h-64"
             />
           ) : (
             <div className="w-64 h-64 flex items-center justify-center bg-muted rounded">
               <p className="text-xs text-muted-foreground text-center p-4 break-all">
-                {qrCode}
+                {trimmed}
               </p>
             </div>
           )}

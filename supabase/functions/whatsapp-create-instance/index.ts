@@ -176,8 +176,10 @@ Deno.serve(async (req) => {
     );
   }
 
-  // Extract QR code from creation response (Evolution API returns it when qrcode: true)
-  const qrCode = createPayload?.qrcode?.base64 ?? createPayload?.qrcode?.code ?? createPayload?.base64 ?? createPayload?.code ?? null;
+  // Extract QR code from creation response (prefer image base64 when available)
+  const qrImage = createPayload?.qrcode?.base64 ?? createPayload?.base64 ?? null;
+  const qrToken = createPayload?.qrcode?.code ?? createPayload?.code ?? null;
+  const qrCode = qrImage ?? qrToken ?? null;
   const pairingCode = createPayload?.qrcode?.pairingCode ?? createPayload?.pairingCode ?? null;
   
   console.log('[Edge:whatsapp-create-instance] creation response', { 
