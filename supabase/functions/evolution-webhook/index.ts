@@ -503,7 +503,7 @@ Deno.serve(async (req: Request) => {
         external_id: providerEventId,
         is_outgoing: isFromMe,
         body: text,
-        status: "received",
+        status: isFromMe ? "sent" : "delivered",
       });
 
       if (msgErr) {
