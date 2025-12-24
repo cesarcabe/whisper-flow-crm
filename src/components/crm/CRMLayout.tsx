@@ -92,22 +92,39 @@ export function CRMLayout() {
           selectedConversationId ? 'hidden' : 'block'
         )}
       >
-        {/* Header com título "Mensagens" + botão + */}
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        {/* Header: Ícone + Mensagens + Seletor Todos/Diretas/Grupos */}
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-primary" />
             <h1 className="text-lg font-semibold text-foreground">Mensagens</h1>
           </div>
-          <Button size="icon" className="h-8 w-8 rounded-full bg-primary hover:bg-primary/90">
-            <Plus className="h-4 w-4 text-primary-foreground" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Select 
+              value={filters.type} 
+              onValueChange={(value: 'all' | 'direct' | 'group') => 
+                setFilters({ ...filters, type: value })
+              }
+            >
+              <SelectTrigger className="h-8 w-[100px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="direct">Diretas</SelectItem>
+                <SelectItem value="group">Grupos</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="icon" className="h-8 w-8 rounded-full bg-primary hover:bg-primary/90">
+              <Plus className="h-4 w-4 text-primary-foreground" />
+            </Button>
+          </div>
         </div>
 
-        {/* WhatsApp Number Selector */}
+        {/* WhatsApp Number Selector (se houver mais de um) */}
         {numbers.length > 1 && (
           <div className="px-4 py-2 border-b border-border/50">
             <Select value={activeNumberId || ''} onValueChange={setSelectedNumberId}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-8 text-xs">
                 <SelectValue placeholder="Selecione uma conexão" />
               </SelectTrigger>
               <SelectContent>
@@ -121,7 +138,7 @@ export function CRMLayout() {
           </div>
         )}
 
-        {/* Busca */}
+        {/* Barra de Busca */}
         <div className="px-4 py-2 border-b border-border/50">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -130,12 +147,12 @@ export function CRMLayout() {
               placeholder="Buscar contato..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 pl-9 text-sm"
+              className="h-8 pl-9 text-xs"
             />
           </div>
         </div>
 
-        {/* Filtros (tipo + relacionamento/estágio) */}
+        {/* Dropdowns: Relacionamento + Estágios de Vendas */}
         <ConversationFilters
           contactClasses={contactClasses}
           stages={stages}

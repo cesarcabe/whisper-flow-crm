@@ -1,8 +1,5 @@
 import { useMemo } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export type ConversationType = 'all' | 'direct' | 'group';
 
@@ -37,138 +34,73 @@ export function ConversationFilters({
   filters,
   onFiltersChange,
 }: ConversationFiltersProps) {
-  const hasActiveFilters = 
-    filters.type !== 'all' || 
-    filters.contactClassIds.length > 0 || 
-    filters.stageIds.length > 0;
-
-  const toggleContactClass = (classId: string) => {
-    const newIds = filters.contactClassIds.includes(classId)
-      ? filters.contactClassIds.filter(id => id !== classId)
-      : [...filters.contactClassIds, classId];
-    onFiltersChange({ ...filters, contactClassIds: newIds });
+  const setContactClass = (value: string) => {
+    if (value === 'all') {
+      onFiltersChange({ ...filters, contactClassIds: [] });
+    } else {
+      onFiltersChange({ ...filters, contactClassIds: [value] });
+    }
   };
 
-  const toggleStage = (stageId: string) => {
-    const newIds = filters.stageIds.includes(stageId)
-      ? filters.stageIds.filter(id => id !== stageId)
-      : [...filters.stageIds, stageId];
-    onFiltersChange({ ...filters, stageIds: newIds });
+  const setStage = (value: string) => {
+    if (value === 'all') {
+      onFiltersChange({ ...filters, stageIds: [] });
+    } else {
+      onFiltersChange({ ...filters, stageIds: [value] });
+    }
   };
 
-  const setType = (type: ConversationType) => {
-    onFiltersChange({ ...filters, type });
-  };
-
-  const clearFilters = () => {
-    onFiltersChange({ type: 'all', contactClassIds: [], stageIds: [] });
-  };
+  const selectedContactClass = filters.contactClassIds[0] || 'all';
+  const selectedStage = filters.stageIds[0] || 'all';
 
   return (
     <div className="px-4 py-2 border-b border-border/50">
-      {/* Filtros: Todos/Diretas/Grupos + Relacionamento + Estágio */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {/* Filtro Tipo: Todos, Diretas, Grupos */}
-        <Badge
-          variant={filters.type === 'all' ? 'default' : 'outline'}
-          className={cn(
-            'cursor-pointer text-xs px-3 py-1 transition-colors',
-            filters.type === 'all' 
-              ? 'bg-primary text-primary-foreground' 
-              : 'hover:bg-accent'
-          )}
-          onClick={() => setType('all')}
-        >
-          Todos
-        </Badge>
-        <Badge
-          variant={filters.type === 'direct' ? 'default' : 'outline'}
-          className={cn(
-            'cursor-pointer text-xs px-3 py-1 transition-colors',
-            filters.type === 'direct' 
-              ? 'bg-primary text-primary-foreground' 
-              : 'hover:bg-accent'
-          )}
-          onClick={() => setType('direct')}
-        >
-          Diretas
-        </Badge>
-        <Badge
-          variant={filters.type === 'group' ? 'default' : 'outline'}
-          className={cn(
-            'cursor-pointer text-xs px-3 py-1 transition-colors',
-            filters.type === 'group' 
-              ? 'bg-primary text-primary-foreground' 
-              : 'hover:bg-accent'
-          )}
-          onClick={() => setType('group')}
-        >
-          Grupos
-        </Badge>
+      <div className="flex gap-2">
+        {/* Dropdown Relacionamento */}
+        <Select value={selectedContactClass} onValueChange={setContactClass}>
+          <SelectTrigger className="h-8 flex-1 text-xs">
+            <SelectValue placeholder="Relacionamento" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Relacionamento</SelectItem>
+            {contactClasses.map((cc) => (
+              <SelectItem key={cc.id} value={cc.id}>
+                <div className="flex items-center gap-2">
+                  {cc.color && (
+                    <div 
+                      className="w-2 h-2 rounded-full" 
+                      style={{ backgroundColor: cc.color }} 
+                    />
+                  )}
+                  {cc.name}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        {/* Separador se houver filtros de relacionamento/estágio */}
-        {(contactClasses.length > 0 || stages.length > 0) && (
-          <div className="w-px h-5 bg-border self-center mx-1" />
-        )}
-
-        {/* Filtros de Relacionamento (Contact Classes) */}
-        {contactClasses.map((cc) => (
-          <Badge
-            key={cc.id}
-            variant={filters.contactClassIds.includes(cc.id) ? 'default' : 'outline'}
-            className={cn(
-              'cursor-pointer text-xs px-3 py-1 transition-colors',
-              filters.contactClassIds.includes(cc.id) 
-                ? 'text-white' 
-                : 'hover:bg-accent'
-            )}
-            style={{
-              borderColor: cc.color || undefined,
-              backgroundColor: filters.contactClassIds.includes(cc.id) 
-                ? (cc.color || undefined) 
-                : undefined,
-            }}
-            onClick={() => toggleContactClass(cc.id)}
-          >
-            {cc.name}
-          </Badge>
-        ))}
-
-        {/* Filtros de Estágio (Stages) */}
-        {stages.map((stage) => (
-          <Badge
-            key={stage.id}
-            variant={filters.stageIds.includes(stage.id) ? 'default' : 'outline'}
-            className={cn(
-              'cursor-pointer text-xs px-3 py-1 transition-colors',
-              filters.stageIds.includes(stage.id) 
-                ? 'text-white' 
-                : 'hover:bg-accent'
-            )}
-            style={{
-              borderColor: stage.color || undefined,
-              backgroundColor: filters.stageIds.includes(stage.id) 
-                ? (stage.color || undefined) 
-                : undefined,
-            }}
-            onClick={() => toggleStage(stage.id)}
-          >
-            {stage.name}
-          </Badge>
-        ))}
-
-        {/* Botão Limpar filtros */}
-        {hasActiveFilters && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={clearFilters}
-            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground ml-1"
-          >
-            <X className="h-3 w-3 mr-1" />
-            Limpar
-          </Button>
-        )}
+        {/* Dropdown Estágios de Vendas */}
+        <Select value={selectedStage} onValueChange={setStage}>
+          <SelectTrigger className="h-8 flex-1 text-xs">
+            <SelectValue placeholder="Estágios de Vendas" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Estágios de Vendas</SelectItem>
+            {stages.map((stage) => (
+              <SelectItem key={stage.id} value={stage.id}>
+                <div className="flex items-center gap-2">
+                  {stage.color && (
+                    <div 
+                      className="w-2 h-2 rounded-full" 
+                      style={{ backgroundColor: stage.color }} 
+                    />
+                  )}
+                  {stage.name}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );
