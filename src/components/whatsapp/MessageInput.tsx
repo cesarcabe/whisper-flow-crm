@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Smile, Paperclip, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,8 +58,28 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
     }
   };
 
+  const hasText = message.trim().length > 0;
+
   return (
     <div className="chat-input-container">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
+        disabled={disabled || sending}
+      >
+        <Smile className="h-5 w-5" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
+        disabled={disabled || sending}
+      >
+        <Paperclip className="h-5 w-5" />
+      </Button>
       <Textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
@@ -69,18 +89,30 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
         className="min-h-[44px] max-h-[120px] resize-none flex-1"
         rows={1}
       />
-      <Button
-        size="icon"
-        onClick={handleSend}
-        disabled={disabled || sending || !message.trim()}
-        className="shrink-0"
-      >
-        {sending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Send className="h-4 w-4" />
-        )}
-      </Button>
+      {hasText || sending ? (
+        <Button
+          size="icon"
+          onClick={handleSend}
+          disabled={disabled || sending || !hasText}
+          className="h-10 w-10 shrink-0"
+        >
+          {sending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
+          disabled={disabled}
+        >
+          <Mic className="h-5 w-5" />
+        </Button>
+      )}
     </div>
   );
 }
