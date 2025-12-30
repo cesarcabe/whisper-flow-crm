@@ -60,7 +60,7 @@ export function useConversations(whatsappNumberId: string | null) {
       const contactIds = [...new Set(convData.map(c => c.contact_id))];
       const { data: contactsData } = await supabase
         .from('contacts')
-        .select('id, name, phone, avatar_url, contact_class_id, contact_class:contact_classes(id, name, color)')
+        .select('*, contact_class:contact_classes(id, name, color)')
         .in('id', contactIds);
 
       const contactsMap = new Map(contactsData?.map(c => [c.id, c]) || []);
@@ -172,7 +172,7 @@ export function useConversations(whatsappNumberId: string | null) {
           // Fetch contact for new conversation, then add to list
           supabase
             .from('contacts')
-            .select('id, name, phone, avatar_url')
+            .select('*')
             .eq('id', newConv.contact_id)
             .single()
             .then(({ data: contact }) => {
