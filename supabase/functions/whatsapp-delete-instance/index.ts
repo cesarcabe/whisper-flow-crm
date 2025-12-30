@@ -181,8 +181,42 @@ Deno.serve(async (req) => {
     evolutionDeleted = true; // No Evolution configured, skip
   }
 
-  // 3) Delete from database
-  console.log('[Edge:whatsapp-delete-instance] deleting_from_db', { whatsappNumberId });
+  // 3) Delete related data from database (in correct order due to foreign keys)
+  console.log('[Edge:whatsapp-delete-instance] deleting_related_data', { whatsappNumberId });
+
+  // 3a) Delete messages associated with this whatsapp_number
+  const { error: messagesError } = await supabase
+    .from("messages")
+    .delete()
+    .eq("whatsapp_number_id", whatsappNumberId);
+
+  if (messagesError) {
+    console.error('[Edge:whatsapp-delete-instance] messages_delete_error', messagesError.message);
+    // Continue anyway - messages might not exist or have different FK
+  } else {
+    console.log('[Edge:whatsapp-delete-instance] messages_deleted');
+  }
+
+  // 3b) Delete conversations associated with this whatsapp_number
+  const { error: conversationsError } = await supabase
+    .from("conversations")
+    .delete()
+    .eq("whatsapp_number_id", whatsappNumberId);
+
+  if (conversationsError) {
+    console.error('[Edge:whatsapp-delete-instance] conversations_delete_error', conversationsError.message);
+    return json({ 
+      ok: false, 
+      message: `Erro ao excluir conversas: ${conversationsError.message}`,
+      evolution_deleted: evolutionDeleted,
+      evolution_error: evolutionError,
+    }, 500);
+  } else {
+    console.log('[Edge:whatsapp-delete-instance] conversations_deleted');
+  }
+
+  // 3c) Finally delete the whatsapp_number record
+  console.log('[Edge:whatsapp-delete-instance] deleting_whatsapp_number', { whatsappNumberId });
 
   const { error: deleteError } = await supabase
     .from("whatsapp_numbers")
