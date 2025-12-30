@@ -84,21 +84,51 @@ export function useWhatsappNumbers() {
   }, []);
 
   const deleteNumber = useCallback(async (id: string) => {
-    console.log('[useWhatsappNumbers]', 'delete_start', { id });
+    console.log('[DeleteConnection] delete_start', { whatsappNumberId: id, workspaceId });
     
-    const { error: deleteError } = await supabase
-      .from('whatsapp_numbers')
-      .delete()
-      .eq('id', id);
-
-    if (deleteError) {
-      console.error('[useWhatsappNumbers]', 'delete_error', deleteError);
-      throw deleteError;
+    if (!workspaceId) {
+      console.error('[DeleteConnection] no_workspace_id');
+      throw new Error('Workspace não encontrado');
     }
 
-    console.log('[useWhatsappNumbers]', 'delete_success', { id });
+    // Call edge function to delete from Evolution API and database
+    console.log('[DeleteConnection] calling_edge_function');
+    
+    const { data, error: invokeError } = await supabase.functions.invoke('whatsapp-delete-instance', {
+      body: { 
+        whatsapp_number_id: id,
+        workspace_id: workspaceId,
+      },
+    });
+
+    console.log('[DeleteConnection] edge_function_response', { data, error: invokeError });
+
+    if (invokeError) {
+      console.error('[DeleteConnection] invoke_error', invokeError);
+      throw new Error(invokeError.message || 'Erro ao chamar função de exclusão');
+    }
+
+    if (!data?.ok) {
+      console.error('[DeleteConnection] function_returned_error', data);
+      throw new Error(data?.message || 'Erro ao excluir conexão');
+    }
+
+    // Log warning if Evolution deletion had issues but DB was cleaned
+    if (data.evolution_error) {
+      console.warn('[DeleteConnection] evolution_warning', data.evolution_error);
+    }
+
+    console.log('[DeleteConnection] delete_success', { 
+      id, 
+      evolutionDeleted: data.evolution_deleted,
+      message: data.message 
+    });
+    
+    // Update local state
     setNumbers(prev => prev.filter(n => n.id !== id));
-  }, []);
+    
+    return data;
+  }, [workspaceId]);
 
   useEffect(() => {
     fetchNumbers();
