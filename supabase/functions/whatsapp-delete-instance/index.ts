@@ -181,38 +181,38 @@ Deno.serve(async (req) => {
     evolutionDeleted = true; // No Evolution configured, skip
   }
 
-  // 3) Delete related data from database (in correct order due to foreign keys)
-  console.log('[Edge:whatsapp-delete-instance] deleting_related_data', { whatsappNumberId });
+  // 3) Orphan related data (set whatsapp_number_id to NULL) to preserve message history
+  console.log('[Edge:whatsapp-delete-instance] orphaning_related_data', { whatsappNumberId });
 
-  // 3a) Delete messages associated with this whatsapp_number
+  // 3a) Set messages' whatsapp_number_id to NULL (preserve history)
   const { error: messagesError } = await supabase
     .from("messages")
-    .delete()
+    .update({ whatsapp_number_id: null })
     .eq("whatsapp_number_id", whatsappNumberId);
 
   if (messagesError) {
-    console.error('[Edge:whatsapp-delete-instance] messages_delete_error', messagesError.message);
-    // Continue anyway - messages might not exist or have different FK
+    console.error('[Edge:whatsapp-delete-instance] messages_orphan_error', messagesError.message);
+    // Continue anyway - messages might not exist
   } else {
-    console.log('[Edge:whatsapp-delete-instance] messages_deleted');
+    console.log('[Edge:whatsapp-delete-instance] messages_orphaned');
   }
 
-  // 3b) Delete conversations associated with this whatsapp_number
+  // 3b) Set conversations' whatsapp_number_id to NULL (preserve history)
   const { error: conversationsError } = await supabase
     .from("conversations")
-    .delete()
+    .update({ whatsapp_number_id: null })
     .eq("whatsapp_number_id", whatsappNumberId);
 
   if (conversationsError) {
-    console.error('[Edge:whatsapp-delete-instance] conversations_delete_error', conversationsError.message);
+    console.error('[Edge:whatsapp-delete-instance] conversations_orphan_error', conversationsError.message);
     return json({ 
       ok: false, 
-      message: `Erro ao excluir conversas: ${conversationsError.message}`,
+      message: `Erro ao desassociar conversas: ${conversationsError.message}`,
       evolution_deleted: evolutionDeleted,
       evolution_error: evolutionError,
     }, 500);
   } else {
-    console.log('[Edge:whatsapp-delete-instance] conversations_deleted');
+    console.log('[Edge:whatsapp-delete-instance] conversations_orphaned');
   }
 
   // 3c) Finally delete the whatsapp_number record
