@@ -59,7 +59,7 @@ interface WhatsappConnectionCardProps {
   onUpdateName: (id: string, name: string) => Promise<void>;
   onShowQr: (id: string) => void;
   onRefresh: () => void;
-  onDelete: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<{ ok: boolean; evolution_error?: string | null } | void>;
 }
 
 export function WhatsappConnectionCard({
@@ -108,13 +108,26 @@ export function WhatsappConnectionCard({
   };
 
   const handleDelete = async () => {
+    console.log('[DeleteConnection] UI_delete_clicked', { 
+      id: number.id, 
+      name: number.internal_name,
+      status: number.status 
+    });
+    
     setDeleting(true);
     try {
-      await onDelete(number.id);
-      toast.success('Conexão excluída com sucesso');
-    } catch (err) {
-      console.error('[WhatsappConnectionCard]', 'delete_error', err);
-      toast.error('Erro ao excluir conexão');
+      const result = await onDelete(number.id);
+      console.log('[DeleteConnection] UI_delete_success', { id: number.id, result });
+      
+      // Show appropriate message based on Evolution result
+      if (result && typeof result === 'object' && 'evolution_error' in result && result.evolution_error) {
+        toast.warning('Conexão removida do sistema. Aviso: não foi possível remover do provedor.');
+      } else {
+        toast.success('Conexão excluída com sucesso');
+      }
+    } catch (err: any) {
+      console.error('[DeleteConnection] UI_delete_error', { id: number.id, error: err });
+      toast.error(err?.message || 'Erro ao excluir conexão');
     } finally {
       setDeleting(false);
       setDeleteDialogOpen(false);
