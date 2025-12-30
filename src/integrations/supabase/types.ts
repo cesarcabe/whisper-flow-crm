@@ -469,7 +469,7 @@ export type Database = {
           stage_id: string | null
           unread_count: number | null
           updated_at: string
-          whatsapp_number_id: string
+          whatsapp_number_id: string | null
           workspace_id: string
         }
         Insert: {
@@ -484,7 +484,7 @@ export type Database = {
           stage_id?: string | null
           unread_count?: number | null
           updated_at?: string
-          whatsapp_number_id: string
+          whatsapp_number_id?: string | null
           workspace_id: string
         }
         Update: {
@@ -499,7 +499,7 @@ export type Database = {
           stage_id?: string | null
           unread_count?: number | null
           updated_at?: string
-          whatsapp_number_id?: string
+          whatsapp_number_id?: string | null
           workspace_id?: string
         }
         Relationships: [
