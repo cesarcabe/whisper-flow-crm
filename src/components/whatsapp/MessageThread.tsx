@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMessages, Message } from '@/hooks/useMessages';
 import { MessageInput } from './MessageInput';
+import { AudioPlayer } from './AudioPlayer';
 import { Tables } from '@/integrations/supabase/types';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -218,6 +219,7 @@ function MessagesWithDateSeparators({ messages }: { messages: Message[] }) {
 function MessageBubble({ message }: { message: Message }) {
   const isOutgoing = message.is_outgoing;
   const time = format(new Date(message.created_at), 'HH:mm', { locale: ptBR });
+  const isAudio = message.type === 'audio';
 
   return (
     <div className={cn('flex', isOutgoing ? 'justify-end' : 'justify-start')}>
@@ -229,14 +231,25 @@ function MessageBubble({ message }: { message: Message }) {
             : 'bg-[hsl(var(--message-received))] text-[hsl(var(--message-received-text))] rounded-bl-md shadow-sm'
         )}
       >
-        <p className="text-sm whitespace-pre-wrap break-words">{message.body}</p>
+        {isAudio && message.media_url ? (
+          <AudioPlayer src={message.media_url} isOutgoing={isOutgoing} />
+        ) : isAudio ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>🎤</span>
+            <span>Áudio indisponível</span>
+          </div>
+        ) : (
+          <p className="text-sm whitespace-pre-wrap break-words">{message.body}</p>
+        )}
         <div className={cn('flex items-center gap-1 mt-1', isOutgoing ? 'justify-end' : 'justify-start')}>
           <span className="text-xs opacity-70">{time}</span>
           {isOutgoing && message.status && (
             <span className="text-xs opacity-70">
+              {message.status === 'sending' && '⏳'}
               {message.status === 'sent' && '✓'}
               {message.status === 'delivered' && '✓✓'}
               {message.status === 'read' && <span className="text-primary">✓✓</span>}
+              {message.status === 'failed' && <span className="text-destructive">✕</span>}
             </span>
           )}
         </div>

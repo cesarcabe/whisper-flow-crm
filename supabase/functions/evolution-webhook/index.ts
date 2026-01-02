@@ -495,6 +495,54 @@ Deno.serve(async (req: Request) => {
 
       const isFromMe = data?.key?.fromMe === true;
 
+      // Detect message type and extract media URL
+      let messageType = "text";
+      let mediaUrl: string | null = null;
+      let bodyText = text;
+
+      // Check for audio message
+      if (data?.message?.audioMessage) {
+        messageType = "audio";
+        mediaUrl = safeString(data?.message?.audioMessage?.url ?? null);
+        bodyText = "🎤 Áudio";
+      }
+      // Check for image message
+      else if (data?.message?.imageMessage) {
+        messageType = "image";
+        mediaUrl = safeString(data?.message?.imageMessage?.url ?? null);
+        bodyText = data?.message?.imageMessage?.caption || "📷 Imagem";
+      }
+      // Check for video message
+      else if (data?.message?.videoMessage) {
+        messageType = "video";
+        mediaUrl = safeString(data?.message?.videoMessage?.url ?? null);
+        bodyText = data?.message?.videoMessage?.caption || "🎥 Vídeo";
+      }
+      // Check for document message
+      else if (data?.message?.documentMessage) {
+        messageType = "document";
+        mediaUrl = safeString(data?.message?.documentMessage?.url ?? null);
+        bodyText = data?.message?.documentMessage?.fileName || "📎 Documento";
+      }
+      // Check for sticker message
+      else if (data?.message?.stickerMessage) {
+        messageType = "sticker";
+        mediaUrl = safeString(data?.message?.stickerMessage?.url ?? null);
+        bodyText = "🎨 Sticker";
+      }
+      // Check for voice note (ptt - push to talk)
+      else if (data?.message?.pttMessage) {
+        messageType = "audio";
+        mediaUrl = safeString(data?.message?.pttMessage?.url ?? null);
+        bodyText = "🎤 Áudio";
+      }
+
+      console.log('[Edge:evolution-webhook] message_parsed', { 
+        messageType, 
+        hasMediaUrl: !!mediaUrl,
+        bodyLength: bodyText.length 
+      });
+
       // insert: se existir unique e der conflito, a função não pode quebrar
       const { error: msgErr } = await supabase.from("messages").insert({
         workspace_id: workspaceId,
@@ -502,7 +550,9 @@ Deno.serve(async (req: Request) => {
         whatsapp_number_id: wa.id,
         external_id: providerEventId,
         is_outgoing: isFromMe,
-        body: text,
+        body: bodyText,
+        type: messageType,
+        media_url: mediaUrl,
         status: isFromMe ? "sent" : "delivered",
       });
 
