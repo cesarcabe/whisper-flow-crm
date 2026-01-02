@@ -6,5 +6,6 @@ export { ConversationItem } from './ConversationItem';
 export { MessageThread } from './MessageThread';
 export { MessageInput } from './MessageInput';
 export { AudioPlayer } from './AudioPlayer';
+export { ImageViewer } from './ImageViewer';
 export { ConversationFilters, useConversationFilters } from './ConversationFilters';
 export type { FilterState, ConversationType } from './ConversationFilters';
