@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { Send, Loader2, Smile, Paperclip, Mic, Square, Trash2 } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Send, Loader2, Smile, Image, Mic, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,9 +13,15 @@ interface MessageInputProps {
   onMessageSent?: () => void;
 }
 
+const MAX_IMAGE_SIZE_MB = 10;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
 export function MessageInput({ conversationId, disabled, onMessageSent }: MessageInputProps) {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   
   const {
     isRecording,
@@ -33,7 +39,43 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleSend = useCallback(async () => {
+  // Handle image selection
+  const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate type
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      toast.error('Tipo de arquivo não suportado. Use JPG, PNG, GIF ou WebP.');
+      return;
+    }
+
+    // Validate size
+    const sizeMB = file.size / (1024 * 1024);
+    if (sizeMB > MAX_IMAGE_SIZE_MB) {
+      toast.error(`Imagem muito grande. Máximo: ${MAX_IMAGE_SIZE_MB}MB`);
+      return;
+    }
+
+    setSelectedImage(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const clearImage = useCallback(() => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+  }, []);
+
+  const handleSendText = useCallback(async () => {
     const text = message.trim();
     if (!text || sending) return;
 
@@ -69,6 +111,66 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
     }
   }, [message, conversationId, sending, onMessageSent]);
 
+  const handleSendImage = useCallback(async () => {
+    if (!selectedImage || sending) return;
+
+    console.log('[WA_IMAGE] sending', { conversationId, size: selectedImage.size });
+    setSending(true);
+
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          const base64Data = base64.split(',')[1];
+          resolve(base64Data);
+        };
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(selectedImage);
+
+      const imageBase64 = await base64Promise;
+
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-image', {
+        body: {
+          conversationId,
+          imageBase64,
+          mimeType: selectedImage.type,
+          caption: message.trim() || undefined,
+        },
+      });
+
+      if (error) {
+        console.error('[WA_IMAGE] error', error);
+        toast.error('Erro ao enviar imagem');
+        return;
+      }
+
+      if (!data?.ok) {
+        toast.error(data?.message || 'Erro ao enviar imagem');
+        return;
+      }
+
+      clearImage();
+      setMessage('');
+      onMessageSent?.();
+    } catch (err: any) {
+      console.error('[WA_IMAGE] error', err);
+      toast.error('Erro ao enviar imagem');
+    } finally {
+      setSending(false);
+    }
+  }, [selectedImage, conversationId, message, sending, onMessageSent, clearImage]);
+
+  const handleSend = useCallback(() => {
+    if (selectedImage) {
+      handleSendImage();
+    } else {
+      handleSendText();
+    }
+  }, [selectedImage, handleSendImage, handleSendText]);
+
   const handleStartRecording = useCallback(async () => {
     console.log('[WA_AUDIO] start_recording');
     await startRecording();
@@ -92,7 +194,6 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onloadend = () => {
           const base64 = reader.result as string;
-          // Remove data URL prefix (e.g., "data:audio/webm;base64,")
           const base64Data = base64.split(',')[1];
           resolve(base64Data);
         };
@@ -150,11 +251,14 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
   };
 
   const hasText = message.trim().length > 0;
+  const canSend = hasText || selectedImage;
 
   // Show error if recording failed
-  if (recordingError) {
-    toast.error(recordingError);
-  }
+  useEffect(() => {
+    if (recordingError) {
+      toast.error(recordingError);
+    }
+  }, [recordingError]);
 
   // Recording UI
   if (isRecording) {
@@ -195,59 +299,93 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
   }
 
   return (
-    <div className="chat-input-container">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
-        disabled={disabled || sending}
-      >
-        <Smile className="h-5 w-5" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
-        disabled={disabled || sending}
-      >
-        <Paperclip className="h-5 w-5" />
-      </Button>
-      <Textarea
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Digite uma mensagem..."
-        disabled={disabled || sending}
-        className="min-h-[44px] max-h-[120px] resize-none flex-1"
-        rows={1}
-      />
-      {hasText || sending ? (
-        <Button
-          size="icon"
-          onClick={handleSend}
-          disabled={disabled || sending || !hasText}
-          className="h-10 w-10 shrink-0"
-        >
-          {sending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
-      ) : (
+    <div className="flex flex-col">
+      {/* Image preview */}
+      {imagePreview && (
+        <div className="px-3 pt-3 pb-1">
+          <div className="relative inline-block">
+            <img
+              src={imagePreview}
+              alt="Preview"
+              className="h-20 w-auto rounded-lg object-cover"
+            />
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              onClick={clearImage}
+              className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="chat-input-container">
+        {/* Hidden file input */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          onChange={handleImageSelect}
+          className="hidden"
+        />
+
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          onClick={handleStartRecording}
           className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
-          disabled={disabled}
+          disabled={disabled || sending}
         >
-          <Mic className="h-5 w-5" />
+          <Smile className="h-5 w-5" />
         </Button>
-      )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
+          disabled={disabled || sending}
+          onClick={() => imageInputRef.current?.click()}
+        >
+          <Image className="h-5 w-5" />
+        </Button>
+        <Textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={selectedImage ? "Adicione uma legenda..." : "Digite uma mensagem..."}
+          disabled={disabled || sending}
+          className="min-h-[44px] max-h-[120px] resize-none flex-1"
+          rows={1}
+        />
+        {canSend || sending ? (
+          <Button
+            size="icon"
+            onClick={handleSend}
+            disabled={disabled || sending || !canSend}
+            className="h-10 w-10 shrink-0"
+          >
+            {sending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleStartRecording}
+            className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
+            disabled={disabled}
+          >
+            <Mic className="h-5 w-5" />
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMessages, Message } from '@/hooks/useMessages';
 import { MessageInput } from './MessageInput';
 import { AudioPlayer } from './AudioPlayer';
+import { ImageViewer } from './ImageViewer';
 import { Tables } from '@/integrations/supabase/types';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -220,6 +221,44 @@ function MessageBubble({ message }: { message: Message }) {
   const isOutgoing = message.is_outgoing;
   const time = format(new Date(message.created_at), 'HH:mm', { locale: ptBR });
   const isAudio = message.type === 'audio';
+  const isImage = message.type === 'image';
+
+  const renderContent = () => {
+    // Audio message
+    if (isAudio && message.media_url) {
+      return <AudioPlayer src={message.media_url} isOutgoing={isOutgoing} />;
+    }
+    if (isAudio) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>🎤</span>
+          <span>Áudio indisponível</span>
+        </div>
+      );
+    }
+
+    // Image message
+    if (isImage && message.media_url) {
+      return (
+        <ImageViewer
+          src={message.media_url}
+          caption={message.body !== '📷 Imagem' ? message.body : undefined}
+          isOutgoing={isOutgoing}
+        />
+      );
+    }
+    if (isImage) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>📷</span>
+          <span>Imagem indisponível</span>
+        </div>
+      );
+    }
+
+    // Text message
+    return <p className="text-sm whitespace-pre-wrap break-words">{message.body}</p>;
+  };
 
   return (
     <div className={cn('flex', isOutgoing ? 'justify-end' : 'justify-start')}>
@@ -231,16 +270,7 @@ function MessageBubble({ message }: { message: Message }) {
             : 'bg-[hsl(var(--message-received))] text-[hsl(var(--message-received-text))] rounded-bl-md shadow-sm'
         )}
       >
-        {isAudio && message.media_url ? (
-          <AudioPlayer src={message.media_url} isOutgoing={isOutgoing} />
-        ) : isAudio ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>🎤</span>
-            <span>Áudio indisponível</span>
-          </div>
-        ) : (
-          <p className="text-sm whitespace-pre-wrap break-words">{message.body}</p>
-        )}
+        {renderContent()}
         <div className={cn('flex items-center gap-1 mt-1', isOutgoing ? 'justify-end' : 'justify-start')}>
           <span className="text-xs opacity-70">{time}</span>
           {isOutgoing && message.status && (
