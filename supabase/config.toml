@@ -21,5 +21,8 @@ verify_jwt = false
 [functions.whatsapp-send]
 verify_jwt = false
 
+[functions.whatsapp-send-audio]
+verify_jwt = false
+
 [functions.whatsapp-delete-instance]
 verify_jwt = false
