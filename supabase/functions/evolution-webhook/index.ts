@@ -158,6 +158,104 @@ async function fetchProfilePicture(instanceName: string, phone: string): Promise
   }
 }
 
+// Download media from Evolution and upload to Supabase storage
+async function downloadAndStoreMedia(
+  supabase: any,
+  instanceName: string,
+  messageKey: any,
+  mediaType: string,
+  workspaceId: string
+): Promise<string | null> {
+  if (!EVOLUTION_BASE_URL || !EVOLUTION_API_KEY) {
+    console.log('[Edge:evolution-webhook] downloadAndStoreMedia skipped - missing config');
+    return null;
+  }
+
+  try {
+    // Use Evolution API to get base64 from media message
+    const url = `${EVOLUTION_BASE_URL}/chat/getBase64FromMediaMessage/${instanceName}`;
+    
+    console.log('[Edge:evolution-webhook] downloadAndStoreMedia', { 
+      instanceName, 
+      messageKey: messageKey?.id,
+      mediaType 
+    });
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': EVOLUTION_API_KEY,
+      },
+      body: JSON.stringify({
+        message: {
+          key: messageKey,
+        },
+        convertToMp4: false,
+      }),
+    });
+
+    if (!response.ok) {
+      console.log('[Edge:evolution-webhook] downloadAndStoreMedia api_failed', { 
+        status: response.status 
+      });
+      return null;
+    }
+
+    const result = await response.json();
+    const base64Data = result?.base64 ?? result?.data ?? null;
+    const mimeType = result?.mimetype ?? result?.mimeType ?? 'application/octet-stream';
+
+    if (!base64Data) {
+      console.log('[Edge:evolution-webhook] downloadAndStoreMedia no_base64');
+      return null;
+    }
+
+    // Determine file extension
+    let ext = 'bin';
+    if (mediaType === 'audio') ext = 'ogg';
+    else if (mediaType === 'image') ext = 'jpg';
+    else if (mediaType === 'video') ext = 'mp4';
+    else if (mediaType === 'document') ext = 'pdf';
+    else if (mediaType === 'sticker') ext = 'webp';
+
+    // Decode and upload to storage
+    const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    const fileName = `${workspaceId}/${mediaType}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+
+    console.log('[Edge:evolution-webhook] uploadToStorage', { 
+      fileName, 
+      size: binaryData.length 
+    });
+
+    const { error: uploadError } = await supabase.storage
+      .from('media')
+      .upload(fileName, binaryData, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.log('[Edge:evolution-webhook] storage_upload_error', { error: uploadError.message });
+      return null;
+    }
+
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from('media')
+      .getPublicUrl(fileName);
+
+    console.log('[Edge:evolution-webhook] storage_upload_success', { 
+      url: publicUrlData.publicUrl 
+    });
+
+    return publicUrlData.publicUrl;
+  } catch (error: any) {
+    console.log('[Edge:evolution-webhook] downloadAndStoreMedia error', { error: error?.message });
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -612,42 +710,64 @@ Deno.serve(async (req: Request) => {
       let messageType = "text";
       let mediaUrl: string | null = null;
       let bodyTextFinal = text;
+      let needsMediaDownload = false;
 
       // Check for audio message
       if (data?.message?.audioMessage) {
         messageType = "audio";
-        mediaUrl = safeString(data?.message?.audioMessage?.url ?? null);
         bodyTextFinal = "🎤 Áudio";
+        needsMediaDownload = true;
       }
       // Check for image message
       else if (data?.message?.imageMessage) {
         messageType = "image";
-        mediaUrl = safeString(data?.message?.imageMessage?.url ?? null);
         bodyTextFinal = data?.message?.imageMessage?.caption || "📷 Imagem";
+        needsMediaDownload = true;
       }
       // Check for video message
       else if (data?.message?.videoMessage) {
         messageType = "video";
-        mediaUrl = safeString(data?.message?.videoMessage?.url ?? null);
         bodyTextFinal = data?.message?.videoMessage?.caption || "🎥 Vídeo";
+        needsMediaDownload = true;
       }
       // Check for document message
       else if (data?.message?.documentMessage) {
         messageType = "document";
-        mediaUrl = safeString(data?.message?.documentMessage?.url ?? null);
         bodyTextFinal = data?.message?.documentMessage?.fileName || "📎 Documento";
+        needsMediaDownload = true;
       }
       // Check for sticker message
       else if (data?.message?.stickerMessage) {
         messageType = "sticker";
-        mediaUrl = safeString(data?.message?.stickerMessage?.url ?? null);
         bodyTextFinal = "🎨 Sticker";
+        needsMediaDownload = true;
       }
       // Check for voice note (ptt - push to talk)
       else if (data?.message?.pttMessage) {
         messageType = "audio";
-        mediaUrl = safeString(data?.message?.pttMessage?.url ?? null);
         bodyTextFinal = "🎤 Áudio";
+        needsMediaDownload = true;
+      }
+
+      // Download and store media if needed (for received messages only)
+      if (needsMediaDownload && !isFromMe && instanceName && data?.key) {
+        try {
+          const storedUrl = await downloadAndStoreMedia(
+            supabase,
+            instanceName,
+            data.key,
+            messageType,
+            workspaceId
+          );
+          if (storedUrl) {
+            mediaUrl = storedUrl;
+            console.log('[Edge:evolution-webhook] media_stored', { messageType, url: storedUrl });
+          } else {
+            console.log('[Edge:evolution-webhook] media_storage_failed', { messageType });
+          }
+        } catch (mediaError: any) {
+          console.log('[Edge:evolution-webhook] media_download_error', { error: mediaError?.message });
+        }
       }
 
       console.log('[Edge:evolution-webhook] message_parsed', { 

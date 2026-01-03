@@ -1,9 +1,15 @@
 import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, ArrowDown, ArrowUp, Users, MoreVertical, WifiOff } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, ArrowDown, ArrowUp, Users, MoreVertical, WifiOff, User, Archive, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useMessages, Message } from '@/hooks/useMessages';
 import { MessageInput } from './MessageInput';
 import { AudioPlayer } from './AudioPlayer';
@@ -12,6 +18,7 @@ import { Tables } from '@/integrations/supabase/types';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 type Contact = Tables<'contacts'>;
 
@@ -126,11 +133,32 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
             {contact?.phone || 'Sem telefone'}
           </p>
         </div>
-        {/* Action buttons - minimized for now */}
+        {/* Action buttons */}
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
-            <MoreVertical className="h-5 w-5" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
+                <MoreVertical className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 bg-popover border shadow-lg z-50">
+              <DropdownMenuItem onClick={() => toast.info('Funcionalidade em breve')}>
+                <User className="h-4 w-4 mr-2" />
+                Ver perfil do contato
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => toast.info('Funcionalidade em breve')}>
+                <Archive className="h-4 w-4 mr-2" />
+                Arquivar conversa
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => toast.info('Funcionalidade em breve')}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Limpar conversa
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -192,10 +220,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
             <span className="text-sm">Conexão WhatsApp inativa. Reconecte para enviar mensagens.</span>
           </div>
         ) : (
-          <MessageInput 
-            conversationId={conversationId} 
-            onMessageSent={refetch}
-          />
+          <MessageInput conversationId={conversationId} />
         )}
       </div>
     </div>
@@ -220,10 +245,14 @@ function DateSeparator({ date }: { date: Date }) {
 
 function MessagesWithDateSeparators({ messages }: { messages: Message[] }) {
   const groupedMessages = useMemo(() => {
+    // Sort messages chronologically (oldest first) for correct display
+    const sortedMessages = [...messages].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    
     const groups: { date: string; messages: Message[] }[] = [];
     
-    // Messages are in reverse order (newest first), so we process accordingly
-    messages.forEach(message => {
+    sortedMessages.forEach(message => {
       const dateKey = format(new Date(message.created_at), 'yyyy-MM-dd');
       const existingGroup = groups.find(g => g.date === dateKey);
       
@@ -238,15 +267,15 @@ function MessagesWithDateSeparators({ messages }: { messages: Message[] }) {
   }, [messages]);
 
   return (
-    <div className="flex flex-col-reverse gap-2">
+    <div className="flex flex-col gap-2">
       {groupedMessages.map(group => (
         <div key={group.date}>
+          <DateSeparator date={new Date(group.date)} />
           {group.messages.map(message => (
             <div key={message.id} className="mb-2">
               <MessageBubble message={message} />
             </div>
           ))}
-          <DateSeparator date={new Date(group.date)} />
         </div>
       ))}
     </div>
