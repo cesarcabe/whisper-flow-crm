@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ConversationWithContact } from '@/hooks/useConversations';
-import { formatDistanceToNow } from 'date-fns';
+import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Users, WifiOff } from 'lucide-react';
@@ -11,6 +11,16 @@ interface ConversationItemProps {
   conversation: ConversationWithContact;
   isActive: boolean;
   onClick: () => void;
+}
+
+function formatMessageTime(date: Date): string {
+  if (isToday(date)) {
+    return format(date, 'HH:mm');
+  }
+  if (isYesterday(date)) {
+    return 'Ontem';
+  }
+  return format(date, 'dd/MM/yy');
 }
 
 export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
@@ -72,7 +82,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
           </div>
           {lastMessageAt && (
             <span className="text-xs text-muted-foreground flex-shrink-0 whitespace-nowrap">
-              {formatDistanceToNow(new Date(lastMessageAt), { addSuffix: false, locale: ptBR })}
+              {formatMessageTime(new Date(lastMessageAt))}
             </span>
           )}
         </div>
