@@ -348,6 +348,7 @@ export type Database = {
           contact_class_id: string | null
           created_at: string
           email: string | null
+          group_class_id: string | null
           id: string
           name: string
           notes: string | null
@@ -363,6 +364,7 @@ export type Database = {
           contact_class_id?: string | null
           created_at?: string
           email?: string | null
+          group_class_id?: string | null
           id?: string
           name: string
           notes?: string | null
@@ -378,6 +380,7 @@ export type Database = {
           contact_class_id?: string | null
           created_at?: string
           email?: string | null
+          group_class_id?: string | null
           id?: string
           name?: string
           notes?: string | null
@@ -394,6 +397,13 @@ export type Database = {
             columns: ["contact_class_id"]
             isOneToOne: false
             referencedRelation: "contact_classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_group_class_id_fkey"
+            columns: ["group_class_id"]
+            isOneToOne: false
+            referencedRelation: "group_classes"
             referencedColumns: ["id"]
           },
         ]
@@ -574,6 +584,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      group_classes: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          position: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
       }
       messages: {
         Row: {

@@ -2,17 +2,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { ContactClass } from '@/hooks/useContactClasses';
 import { GroupConversation } from '@/hooks/useGroupConversations';
+import { GroupClass } from '@/types/database';
 
 export interface GroupWithClass extends GroupConversation {
-  contact_class_id: string | null;
+  group_class_id: string | null;
 }
 
 export function useGroupClasses() {
   const { user } = useAuth();
   const { workspaceId } = useWorkspace();
-  const [contactClasses, setContactClasses] = useState<ContactClass[]>([]);
+  const [groupClasses, setGroupClasses] = useState<GroupClass[]>([]);
   const [groupsByClass, setGroupsByClass] = useState<Record<string, GroupWithClass[]>>({});
   const [unclassifiedGroups, setUnclassifiedGroups] = useState<GroupWithClass[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,9 +23,9 @@ export function useGroupClasses() {
     try {
       setLoading(true);
 
-      // Fetch contact classes
+      // Fetch group classes (separate table for groups)
       const { data: classesData, error: classesError } = await supabase
-        .from('contact_classes')
+        .from('group_classes')
         .select('*')
         .eq('workspace_id', workspaceId)
         .order('position', { ascending: true });
@@ -50,7 +50,7 @@ export function useGroupClasses() {
             name,
             phone,
             avatar_url,
-            contact_class_id
+            group_class_id
           )
         `)
         .eq('workspace_id', workspaceId)
@@ -62,8 +62,8 @@ export function useGroupClasses() {
         return;
       }
 
-      const classes = classesData || [];
-      setContactClasses(classes);
+      const classes = (classesData || []) as GroupClass[];
+      setGroupClasses(classes);
 
       // Format and organize groups by class
       const formattedGroups: GroupWithClass[] = (groupsData || []).map((conv: any) => ({
@@ -73,7 +73,7 @@ export function useGroupClasses() {
         last_message_at: conv.last_message_at,
         unread_count: conv.unread_count || 0,
         whatsapp_number_id: conv.whatsapp_number_id,
-        contact_class_id: conv.contacts.contact_class_id,
+        group_class_id: conv.contacts.group_class_id,
         contact: {
           id: conv.contacts.id,
           name: conv.contacts.name,
@@ -91,8 +91,8 @@ export function useGroupClasses() {
       });
 
       formattedGroups.forEach((group) => {
-        if (group.contact_class_id && byClass[group.contact_class_id]) {
-          byClass[group.contact_class_id].push(group);
+        if (group.group_class_id && byClass[group.group_class_id]) {
+          byClass[group.group_class_id].push(group);
         } else {
           unclassified.push(group);
         }
@@ -134,9 +134,10 @@ export function useGroupClasses() {
 
     if (!contactId) return false;
 
+    // Update group_class_id (not contact_class_id)
     const { error } = await supabase
       .from('contacts')
-      .update({ contact_class_id: newClassId })
+      .update({ group_class_id: newClassId })
       .eq('id', contactId);
 
     if (error) {
@@ -151,10 +152,11 @@ export function useGroupClasses() {
   const createGroupClass = useCallback(async (name: string, color: string): Promise<boolean> => {
     if (!user || !workspaceId) return false;
 
-    const maxPosition = contactClasses.reduce((max, cls) => Math.max(max, cls.position), -1);
+    const maxPosition = groupClasses.reduce((max, cls) => Math.max(max, cls.position), -1);
 
+    // Insert into group_classes table (not contact_classes)
     const { error } = await supabase
-      .from('contact_classes')
+      .from('group_classes')
       .insert({
         name,
         color,
@@ -169,10 +171,10 @@ export function useGroupClasses() {
 
     await fetchData();
     return true;
-  }, [user, workspaceId, contactClasses, fetchData]);
+  }, [user, workspaceId, groupClasses, fetchData]);
 
   return {
-    contactClasses,
+    groupClasses,
     groupsByClass,
     unclassifiedGroups,
     loading,
