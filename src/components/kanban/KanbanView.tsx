@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useContacts } from '@/hooks/useContacts';
 import { useContactClasses } from '@/hooks/useContactClasses';
@@ -72,6 +73,7 @@ export function KanbanView() {
     activePipeline: stagePipeline,
     loading: stagesLoading,
     moveConversation,
+    fetchPipelineWithConversations,
   } = useConversationStages();
 
   // Check if URL has whatsapp param to auto-switch to chat view
@@ -412,7 +414,13 @@ export function KanbanView() {
                     .eq('id', editStageId);
                   if (!error) {
                     setShowEditStage(false);
-                    window.location.reload(); // TEMP: refresh to reload stages
+                    // Refetch stages without reload
+                    if (stagePipeline?.id) {
+                      await fetchPipelineWithConversations(stagePipeline.id);
+                    }
+                    toast.success('Estágio atualizado!');
+                  } else {
+                    toast.error('Erro ao atualizar estágio');
                   }
                 }
               }}
@@ -457,13 +465,13 @@ export function KanbanView() {
             <Button
               onClick={async () => {
                 if (editClassId) {
-                  const { error } = await supabase
-                    .from('contact_classes')
-                    .update({ name: editClassName, color: editClassColor })
-                    .eq('id', editClassId);
-                  if (!error) {
+                  const success = await updateContactClass(editClassId, { 
+                    name: editClassName, 
+                    color: editClassColor 
+                  });
+                  if (success) {
                     setShowEditClass(false);
-                    window.location.reload(); // TEMP: refresh to reload classes
+                    toast.success('Classe atualizada!');
                   }
                 }
               }}
