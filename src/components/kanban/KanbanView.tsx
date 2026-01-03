@@ -6,18 +6,20 @@ import { usePipelines } from '@/hooks/usePipelines';
 import { useContacts } from '@/hooks/useContacts';
 import { useContactClasses } from '@/hooks/useContactClasses';
 import { useConversationStages } from '@/hooks/useConversationStages';
+import { useGroupConversations } from '@/hooks/useGroupConversations';
 import { useAuth } from '@/contexts/AuthContext';
 import { PipelineHeader } from './PipelineHeader';
 import { KanbanBoard } from './KanbanBoard';
 import { RelationshipBoard } from './RelationshipBoard';
 import { StageBoard } from './StageBoard';
+import { GroupsBoard } from './GroupsBoard';
 import { CRMLayout } from '@/components/crm/CRMLayout';
 import { CreatePipelineDialog } from './dialogs/CreatePipelineDialog';
 import { CreateStageDialog } from './dialogs/CreateStageDialog';
 import { CreateCardDialog } from './dialogs/CreateCardDialog';
 import { CreateContactDialog } from './dialogs/CreateContactDialog';
 import { Card, BoardViewType } from '@/types/database';
-import { Loader2, Users, TrendingUp } from 'lucide-react';
+import { Loader2, Users, TrendingUp, UsersRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,6 +77,11 @@ export function KanbanView() {
     moveConversation,
     fetchPipelineWithConversations,
   } = useConversationStages();
+
+  const {
+    groups,
+    loading: groupsLoading,
+  } = useGroupConversations();
 
   // Check if URL has whatsapp param to auto-switch to chat view
   const whatsappFromUrl = searchParams.get('whatsapp');
@@ -172,7 +179,7 @@ export function KanbanView() {
     }
   };
 
-  const loading = pipelinesLoading || classesLoading || stagesLoading;
+  const loading = pipelinesLoading || classesLoading || stagesLoading || groupsLoading;
 
   if (loading) {
     return (
@@ -223,7 +230,7 @@ export function KanbanView() {
       />
 
       {/* Board Type Toggle */}
-      <div className="px-4 py-2 border-b border-border flex items-center gap-2">
+      <div className="px-4 py-2 border-b border-border flex items-center gap-2 flex-wrap">
         <span className="text-sm text-muted-foreground mr-2">Visualizar:</span>
         <Button
           variant={boardType === 'relationship' ? 'default' : 'outline'}
@@ -243,6 +250,15 @@ export function KanbanView() {
           <TrendingUp className="h-4 w-4" />
           Estágios de Venda
         </Button>
+        <Button
+          variant={boardType === 'groups' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setBoardType('groups')}
+          className="gap-2"
+        >
+          <UsersRound className="h-4 w-4" />
+          Grupos
+        </Button>
       </div>
 
       <main className="flex-1 overflow-hidden">
@@ -256,6 +272,16 @@ export function KanbanView() {
             onAddClass={() => setShowCreateClass(true)}
             onEditClass={handleEditClass}
             onDeleteClass={deleteContactClass}
+          />
+        ) : boardType === 'groups' ? (
+          <GroupsBoard
+            groups={groups}
+            onGroupClick={(group) => {
+              // Open chat with the group
+              localStorage.setItem('crm:selectedContactId', group.contact_id);
+              localStorage.setItem('crm:selectedConversationId', group.id);
+              setCurrentView('chat');
+            }}
           />
         ) : stagePipeline ? (
           <StageBoard

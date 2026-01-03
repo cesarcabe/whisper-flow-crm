@@ -13,7 +13,7 @@ export type CatalogStatus = 'active' | 'inactive';
 export type CatalogSendStatus = 'queued' | 'sending' | 'sent' | 'failed';
 
 // Board view types
-export type BoardViewType = 'relationship' | 'stage';
+export type BoardViewType = 'relationship' | 'stage' | 'groups';
 
 // Workspace types
 export interface Workspace {

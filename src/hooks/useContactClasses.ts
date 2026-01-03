@@ -58,6 +58,15 @@ export function useContactClasses() {
     if (!user || !workspaceId) return;
 
     try {
+      // First, get contacts that belong to groups
+      const { data: groupConversations } = await supabase
+        .from('conversations')
+        .select('contact_id')
+        .eq('workspace_id', workspaceId)
+        .eq('is_group', true);
+
+      const groupContactIds = new Set((groupConversations || []).map(c => c.contact_id));
+
       const { data: contacts, error } = await supabase
         .from('contacts')
         .select('id, name, phone, email, avatar_url, contact_class_id, workspace_id')
@@ -69,11 +78,14 @@ export function useContactClasses() {
         return;
       }
 
-      // Group contacts by class
+      // Group contacts by class, excluding group contacts
       const grouped: Record<string, ContactWithClass[]> = {};
       const unclassified: ContactWithClass[] = [];
 
       (contacts || []).forEach((contact) => {
+        // Skip contacts that belong to groups
+        if (groupContactIds.has(contact.id)) return;
+
         if (contact.contact_class_id) {
           if (!grouped[contact.contact_class_id]) {
             grouped[contact.contact_class_id] = [];
