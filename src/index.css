@@ -45,8 +45,10 @@
     --message-received: 0 0% 100%;
     --message-sent-text: 210 20% 15%;
     --message-received-text: 210 20% 15%;
-    --online: 152 69% 45%;
-    --typing: 210 10% 60%;
+    --status-online: 152 69% 45%;
+    --status-typing: 210 10% 60%;
+    --status-offline: 0 0% 60%;
+    --lead-inbox: 220 14% 46%;
 
     /* Sidebar */
     --sidebar-background: 0 0% 100%;
@@ -112,6 +114,10 @@
     --message-received: 210 20% 15%;
     --message-sent-text: 210 20% 95%;
     --message-received-text: 210 20% 95%;
+    --status-online: 152 69% 45%;
+    --status-typing: 210 10% 60%;
+    --status-offline: 0 0% 45%;
+    --lead-inbox: 220 14% 55%;
 
     --sidebar-background: 210 20% 10%;
     --sidebar-foreground: 0 0% 98%;

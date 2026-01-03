@@ -11,8 +11,9 @@ import {
   DragEndEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { PipelineWithConversations, ConversationWithStage } from '@/hooks/useConversationStages';
+import { PipelineWithConversations, ConversationWithStage, LeadInboxStage } from '@/hooks/useConversationStages';
 import { StageColumn } from './StageColumn';
+import { LeadInboxColumn } from './LeadInboxColumn';
 import { StageCard } from './StageCard';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -51,7 +52,14 @@ export function StageBoard({
     const { active } = event;
     const contactId = active.id as string;
 
-    // Find the contact entry by contact_id
+    // Check lead inbox first
+    const inLeadInbox = pipeline.leadInbox.conversations.find(c => c.contact_id === contactId);
+    if (inLeadInbox) {
+      setActiveConversation(inLeadInbox);
+      return;
+    }
+
+    // Find the contact entry by contact_id in stages
     for (const stage of pipeline.stages) {
       const conversation = stage.conversations.find(c => c.contact_id === contactId);
       if (conversation) {
@@ -70,13 +78,18 @@ export function StageBoard({
     const contactId = active.id as string;
     const overId = over.id as string;
 
-    // Find the active conversation entry to get existing conversation id
+    // Find existing conversation id - check lead inbox first
     let existingConversationId: string | null = null;
-    for (const stage of pipeline.stages) {
-      const entry = stage.conversations.find(c => c.contact_id === contactId);
-      if (entry) {
-        existingConversationId = entry.id;
-        break;
+    const inLeadInbox = pipeline.leadInbox.conversations.find(c => c.contact_id === contactId);
+    if (inLeadInbox) {
+      existingConversationId = inLeadInbox.id;
+    } else {
+      for (const stage of pipeline.stages) {
+        const entry = stage.conversations.find(c => c.contact_id === contactId);
+        if (entry) {
+          existingConversationId = entry.id;
+          break;
+        }
       }
     }
 
@@ -112,6 +125,13 @@ export function StageBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-4 p-4 min-h-full">
+          {/* Lead Inbox Column */}
+          <LeadInboxColumn
+            leadInbox={pipeline.leadInbox}
+            onConversationClick={onConversationClick}
+          />
+
+          {/* Regular Stage Columns */}
           {pipeline.stages.map((stage) => (
             <StageColumn
               key={stage.id}

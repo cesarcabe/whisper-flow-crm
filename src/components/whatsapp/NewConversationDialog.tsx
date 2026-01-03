@@ -50,7 +50,6 @@ export function NewConversationDialog({
     }
 
     setCreating(true);
-    console.log('[NewConversation] creating', { contactId, whatsappNumberId });
 
     try {
       // Check if conversation already exists
@@ -67,7 +66,6 @@ export function NewConversationDialog({
       }
 
       if (existingConv) {
-        console.log('[NewConversation] exists', { conversationId: existingConv.id });
         toast.info('Conversa já existe');
         onConversationCreated(existingConv.id);
         onOpenChange(false);
@@ -96,7 +94,6 @@ export function NewConversationDialog({
         throw new Error('Erro ao criar conversa');
       }
 
-      console.log('[NewConversation] created', { conversationId: newConv.id });
       toast.success('Conversa criada!');
       onConversationCreated(newConv.id);
       onOpenChange(false);

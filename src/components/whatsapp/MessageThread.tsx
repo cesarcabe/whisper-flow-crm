@@ -1,5 +1,5 @@
-import { useRef, useEffect, useMemo } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, ArrowDown, Users, MoreVertical, WifiOff } from 'lucide-react';
+import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
+import { Loader2, AlertTriangle, RefreshCw, ArrowDown, ArrowUp, Users, MoreVertical, WifiOff } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,25 +25,52 @@ interface MessageThreadProps {
 export function MessageThread({ conversationId, contact, isGroup, connectionStatus = 'unknown' }: MessageThreadProps) {
   const { messages, loading, loadingMore, error, hasMore, loadMore, refetch } = useMessages(conversationId);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const prevMessagesLengthRef = useRef(0);
 
   const name = contact?.name || 'Contato desconhecido';
   const initials = isGroup 
     ? 'GP' 
     : name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
+  // Scroll to bottom function
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior });
+    }
+  }, []);
+
   // Scroll to bottom on initial load
   useEffect(() => {
-    if (!loading && isInitialLoadRef.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (!loading && isInitialLoadRef.current && messages.length > 0) {
+      setTimeout(() => scrollToBottom('instant'), 100);
       isInitialLoadRef.current = false;
+      prevMessagesLengthRef.current = messages.length;
     }
-  }, [loading]);
+  }, [loading, messages.length, scrollToBottom]);
+
+  // Auto-scroll when new messages arrive
+  useEffect(() => {
+    if (!isInitialLoadRef.current && messages.length > prevMessagesLengthRef.current) {
+      scrollToBottom('smooth');
+    }
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages.length, scrollToBottom]);
 
   // Reset initial load ref when conversation changes
   useEffect(() => {
     isInitialLoadRef.current = true;
+    prevMessagesLengthRef.current = 0;
   }, [conversationId]);
+
+  // Track scroll position to show/hide scroll button
+  const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLDivElement;
+    const isNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 100;
+    setShowScrollButton(!isNearBottom);
+  }, []);
 
   if (loading) {
     return (
@@ -108,8 +135,8 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
       </div>
 
       {/* Messages - scrollable area */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <ScrollArea ref={scrollRef} className="h-full">
+      <div className="flex-1 min-h-0 overflow-hidden relative">
+        <ScrollArea ref={scrollRef} className="h-full" onScrollCapture={handleScroll}>
           <div className="p-4 bg-[hsl(var(--chat-bg))]">
             {hasMore && (
               <div className="flex justify-center mb-4">
@@ -123,8 +150,8 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <>
-                      <ArrowDown className="h-4 w-4 mr-2" />
-                      Carregar mais
+                      <ArrowUp className="h-4 w-4 mr-2" />
+                      Carregar anteriores
                     </>
                   )}
                 </Button>
@@ -138,8 +165,23 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
             ) : (
               <MessagesWithDateSeparators messages={messages} />
             )}
+            
+            {/* Scroll anchor */}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
+        
+        {/* Scroll to bottom button */}
+        {showScrollButton && (
+          <Button
+            variant="secondary"
+            size="icon"
+            className="absolute bottom-4 right-4 rounded-full shadow-lg h-10 w-10"
+            onClick={() => scrollToBottom('smooth')}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
       {/* Message Input - fixed at bottom */}

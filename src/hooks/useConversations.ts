@@ -125,8 +125,6 @@ export function useConversations(whatsappNumberId: string | null) {
       supabase.removeChannel(channelRef.current);
     }
 
-    console.log('[Realtime]', 'subscribed', { workspaceId, whatsappNumberId });
-
     channelRef.current = supabase
       .channel(`conversations-${workspaceId}-${whatsappNumberId}`)
       // Listen for conversation updates (last_message_at, unread_count, etc.)
@@ -140,7 +138,6 @@ export function useConversations(whatsappNumberId: string | null) {
         },
         (payload) => {
           const updated = payload.new as Conversation;
-          console.log('[Realtime]', 'event', { table: 'conversations', type: 'UPDATE', id: updated?.id });
           // Update only the affected conversation in-place
           setConversations((prev) => {
             const updated_list = prev.map((c) =>
@@ -168,7 +165,6 @@ export function useConversations(whatsappNumberId: string | null) {
         },
         (payload) => {
           const newConv = payload.new as Conversation;
-          console.log('[Realtime]', 'event', { table: 'conversations', type: 'INSERT', id: newConv?.id });
           // Fetch contact for new conversation, then add to list
           supabase
             .from('contacts')
@@ -199,7 +195,6 @@ export function useConversations(whatsappNumberId: string | null) {
         },
         (payload) => {
           const msg = payload.new as { conversation_id: string; body: string; created_at: string };
-          console.log('[Realtime]', 'event', { table: 'messages', type: 'INSERT', conversationId: msg?.conversation_id });
           // Update preview and move conversation to top
           setConversations((prev) => {
             const idx = prev.findIndex((c) => c.id === msg.conversation_id);
@@ -215,13 +210,10 @@ export function useConversations(whatsappNumberId: string | null) {
           });
         }
       )
-      .subscribe((status) => {
-        console.log('[Realtime]', 'status', { channel: 'conversations', status, whatsappNumberId });
-      });
+      .subscribe();
 
     return () => {
       if (channelRef.current) {
-        console.log('[Realtime]', 'unsubscribed', { workspaceId, whatsappNumberId });
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
