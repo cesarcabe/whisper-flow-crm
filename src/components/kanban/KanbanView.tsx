@@ -79,7 +79,7 @@ export function KanbanView() {
   } = useConversationStages();
 
   const {
-    contactClasses: groupClasses,
+    groupClasses,
     groupsByClass,
     unclassifiedGroups,
     loading: groupsLoading,

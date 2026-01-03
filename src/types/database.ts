@@ -83,6 +83,17 @@ export interface ContactClass {
   updated_at: string;
 }
 
+// Group Classes (for WhatsApp groups classification)
+export interface GroupClass {
+  id: string;
+  workspace_id: string;
+  name: string;
+  color: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Contact {
   id: string;
   workspace_id: string | null;
@@ -94,7 +105,8 @@ export interface Contact {
   status: ContactStatus;
   tags: string[]; // deprecated, use contact_tags
   notes: string | null;
-  contact_class_id: string | null;
+  contact_class_id: string | null; // For leads (relationship classification)
+  group_class_id: string | null; // For groups (group type classification)
   created_at: string;
   updated_at: string;
 }
