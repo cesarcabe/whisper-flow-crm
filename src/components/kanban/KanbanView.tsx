@@ -6,7 +6,7 @@ import { usePipelines } from '@/hooks/usePipelines';
 import { useContacts } from '@/hooks/useContacts';
 import { useContactClasses } from '@/hooks/useContactClasses';
 import { useConversationStages } from '@/hooks/useConversationStages';
-import { useGroupConversations } from '@/hooks/useGroupConversations';
+import { useGroupClasses } from '@/hooks/useGroupClasses';
 import { useAuth } from '@/contexts/AuthContext';
 import { PipelineHeader } from './PipelineHeader';
 import { KanbanBoard } from './KanbanBoard';
@@ -79,9 +79,13 @@ export function KanbanView() {
   } = useConversationStages();
 
   const {
-    groups,
+    contactClasses: groupClasses,
+    groupsByClass,
+    unclassifiedGroups,
     loading: groupsLoading,
-  } = useGroupConversations();
+    moveGroup,
+    createGroupClass,
+  } = useGroupClasses();
 
   // Check if URL has whatsapp param to auto-switch to chat view
   const whatsappFromUrl = searchParams.get('whatsapp');
@@ -275,13 +279,18 @@ export function KanbanView() {
           />
         ) : boardType === 'groups' ? (
           <GroupsBoard
-            groups={groups}
+            contactClasses={groupClasses}
+            groupsByClass={groupsByClass}
+            unclassifiedGroups={unclassifiedGroups}
+            onMoveGroup={moveGroup}
             onGroupClick={(group) => {
-              // Open chat with the group
               localStorage.setItem('crm:selectedContactId', group.contact_id);
               localStorage.setItem('crm:selectedConversationId', group.id);
               setCurrentView('chat');
             }}
+            onAddClass={() => setShowCreateClass(true)}
+            onEditClass={handleEditClass}
+            onDeleteClass={deleteContactClass}
           />
         ) : stagePipeline ? (
           <StageBoard
