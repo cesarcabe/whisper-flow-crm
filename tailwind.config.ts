@@ -62,8 +62,12 @@ export default {
   				sent: 'hsl(var(--message-sent))',
   				received: 'hsl(var(--message-received))'
   			},
-  			online: 'hsl(var(--online))',
-  			typing: 'hsl(var(--typing))'
+  			status: {
+  				online: 'hsl(var(--status-online))',
+  				typing: 'hsl(var(--status-typing))',
+  				offline: 'hsl(var(--status-offline))'
+  			},
+  			'lead-inbox': 'hsl(var(--lead-inbox))'
   		},
   		borderRadius: {
   			lg: 'var(--radius)',

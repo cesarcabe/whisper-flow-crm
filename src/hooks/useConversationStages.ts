@@ -25,8 +25,18 @@ export interface StageWithConversations extends Stage {
   conversations: ConversationWithStage[];
 }
 
+// Virtual stage for unassigned contacts
+export interface LeadInboxStage {
+  id: 'lead-inbox';
+  name: string;
+  color: string;
+  position: -1;
+  conversations: ConversationWithStage[];
+}
+
 export interface PipelineWithConversations extends Pipeline {
   stages: StageWithConversations[];
+  leadInbox: LeadInboxStage;
 }
 
 export function useConversationStages() {
@@ -143,20 +153,20 @@ export function useConversationStages() {
         conversations: contactEntries.filter(entry => entry.stage_id === stage.id),
       }));
 
-      // Add unassigned contacts (those without stage_id) to a virtual first position
+      // Create virtual "Entrada de Leads" stage for unassigned contacts
       const unassignedContacts = contactEntries.filter(entry => !entry.stage_id);
-
-      // If there are unassigned contacts, add them to the first stage
-      if (unassignedContacts.length > 0 && stagesWithConversations.length > 0) {
-        stagesWithConversations[0].conversations = [
-          ...unassignedContacts,
-          ...stagesWithConversations[0].conversations,
-        ];
-      }
+      const leadInbox: LeadInboxStage = {
+        id: 'lead-inbox',
+        name: 'Entrada de Leads',
+        color: '#6B7280', // muted gray
+        position: -1,
+        conversations: unassignedContacts,
+      };
 
       setActivePipelineState({
         ...pipelineData,
         stages: stagesWithConversations,
+        leadInbox,
       });
     } catch (err) {
       console.error('[ConversationStages] Exception fetching pipeline:', err);

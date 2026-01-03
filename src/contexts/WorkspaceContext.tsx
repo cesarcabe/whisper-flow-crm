@@ -21,14 +21,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const fetchWorkspace = async () => {
     if (!user) {
-      console.log('[Workspace] No user, clearing workspace');
       setWorkspace(null);
       setWorkspaceMember(null);
       setLoading(false);
       return;
     }
-
-    console.log('[Workspace] Fetching workspace for user:', user.id);
 
     try {
       // First, get user's workspace membership
@@ -37,8 +34,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
-
-      console.log('[Workspace] Member data:', memberData, 'Error:', memberError);
 
       if (memberError) {
         console.error('[Workspace] Error fetching workspace member:', memberError);
@@ -62,8 +57,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           .eq('id', memberData.workspace_id)
           .maybeSingle();
 
-        console.log('[Workspace] Workspace data:', workspaceData, 'Error:', workspaceError);
-
+        if (workspaceError) {
+          console.error('[Workspace] Error fetching workspace:', workspaceError);
+        }
+        
         if (workspaceData) {
           setWorkspace({
             id: workspaceData.id,
@@ -75,8 +72,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             updated_at: workspaceData.updated_at,
           });
         }
-      } else {
-        console.log('[Workspace] No workspace membership found for user');
       }
     } catch (err) {
       console.error('[Workspace] Exception fetching workspace:', err);
