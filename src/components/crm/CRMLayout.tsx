@@ -6,6 +6,7 @@ import { useContactClasses } from '@/hooks/useContactClasses';
 import { usePipelines } from '@/hooks/usePipelines';
 import { MessageThread } from '@/components/whatsapp/MessageThread';
 import { ConversationItem } from '@/components/whatsapp/ConversationItem';
+import { NewConversationDialog } from '@/components/whatsapp/NewConversationDialog';
 import { 
   ConversationFilters, 
   FilterState, 
@@ -17,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export function CRMLayout() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,6 +28,7 @@ export function CRMLayout() {
   const [selectedNumberId, setSelectedNumberId] = useState<string | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     type: 'all',
     contactClassIds: [],
@@ -62,7 +65,11 @@ export function CRMLayout() {
   }, [activeNumber]) as 'connected' | 'disconnected' | 'unknown';
   
   const { conversations, loading, error, refetch } = useConversations(activeNumberId);
-  
+
+  const handleNewConversationCreated = (conversationId: string) => {
+    setSelectedConversationId(conversationId);
+    refetch();
+  };
   // Get stages from active pipeline
   const stages = useMemo(() => {
     if (!activePipeline?.stages) return [];
@@ -120,16 +127,40 @@ export function CRMLayout() {
         )}
       >
         {/* Header: Ícone + Mensagens + Seletor de Número + Seletor Todos/Diretas/Grupos */}
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2 flex-shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <MessageSquare className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-semibold text-foreground truncate">Mensagens</h1>
+        <div className="px-3 py-3 border-b border-border flex flex-col gap-2 flex-shrink-0">
+          {/* Row 1: Title + New button */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <MessageSquare className="h-5 w-5 text-primary" />
+              <h1 className="text-lg font-semibold text-foreground truncate">Mensagens</h1>
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  size="icon" 
+                  className="h-8 w-8 rounded-full bg-primary hover:bg-primary/90"
+                  onClick={() => setNewConversationOpen(true)}
+                  disabled={!activeNumberId || connectionStatus !== 'connected'}
+                >
+                  <Plus className="h-4 w-4 text-primary-foreground" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {!activeNumberId 
+                  ? 'Selecione uma conexão' 
+                  : connectionStatus !== 'connected' 
+                    ? 'Conexão inativa' 
+                    : 'Nova conversa'}
+              </TooltipContent>
+            </Tooltip>
           </div>
-          <div className="flex items-center gap-2 min-w-0 flex-wrap justify-end">
+          
+          {/* Row 2: Selectors - stacked on mobile, inline on larger screens */}
+          <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-2">
             {/* WhatsApp Number Selector */}
             {numbers.length > 0 && (
               <Select value={activeNumberId || ''} onValueChange={setSelectedNumberId}>
-                <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectTrigger className="h-8 text-xs flex-1 xs:w-[140px] xs:flex-none">
                   <SelectValue placeholder="Conexão" />
                 </SelectTrigger>
                 <SelectContent>
@@ -145,7 +176,7 @@ export function CRMLayout() {
               value={filters.type}
               onValueChange={(value: 'all' | 'direct' | 'group') => setFilters({ ...filters, type: value })}
             >
-              <SelectTrigger className="h-8 w-[100px] text-xs">
+              <SelectTrigger className="h-8 text-xs flex-1 xs:w-[100px] xs:flex-none">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -154,9 +185,6 @@ export function CRMLayout() {
                 <SelectItem value="group">Grupos</SelectItem>
               </SelectContent>
             </Select>
-            <Button size="icon" className="h-8 w-8 rounded-full bg-primary hover:bg-primary/90">
-              <Plus className="h-4 w-4 text-primary-foreground" />
-            </Button>
           </div>
         </div>
 
@@ -263,6 +291,14 @@ export function CRMLayout() {
           </div>
         )}
       </div>
+
+      {/* New Conversation Dialog */}
+      <NewConversationDialog
+        open={newConversationOpen}
+        onOpenChange={setNewConversationOpen}
+        whatsappNumberId={activeNumberId}
+        onConversationCreated={handleNewConversationCreated}
+      />
     </div>
   );
 }
