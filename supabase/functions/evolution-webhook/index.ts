@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const EVOLUTION_BASE_URL = Deno.env.get("EVOLUTION_BASE_URL");
+const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -112,6 +114,48 @@ async function makeDeliveryKey(
   const base = `${provider}:${eventType ?? "unknown"}:${instanceName ?? "unknown"}:`;
   if (providerEventId) return base + providerEventId;
   return base + (await sha256Hex(bodyText));
+}
+
+// Fetch profile picture from Evolution API
+async function fetchProfilePicture(instanceName: string, phone: string): Promise<string | null> {
+  if (!EVOLUTION_BASE_URL || !EVOLUTION_API_KEY) {
+    console.log('[Edge:evolution-webhook] fetchProfilePicture skipped - missing config');
+    return null;
+  }
+
+  try {
+    const url = `${EVOLUTION_BASE_URL}/chat/fetchProfilePictureUrl/${instanceName}`;
+    console.log('[Edge:evolution-webhook] fetchProfilePicture', { instanceName, phone });
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': EVOLUTION_API_KEY,
+      },
+      body: JSON.stringify({ number: phone }),
+    });
+
+    if (!response.ok) {
+      console.log('[Edge:evolution-webhook] fetchProfilePicture failed', { 
+        status: response.status, 
+        statusText: response.statusText 
+      });
+      return null;
+    }
+
+    const result = await response.json();
+    const avatarUrl = safeString(result?.profilePictureUrl ?? result?.url ?? result?.picture ?? null);
+    
+    console.log('[Edge:evolution-webhook] fetchProfilePicture result', { 
+      hasAvatar: !!avatarUrl 
+    });
+    
+    return avatarUrl;
+  } catch (error: any) {
+    console.log('[Edge:evolution-webhook] fetchProfilePicture error', { error: error?.message });
+    return null;
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -246,17 +290,53 @@ Deno.serve(async (req: Request) => {
     return null;
   }
 
-  // helper: upsert contato por workspace+phone
-  async function upsertContact(phone: string) {
+  // helper: upsert contato por workspace+phone, usando pushName e avatar
+  async function upsertContact(
+    phone: string, 
+    pushName: string | null = null,
+    avatarUrl: string | null = null
+  ): Promise<string> {
+    console.log('[Edge:evolution-webhook] upsertContact', { 
+      phone, 
+      pushName, 
+      hasAvatar: !!avatarUrl 
+    });
+
     // First check if contact exists
     const { data: existing } = await supabase
       .from("contacts")
-      .select("id")
+      .select("id, name, avatar_url")
       .eq("workspace_id", workspaceId)
       .eq("phone", phone)
       .maybeSingle();
 
-    if (existing) return existing.id as string;
+    if (existing) {
+      // Update name if pushName is provided and different from current
+      // Only update if current name is just the phone number or empty
+      const shouldUpdateName = pushName && 
+        (existing.name === phone || existing.name === null || existing.name === '');
+      
+      // Update avatar if we have one and current is null
+      const shouldUpdateAvatar = avatarUrl && !existing.avatar_url;
+      
+      if (shouldUpdateName || shouldUpdateAvatar) {
+        const updates: Record<string, unknown> = {};
+        if (shouldUpdateName) updates.name = pushName;
+        if (shouldUpdateAvatar) updates.avatar_url = avatarUrl;
+        
+        console.log('[Edge:evolution-webhook] updateContact', { 
+          contactId: existing.id, 
+          updates 
+        });
+        
+        await supabase
+          .from("contacts")
+          .update(updates)
+          .eq("id", existing.id);
+      }
+      
+      return existing.id as string;
+    }
 
     // Create new contact - need user_id (use a system user or first admin)
     const { data: member } = await supabase
@@ -266,12 +346,22 @@ Deno.serve(async (req: Request) => {
       .limit(1)
       .maybeSingle();
 
+    // Use pushName if available, otherwise fallback to phone
+    const contactName = pushName || phone;
+    
+    console.log('[Edge:evolution-webhook] createContact', { 
+      phone, 
+      name: contactName, 
+      hasAvatar: !!avatarUrl 
+    });
+
     const { data: c, error } = await supabase
       .from("contacts")
       .insert({
         workspace_id: workspaceId,
         phone,
-        name: phone,
+        name: contactName,
+        avatar_url: avatarUrl,
         user_id: member?.user_id || workspaceId,
       })
       .select("id")
@@ -449,7 +539,30 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true, ignored: true });
       }
 
-      const contactId = await upsertContact(phone);
+      // Extract pushName from payload (Evolution API sends this with messages)
+      const pushName = safeString(
+        data?.pushName ?? 
+        data?.message?.pushName ?? 
+        data?.contact?.name ?? 
+        data?.contact?.pushname ?? 
+        null
+      );
+
+      console.log('[Edge:evolution-webhook] message_contact_info', { 
+        phone, 
+        pushName,
+        remoteJid 
+      });
+
+      // Try to fetch avatar from Evolution API (async, non-blocking for response)
+      let avatarUrl: string | null = null;
+      if (instanceName && !remoteJid?.endsWith('@g.us')) {
+        // Only fetch avatar for individual chats, not groups
+        // Do this async to not block the webhook response
+        avatarUrl = await fetchProfilePicture(instanceName, phone);
+      }
+
+      const contactId = await upsertContact(phone, pushName, avatarUrl);
       const conversationId = await upsertConversation(contactId, wa.id, remoteJid);
 
       // Auditoria (event log)
@@ -498,49 +611,49 @@ Deno.serve(async (req: Request) => {
       // Detect message type and extract media URL
       let messageType = "text";
       let mediaUrl: string | null = null;
-      let bodyText = text;
+      let bodyTextFinal = text;
 
       // Check for audio message
       if (data?.message?.audioMessage) {
         messageType = "audio";
         mediaUrl = safeString(data?.message?.audioMessage?.url ?? null);
-        bodyText = "🎤 Áudio";
+        bodyTextFinal = "🎤 Áudio";
       }
       // Check for image message
       else if (data?.message?.imageMessage) {
         messageType = "image";
         mediaUrl = safeString(data?.message?.imageMessage?.url ?? null);
-        bodyText = data?.message?.imageMessage?.caption || "📷 Imagem";
+        bodyTextFinal = data?.message?.imageMessage?.caption || "📷 Imagem";
       }
       // Check for video message
       else if (data?.message?.videoMessage) {
         messageType = "video";
         mediaUrl = safeString(data?.message?.videoMessage?.url ?? null);
-        bodyText = data?.message?.videoMessage?.caption || "🎥 Vídeo";
+        bodyTextFinal = data?.message?.videoMessage?.caption || "🎥 Vídeo";
       }
       // Check for document message
       else if (data?.message?.documentMessage) {
         messageType = "document";
         mediaUrl = safeString(data?.message?.documentMessage?.url ?? null);
-        bodyText = data?.message?.documentMessage?.fileName || "📎 Documento";
+        bodyTextFinal = data?.message?.documentMessage?.fileName || "📎 Documento";
       }
       // Check for sticker message
       else if (data?.message?.stickerMessage) {
         messageType = "sticker";
         mediaUrl = safeString(data?.message?.stickerMessage?.url ?? null);
-        bodyText = "🎨 Sticker";
+        bodyTextFinal = "🎨 Sticker";
       }
       // Check for voice note (ptt - push to talk)
       else if (data?.message?.pttMessage) {
         messageType = "audio";
         mediaUrl = safeString(data?.message?.pttMessage?.url ?? null);
-        bodyText = "🎤 Áudio";
+        bodyTextFinal = "🎤 Áudio";
       }
 
       console.log('[Edge:evolution-webhook] message_parsed', { 
         messageType, 
         hasMediaUrl: !!mediaUrl,
-        bodyLength: bodyText.length 
+        bodyLength: bodyTextFinal.length 
       });
 
       // insert: se existir unique e der conflito, a função não pode quebrar
@@ -550,7 +663,7 @@ Deno.serve(async (req: Request) => {
         whatsapp_number_id: wa.id,
         external_id: providerEventId,
         is_outgoing: isFromMe,
-        body: bodyText,
+        body: bodyTextFinal,
         type: messageType,
         media_url: mediaUrl,
         status: isFromMe ? "sent" : "delivered",
