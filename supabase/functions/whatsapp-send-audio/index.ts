@@ -18,6 +18,54 @@ function json(data: unknown, status = 200) {
   });
 }
 
+// Upload base64 audio to Supabase storage and return public URL
+async function uploadToStorage(
+  supabase: any,
+  base64Data: string,
+  mimeType: string,
+  workspaceId: string
+): Promise<string | null> {
+  try {
+    // Decode base64 to Uint8Array
+    const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    
+    // Determine file extension from mime type
+    let ext = 'ogg';
+    if (mimeType.includes('mp3') || mimeType.includes('mpeg')) ext = 'mp3';
+    else if (mimeType.includes('wav')) ext = 'wav';
+    else if (mimeType.includes('webm')) ext = 'webm';
+    else if (mimeType.includes('ogg')) ext = 'ogg';
+    else if (mimeType.includes('mp4') || mimeType.includes('m4a')) ext = 'm4a';
+    
+    const fileName = `${workspaceId}/audio/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    
+    console.log('[Edge:whatsapp-send-audio] uploading_to_storage', { fileName, size: binaryData.length, mimeType });
+    
+    const { error: uploadError } = await supabase.storage
+      .from('media')
+      .upload(fileName, binaryData, {
+        contentType: mimeType || 'audio/ogg',
+        upsert: false,
+      });
+    
+    if (uploadError) {
+      console.log('[Edge:whatsapp-send-audio] storage_upload_error', { error: uploadError.message });
+      return null;
+    }
+    
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from('media')
+      .getPublicUrl(fileName);
+    
+    console.log('[Edge:whatsapp-send-audio] storage_upload_success', { url: publicUrlData.publicUrl });
+    return publicUrlData.publicUrl;
+  } catch (error: any) {
+    console.log('[Edge:whatsapp-send-audio] storage_upload_exception', { error: error.message });
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -121,10 +169,18 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, message: "WhatsApp not connected" }, 400);
     }
 
+    // Upload audio to storage first
+    const storedMediaUrl = await uploadToStorage(
+      supabase, 
+      audioBase64, 
+      mimeType || 'audio/ogg',
+      conversation.workspace_id
+    );
+
     // Determine destination
     const remoteJid = conversation.remote_jid || `${contact?.phone}@s.whatsapp.net`;
 
-    // Insert message with 'sending' status
+    // Insert message with 'sending' status and storage URL
     const { data: insertedMessage, error: insertError } = await supabase
       .from('messages')
       .insert({
@@ -136,6 +192,7 @@ Deno.serve(async (req: Request) => {
         is_outgoing: true,
         status: 'sending',
         sent_by_user_id: user.id,
+        media_url: storedMediaUrl, // Set immediately for playback
       })
       .select('id')
       .single();
@@ -194,15 +251,13 @@ Deno.serve(async (req: Request) => {
 
     // Extract external message ID from Evolution response
     const externalId = evolutionData?.key?.id || evolutionData?.messageId || evolutionData?.id || null;
-    const mediaUrl = evolutionData?.message?.audioMessage?.url || evolutionData?.mediaUrl || null;
 
-    // Update message with success status and media URL if available
+    // Update message with success status (keep our storage URL)
     await supabase
       .from('messages')
       .update({
         status: 'sent',
         external_id: externalId,
-        media_url: mediaUrl,
       })
       .eq('id', messageId);
 
@@ -215,12 +270,13 @@ Deno.serve(async (req: Request) => {
       })
       .eq('id', conversationId);
 
-    console.log('[Edge:whatsapp-send-audio] success', { messageId, externalId });
+    console.log('[Edge:whatsapp-send-audio] success', { messageId, externalId, storedMediaUrl });
 
     return json({ 
       ok: true, 
       messageId,
       externalId,
+      mediaUrl: storedMediaUrl,
     });
 
   } catch (error: any) {

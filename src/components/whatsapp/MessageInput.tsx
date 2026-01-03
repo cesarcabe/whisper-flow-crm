@@ -102,7 +102,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
       }
 
       setMessage('');
-      onMessageSent?.();
+      // Realtime subscription handles adding new messages - no refetch needed
     } catch (err: any) {
       console.error('[WA_SEND] error', err);
       toast.error('Erro ao enviar mensagem');
@@ -154,7 +154,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
 
       clearImage();
       setMessage('');
-      onMessageSent?.();
+      // Realtime subscription handles adding new messages - no refetch needed
     } catch (err: any) {
       console.error('[WA_IMAGE] error', err);
       toast.error('Erro ao enviar imagem');
@@ -229,7 +229,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
       }
 
       console.log('[WA_AUDIO] sent', { messageId: data.messageId });
-      onMessageSent?.();
+      // Realtime subscription handles adding new messages - no refetch needed
     } catch (err: any) {
       console.error('[WA_AUDIO] error', err);
       toast.error('Erro ao enviar áudio');
