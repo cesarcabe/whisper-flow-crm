@@ -51,6 +51,16 @@ export function CRMLayout() {
   // Auto-select first WhatsApp number if available
   const activeNumberId = selectedNumberId || (numbers.length > 0 ? numbers[0].id : null);
   
+  // Get active number status
+  const activeNumber = useMemo(() => 
+    numbers.find(n => n.id === activeNumberId), 
+    [numbers, activeNumberId]
+  );
+  const connectionStatus = useMemo(() => {
+    if (!activeNumber) return 'unknown';
+    return activeNumber.status === 'connected' ? 'connected' : 'disconnected';
+  }, [activeNumber]) as 'connected' | 'disconnected' | 'unknown';
+  
   const { conversations, loading, error, refetch } = useConversations(activeNumberId);
   
   // Get stages from active pipeline
@@ -237,7 +247,11 @@ export function CRMLayout() {
                 ← Voltar
               </Button>
             </div>
-            <MessageThread conversationId={selectedConversationId} contact={selectedConversation?.contact} />
+            <MessageThread 
+              conversationId={selectedConversationId} 
+              contact={selectedConversation?.contact} 
+              connectionStatus={connectionStatus}
+            />
           </>
         ) : (
           <div className="flex-1 min-h-0 flex items-center justify-center bg-muted/30">

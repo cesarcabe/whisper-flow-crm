@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, ArrowDown, Users, Search, Phone, Video, MoreVertical } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, ArrowDown, Users, MoreVertical, WifiOff } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,9 +19,10 @@ interface MessageThreadProps {
   conversationId: string;
   contact?: Contact | null;
   isGroup?: boolean;
+  connectionStatus?: 'connected' | 'disconnected' | 'unknown';
 }
 
-export function MessageThread({ conversationId, contact, isGroup }: MessageThreadProps) {
+export function MessageThread({ conversationId, contact, isGroup, connectionStatus = 'unknown' }: MessageThreadProps) {
   const { messages, loading, loadingMore, error, hasMore, loadMore, refetch } = useMessages(conversationId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef(true);
@@ -71,24 +72,20 @@ export function MessageThread({ conversationId, contact, isGroup }: MessageThrea
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
       {/* Contact Header */}
       <div className="flex items-center gap-3 p-3 border-b bg-card flex-shrink-0">
-        <div className="relative">
-          <Avatar className="h-10 w-10">
-            {isGroup ? (
-              <AvatarFallback className="bg-secondary/20 text-secondary">
-                <Users className="h-5 w-5" />
+        <Avatar className="h-10 w-10">
+          {isGroup ? (
+            <AvatarFallback className="bg-secondary/20 text-secondary">
+              <Users className="h-5 w-5" />
+            </AvatarFallback>
+          ) : (
+            <>
+              <AvatarImage src={contact?.avatar_url || undefined} alt={name} />
+              <AvatarFallback className="bg-primary/10 text-primary">
+                {initials}
               </AvatarFallback>
-            ) : (
-              <>
-                <AvatarImage src={contact?.avatar_url || undefined} alt={name} />
-                <AvatarFallback className="bg-primary/10 text-primary">
-                  {initials}
-                </AvatarFallback>
-              </>
-            )}
-          </Avatar>
-          {/* Online status indicator */}
-          <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
-        </div>
+            </>
+          )}
+        </Avatar>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-foreground">{name}</h3>
@@ -98,22 +95,12 @@ export function MessageThread({ conversationId, contact, isGroup }: MessageThrea
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-green-500" />
-            <span className="text-xs text-green-600 dark:text-green-400">Online</span>
-          </div>
+          <p className="text-xs text-muted-foreground truncate">
+            {contact?.phone || 'Sem telefone'}
+          </p>
         </div>
-        {/* Action buttons */}
+        {/* Action buttons - minimized for now */}
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
-            <Search className="h-5 w-5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
-            <Phone className="h-5 w-5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
-            <Video className="h-5 w-5" />
-          </Button>
           <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
             <MoreVertical className="h-5 w-5" />
           </Button>
@@ -157,10 +144,17 @@ export function MessageThread({ conversationId, contact, isGroup }: MessageThrea
 
       {/* Message Input - fixed at bottom */}
       <div className="flex-shrink-0 border-t">
-        <MessageInput 
-          conversationId={conversationId} 
-          onMessageSent={refetch}
-        />
+        {connectionStatus === 'disconnected' ? (
+          <div className="flex items-center justify-center gap-2 p-4 bg-muted/50 text-muted-foreground">
+            <WifiOff className="h-4 w-4" />
+            <span className="text-sm">Conexão WhatsApp inativa. Reconecte para enviar mensagens.</span>
+          </div>
+        ) : (
+          <MessageInput 
+            conversationId={conversationId} 
+            onMessageSent={refetch}
+          />
+        )}
       </div>
     </div>
   );

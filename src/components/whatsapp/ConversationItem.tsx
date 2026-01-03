@@ -1,10 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ConversationWithContact } from '@/hooks/useConversations';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Users } from 'lucide-react';
+import { Users, WifiOff } from 'lucide-react';
 
 interface ConversationItemProps {
   conversation: ConversationWithContact;
@@ -15,6 +16,7 @@ interface ConversationItemProps {
 export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
   const contact = conversation.contact;
   const isGroup = (conversation as any).is_group === true;
+  const isOrphan = !conversation.whatsapp_number_id;
   const name = contact?.name || 'Contato desconhecido';
   const initials = isGroup 
     ? 'GP' 
@@ -30,7 +32,8 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
     <div
       className={cn(
         'flex items-start gap-3 p-3 w-full min-w-0 overflow-hidden cursor-pointer transition-colors border-b border-border/50',
-        isActive ? 'bg-accent' : 'hover:bg-accent/50'
+        isActive ? 'bg-accent' : 'hover:bg-accent/50',
+        isOrphan && 'opacity-60'
       )}
       onClick={onClick}
     >
@@ -55,6 +58,16 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
               <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 shrink-0">
                 Grupo
               </Badge>
+            )}
+            {isOrphan && (
+              <Tooltip>
+                <TooltipTrigger>
+                  <WifiOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Conexão WhatsApp removida</p>
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
           {lastMessageAt && (
