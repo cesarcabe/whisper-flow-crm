@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, ArrowDown, ArrowUp, Users, MoreVertical, WifiOff, User, Archive, Trash2 } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, ArrowDown, ArrowUp, Users, MoreVertical, WifiOff, User, Archive, Trash2, Tag } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,8 +9,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { useMessages, Message } from '@/hooks/useMessages';
+import { useContactClasses } from '@/hooks/useContactClasses';
+import { supabase } from '@/integrations/supabase/client';
 import { MessageInput } from './MessageInput';
 import { AudioPlayer } from './AudioPlayer';
 import { ImageViewer } from './ImageViewer';
@@ -31,13 +38,44 @@ interface MessageThreadProps {
 
 export function MessageThread({ conversationId, contact, isGroup, connectionStatus = 'unknown' }: MessageThreadProps) {
   const { messages, loading, loadingMore, error, hasMore, loadMore, refetch } = useMessages(conversationId);
+  const { contactClasses } = useContactClasses();
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isUpdatingClass, setIsUpdatingClass] = useState(false);
   const prevMessagesLengthRef = useRef(0);
 
   const name = contact?.name || 'Contato desconhecido';
+  const currentClassId = contact?.contact_class_id;
+  const currentClass = contactClasses.find(c => c.id === currentClassId);
+
+  const handleClassChange = async (newClassId: string | null) => {
+    if (!contact?.id) return;
+    
+    setIsUpdatingClass(true);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({ contact_class_id: newClassId })
+        .eq('id', contact.id);
+
+      if (error) {
+        toast.error('Erro ao atualizar classificação');
+        console.error('[MessageThread] Error updating class:', error);
+      } else {
+        const className = newClassId 
+          ? contactClasses.find(c => c.id === newClassId)?.name 
+          : 'Sem classificação';
+        toast.success(`Classificação atualizada: ${className}`);
+      }
+    } catch (err) {
+      console.error('[MessageThread] Exception updating class:', err);
+      toast.error('Erro ao atualizar classificação');
+    } finally {
+      setIsUpdatingClass(false);
+    }
+  };
   const initials = isGroup 
     ? 'GP' 
     : name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -135,13 +173,62 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
         </div>
         {/* Action buttons */}
         <div className="flex items-center gap-1">
+          {currentClass && (
+            <Badge 
+              variant="secondary" 
+              className="text-xs"
+              style={{ 
+                backgroundColor: `${currentClass.color}20`,
+                color: currentClass.color,
+                borderColor: currentClass.color
+              }}
+            >
+              {currentClass.name}
+            </Badge>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
                 <MoreVertical className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 bg-popover border shadow-lg z-50">
+            <DropdownMenuContent align="end" className="w-56 bg-popover border shadow-lg z-50">
+              {/* Classification submenu */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger disabled={isUpdatingClass}>
+                  <Tag className="h-4 w-4 mr-2" />
+                  {isUpdatingClass ? 'Atualizando...' : 'Classificar'}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="bg-popover border shadow-lg z-50">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    Classificação
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem 
+                    onClick={() => handleClassChange(null)}
+                    className={cn(!currentClassId && 'bg-accent')}
+                  >
+                    <div className="w-3 h-3 rounded-full bg-muted mr-2" />
+                    Sem classificação
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {contactClasses.map((cls) => (
+                    <DropdownMenuItem
+                      key={cls.id}
+                      onClick={() => handleClassChange(cls.id)}
+                      className={cn(currentClassId === cls.id && 'bg-accent')}
+                    >
+                      <div 
+                        className="w-3 h-3 rounded-full mr-2" 
+                        style={{ backgroundColor: cls.color }}
+                      />
+                      {cls.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              
+              <DropdownMenuSeparator />
+              
               <DropdownMenuItem onClick={() => toast.info('Funcionalidade em breve')}>
                 <User className="h-4 w-4 mr-2" />
                 Ver perfil do contato
