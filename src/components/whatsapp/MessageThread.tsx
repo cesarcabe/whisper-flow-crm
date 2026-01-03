@@ -16,7 +16,7 @@ import {
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { useMessages, Message } from '@/hooks/useMessages';
-import { useContactClasses } from '@/hooks/useContactClasses';
+import { usePipelines } from '@/hooks/usePipelines';
 import { supabase } from '@/integrations/supabase/client';
 import { MessageInput } from './MessageInput';
 import { AudioPlayer } from './AudioPlayer';
@@ -34,46 +34,49 @@ interface MessageThreadProps {
   contact?: Contact | null;
   isGroup?: boolean;
   connectionStatus?: 'connected' | 'disconnected' | 'unknown';
+  currentStageId?: string | null;
 }
 
-export function MessageThread({ conversationId, contact, isGroup, connectionStatus = 'unknown' }: MessageThreadProps) {
+export function MessageThread({ conversationId, contact, isGroup, connectionStatus = 'unknown', currentStageId }: MessageThreadProps) {
   const { messages, loading, loadingMore, error, hasMore, loadMore, refetch } = useMessages(conversationId);
-  const { contactClasses } = useContactClasses();
+  const { activePipeline } = usePipelines();
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [isUpdatingClass, setIsUpdatingClass] = useState(false);
+  const [isUpdatingStage, setIsUpdatingStage] = useState(false);
   const prevMessagesLengthRef = useRef(0);
 
   const name = contact?.name || 'Contato desconhecido';
-  const currentClassId = contact?.contact_class_id;
-  const currentClass = contactClasses.find(c => c.id === currentClassId);
+  
+  // Get stages from the active pipeline
+  const stages = activePipeline?.stages || [];
+  const currentStage = stages.find(s => s.id === currentStageId);
 
-  const handleClassChange = async (newClassId: string | null) => {
-    if (!contact?.id) return;
+  const handleStageChange = async (newStageId: string | null) => {
+    if (!conversationId) return;
     
-    setIsUpdatingClass(true);
+    setIsUpdatingStage(true);
     try {
       const { error } = await supabase
-        .from('contacts')
-        .update({ contact_class_id: newClassId })
-        .eq('id', contact.id);
+        .from('conversations')
+        .update({ stage_id: newStageId })
+        .eq('id', conversationId);
 
       if (error) {
-        toast.error('Erro ao atualizar classificação');
-        console.error('[MessageThread] Error updating class:', error);
+        toast.error('Erro ao atualizar estágio');
+        console.error('[MessageThread] Error updating stage:', error);
       } else {
-        const className = newClassId 
-          ? contactClasses.find(c => c.id === newClassId)?.name 
-          : 'Sem classificação';
-        toast.success(`Classificação atualizada: ${className}`);
+        const stageName = newStageId 
+          ? stages.find(s => s.id === newStageId)?.name 
+          : 'Sem estágio';
+        toast.success(`Estágio atualizado: ${stageName}`);
       }
     } catch (err) {
-      console.error('[MessageThread] Exception updating class:', err);
-      toast.error('Erro ao atualizar classificação');
+      console.error('[MessageThread] Exception updating stage:', err);
+      toast.error('Erro ao atualizar estágio');
     } finally {
-      setIsUpdatingClass(false);
+      setIsUpdatingStage(false);
     }
   };
   const initials = isGroup 
@@ -173,17 +176,17 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
         </div>
         {/* Action buttons */}
         <div className="flex items-center gap-1">
-          {currentClass && (
+          {currentStage && (
             <Badge 
               variant="secondary" 
               className="text-xs"
               style={{ 
-                backgroundColor: `${currentClass.color}20`,
-                color: currentClass.color,
-                borderColor: currentClass.color
+                backgroundColor: `${currentStage.color}20`,
+                color: currentStage.color,
+                borderColor: currentStage.color
               }}
             >
-              {currentClass.name}
+              {currentStage.name}
             </Badge>
           )}
           <DropdownMenu>
@@ -193,35 +196,35 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 bg-popover border shadow-lg z-50">
-              {/* Classification submenu */}
+              {/* Stage classification submenu */}
               <DropdownMenuSub>
-                <DropdownMenuSubTrigger disabled={isUpdatingClass}>
+                <DropdownMenuSubTrigger disabled={isUpdatingStage}>
                   <Tag className="h-4 w-4 mr-2" />
-                  {isUpdatingClass ? 'Atualizando...' : 'Classificar'}
+                  {isUpdatingStage ? 'Atualizando...' : 'Estágio de Venda'}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="bg-popover border shadow-lg z-50">
                   <DropdownMenuLabel className="text-xs text-muted-foreground">
-                    Classificação
+                    Estágio de Venda
                   </DropdownMenuLabel>
                   <DropdownMenuItem 
-                    onClick={() => handleClassChange(null)}
-                    className={cn(!currentClassId && 'bg-accent')}
+                    onClick={() => handleStageChange(null)}
+                    className={cn(!currentStageId && 'bg-accent')}
                   >
                     <div className="w-3 h-3 rounded-full bg-muted mr-2" />
-                    Sem classificação
+                    Sem estágio
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  {contactClasses.map((cls) => (
+                  {stages.map((stage) => (
                     <DropdownMenuItem
-                      key={cls.id}
-                      onClick={() => handleClassChange(cls.id)}
-                      className={cn(currentClassId === cls.id && 'bg-accent')}
+                      key={stage.id}
+                      onClick={() => handleStageChange(stage.id)}
+                      className={cn(currentStageId === stage.id && 'bg-accent')}
                     >
                       <div 
                         className="w-3 h-3 rounded-full mr-2" 
-                        style={{ backgroundColor: cls.color }}
+                        style={{ backgroundColor: stage.color }}
                       />
-                      {cls.name}
+                      {stage.name}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuSubContent>
