@@ -279,6 +279,7 @@ export function CRMLayout() {
               conversationId={selectedConversationId} 
               contact={selectedConversation?.contact} 
               connectionStatus={connectionStatus}
+              currentStageId={selectedConversation?.stage_id}
             />
           </>
         ) : (
