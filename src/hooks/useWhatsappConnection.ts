@@ -353,10 +353,42 @@ export function useWhatsappConnection() {
   }, [checkConnectionStatus, stopPolling]);
 
   const disconnectInstance = useCallback(async (whatsappNumberId: string): Promise<boolean> => {
-    console.log('[WA_CONNECT] disconnect_instance', { whatsappNumberId });
-    // TODO: Implement when whatsapp-disconnect-instance edge function exists
-    return false;
-  }, []);
+    console.log('[WA_CONNECT] disconnect_instance', { whatsappNumberId, workspaceId });
+
+    if (!workspaceId) {
+      setError('Workspace não encontrado');
+      return false;
+    }
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('whatsapp-disconnect-instance', {
+        body: {
+          whatsapp_number_id: whatsappNumberId,
+          workspace_id: workspaceId,
+        },
+      });
+
+      if (fnError) {
+        console.error('[WA_CONNECT] disconnect_error', fnError);
+        setError(fnError.message || 'Erro ao desconectar');
+        return false;
+      }
+
+      if (!data?.ok) {
+        console.error('[WA_CONNECT] disconnect_failed', data?.message);
+        setError(data?.message || 'Erro ao desconectar');
+        return false;
+      }
+
+      console.log('[WA_CONNECT] disconnect_success', { whatsappNumberId });
+      setConnectionStatus({ status: 'DISCONNECTED' });
+      return true;
+    } catch (err: any) {
+      console.error('[WA_CONNECT] disconnect_catch', err);
+      setError(err.message || 'Erro ao desconectar');
+      return false;
+    }
+  }, [workspaceId]);
 
   const retryConnection = useCallback(async (whatsappNumberId: string): Promise<void> => {
     console.log('[WA_CONNECT] retry_connection', { whatsappNumberId });

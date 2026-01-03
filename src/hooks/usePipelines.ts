@@ -243,6 +243,7 @@ export function usePipelines() {
         return false;
       }
 
+      toast.success('Estágio atualizado!');
       await fetchPipelineWithStages(activePipeline.id);
       return true;
     } catch (err) {
@@ -353,6 +354,7 @@ export function usePipelines() {
         return false;
       }
 
+      toast.success('Card atualizado!');
       await fetchPipelineWithStages(activePipeline.id);
       return true;
     } catch (err) {

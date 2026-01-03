@@ -142,6 +142,7 @@ export function useContactClasses() {
         return false;
       }
 
+      toast.success('Classificação atualizada!');
       await fetchContactClasses();
       return true;
     } catch (err) {
@@ -185,6 +186,7 @@ export function useContactClasses() {
         return false;
       }
 
+      toast.success('Contato movido!');
       await fetchContactsByClass();
       return true;
     } catch (err) {

@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.whatsapp-delete-instance]
 verify_jwt = false
+
+[functions.whatsapp-disconnect-instance]
+verify_jwt = false
