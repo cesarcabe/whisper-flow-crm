@@ -104,6 +104,15 @@ export function useConversationStages() {
         return;
       }
 
+      // Fetch group conversations to exclude those contacts
+      const { data: groupConversations } = await supabase
+        .from('conversations')
+        .select('contact_id')
+        .eq('workspace_id', workspaceId)
+        .eq('is_group', true);
+
+      const groupContactIds = new Set((groupConversations || []).map(c => c.contact_id));
+
       // Fetch ALL contacts (not just those with conversations)
       const { data: contactsData, error: contactsError } = await supabase
         .from('contacts')
@@ -115,12 +124,13 @@ export function useConversationStages() {
         return;
       }
 
-      // Fetch conversations for this pipeline
+      // Fetch conversations for this pipeline (excluding groups)
       const { data: conversationsData, error: conversationsError } = await supabase
         .from('conversations')
-        .select('id, contact_id, stage_id, pipeline_id, last_message_at, unread_count')
+        .select('id, contact_id, stage_id, pipeline_id, last_message_at, unread_count, is_group')
         .eq('workspace_id', workspaceId)
-        .eq('pipeline_id', pipelineId);
+        .eq('pipeline_id', pipelineId)
+        .or('is_group.is.null,is_group.eq.false');
 
       if (conversationsError) {
         console.error('[ConversationStages] Error fetching conversations:', conversationsError);
@@ -133,19 +143,21 @@ export function useConversationStages() {
         conversationsByContact.set(conv.contact_id, conv);
       });
 
-      // Build contact entries with LEFT JOIN logic
-      const contactEntries: ConversationWithStage[] = (contactsData || []).map(contact => {
-        const conversation = conversationsByContact.get(contact.id);
-        return {
-          id: conversation?.id || null,
-          contact_id: contact.id,
-          stage_id: conversation?.stage_id || null,
-          pipeline_id: conversation?.pipeline_id || null,
-          last_message_at: conversation?.last_message_at || null,
-          unread_count: conversation?.unread_count || 0,
-          contact: contact,
-        };
-      });
+      // Build contact entries with LEFT JOIN logic, excluding group contacts
+      const contactEntries: ConversationWithStage[] = (contactsData || [])
+        .filter(contact => !groupContactIds.has(contact.id))
+        .map(contact => {
+          const conversation = conversationsByContact.get(contact.id);
+          return {
+            id: conversation?.id || null,
+            contact_id: contact.id,
+            stage_id: conversation?.stage_id || null,
+            pipeline_id: conversation?.pipeline_id || null,
+            last_message_at: conversation?.last_message_at || null,
+            unread_count: conversation?.unread_count || 0,
+            contact: contact,
+          };
+        });
 
       // Build stages with contacts
       const stagesWithConversations: StageWithConversations[] = (stagesData || []).map(stage => ({
