@@ -71,7 +71,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
             )}
           </div>
           {lastMessageAt && (
-            <span className="text-xs text-muted-foreground flex-shrink-0">
+            <span className="text-xs text-muted-foreground flex-shrink-0 whitespace-nowrap">
               {formatDistanceToNow(new Date(lastMessageAt), { addSuffix: false, locale: ptBR })}
             </span>
           )}
