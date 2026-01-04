@@ -31,7 +31,7 @@ export function CRMLayout() {
   const [searchQuery, setSearchQuery] = useState('');
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
-    type: 'all',
+    type: 'direct',
     contactClassIds: [],
     stageIds: [],
   });
