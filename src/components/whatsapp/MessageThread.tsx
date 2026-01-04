@@ -27,6 +27,34 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
+// Regex para detectar URLs
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
+function renderMessageWithLinks(text: string, isOutgoing: boolean) {
+  const parts = text.split(URL_REGEX);
+  
+  return parts.map((part, index) => {
+    if (part.match(URL_REGEX)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(
+            'underline hover:opacity-80 break-all',
+            isOutgoing ? 'text-blue-200' : 'text-primary'
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
+}
+
 type Contact = Tables<'contacts'>;
 
 interface MessageThreadProps {
@@ -412,7 +440,11 @@ function MessageBubble({ message }: { message: Message }) {
     }
 
     // Text message
-    return <p className="text-sm whitespace-pre-wrap break-words">{message.body}</p>;
+    return (
+      <p className="text-sm whitespace-pre-wrap break-words">
+        {renderMessageWithLinks(message.body || '', isOutgoing)}
+      </p>
+    );
   };
 
   return (
