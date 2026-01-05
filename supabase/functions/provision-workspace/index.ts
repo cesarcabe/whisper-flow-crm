@@ -92,18 +92,24 @@ Deno.serve(async (req) => {
   }
 
   // 5) seed mínimo de pipeline/stages
-  const { data: pipe } = await supabaseAdmin
+  const { data: pipe, error: pipelineErr } = await supabaseAdmin
     .from("pipelines")
     .insert({ workspace_id: workspaceId, name: "Entrada" })
     .select("id")
     .single();
 
-  if (pipe?.id) {
-    await supabaseAdmin.from("stages").insert([
+  if (pipelineErr) {
+    console.error("Error creating pipeline:", pipelineErr);
+  } else if (pipe?.id) {
+    const { error: stagesErr } = await supabaseAdmin.from("stages").insert([
       { workspace_id: workspaceId, pipeline_id: pipe.id, name: "Novo", position: 1 },
       { workspace_id: workspaceId, pipeline_id: pipe.id, name: "Em atendimento", position: 2 },
       { workspace_id: workspaceId, pipeline_id: pipe.id, name: "Fechado", position: 3 },
     ]);
+
+    if (stagesErr) {
+      console.error("Error creating stages:", stagesErr);
+    }
   }
 
   console.log(`Workspace ${workspaceId} created successfully`);
