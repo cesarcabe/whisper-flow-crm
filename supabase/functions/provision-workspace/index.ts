@@ -4,8 +4,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(data), { 
+    status, 
+    headers: { ...corsHeaders, "Content-Type": "application/json" } 
+  });
 }
 
 function requireAuthUser(req: Request) {
@@ -15,6 +23,11 @@ function requireAuthUser(req: Request) {
 }
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   if (req.method !== "POST") return json({ ok: true });
 
   const jwt = requireAuthUser(req);
@@ -35,6 +48,8 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const workspaceName = (body?.name ?? "Meu Workspace").toString();
 
+  console.log(`Creating workspace "${workspaceName}" for user ${userId}`);
+
   // 2) cria workspace
   const { data: ws, error: wsErr } = await supabaseAdmin
     .from("workspaces")
@@ -42,30 +57,41 @@ Deno.serve(async (req) => {
     .select("id")
     .single();
 
-  if (wsErr) return json({ ok: false, error: wsErr.message }, 500);
+  if (wsErr) {
+    console.error("Error creating workspace:", wsErr);
+    return json({ ok: false, error: wsErr.message }, 500);
+  }
   const workspaceId = ws.id;
 
-  // 3) cria membership (ajuste o nome da sua tabela se for diferente)
-  await supabaseAdmin.from("workspace_members").insert({
+  // 3) cria membership
+  const { error: memberErr } = await supabaseAdmin.from("workspace_members").insert({
     workspace_id: workspaceId,
     user_id: userId,
     role: "owner",
   });
 
-  // 4) cria API key ativa (workspace_api_keys)
+  if (memberErr) {
+    console.error("Error creating membership:", memberErr);
+  }
+
+  // 4) cria API key ativa
   const apiKey = crypto.getRandomValues(new Uint8Array(32));
   const apiKeyHex = Array.from(apiKey)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  await supabaseAdmin.from("workspace_api_keys").insert({
+  const { error: apiKeyErr } = await supabaseAdmin.from("workspace_api_keys").insert({
     workspace_id: workspaceId,
     api_key: apiKeyHex,
     is_active: true,
     name: "primary",
   });
 
-  // 5) seed mínimo de pipeline/stages (ajuste tabelas/colunas se necessário)
+  if (apiKeyErr) {
+    console.error("Error creating API key:", apiKeyErr);
+  }
+
+  // 5) seed mínimo de pipeline/stages
   const { data: pipe } = await supabaseAdmin
     .from("pipelines")
     .insert({ workspace_id: workspaceId, name: "Entrada" })
@@ -79,6 +105,8 @@ Deno.serve(async (req) => {
       { workspace_id: workspaceId, pipeline_id: pipe.id, name: "Fechado", position: 3 },
     ]);
   }
+
+  console.log(`Workspace ${workspaceId} created successfully`);
 
   return json({ ok: true, workspace_id: workspaceId });
 });
