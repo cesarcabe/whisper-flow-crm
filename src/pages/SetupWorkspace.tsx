@@ -1,0 +1,137 @@
+import { useState, FormEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import { z } from 'zod';
+import { Loader2, Building2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/contexts/AuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+const workspaceNameSchema = z
+  .string()
+  .trim()
+  .min(2, 'Nome deve ter pelo menos 2 caracteres')
+  .max(50, 'Nome deve ter no máximo 50 caracteres');
+
+export default function SetupWorkspace() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { session } = useAuth();
+  const { refetchWorkspace } = useWorkspace();
+
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Query params para integração futura com Stripe
+  const plan = searchParams.get('plan');
+  const sessionId = searchParams.get('session_id');
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    // Validar nome
+    const validation = workspaceNameSchema.safeParse(workspaceName);
+    if (!validation.success) {
+      setError(validation.error.errors[0].message);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('provision-workspace', {
+        body: { name: validation.data },
+      });
+
+      if (fnError) {
+        console.error('Error creating workspace:', fnError);
+        throw new Error(fnError.message || 'Erro ao criar workspace');
+      }
+
+      if (!data?.ok) {
+        throw new Error(data?.error || 'Erro ao criar workspace');
+      }
+
+      toast.success('Workspace criado com sucesso!');
+      
+      // Atualizar contexto de workspace
+      await refetchWorkspace();
+      
+      // Redirecionar para home
+      navigate('/', { replace: true });
+    } catch (err: any) {
+      console.error('Setup workspace error:', err);
+      setError(err.message || 'Erro ao criar workspace. Tente novamente.');
+      toast.error('Erro ao criar workspace');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <Helmet>
+        <title>Configurar Workspace | CRM</title>
+        <meta name="description" content="Configure seu workspace para começar a usar o CRM" />
+      </Helmet>
+
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+              <Building2 className="h-6 w-6 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Criar Workspace</CardTitle>
+            <CardDescription>
+              {plan 
+                ? `Configure seu workspace para o plano ${plan}`
+                : 'Dê um nome ao seu workspace para começar'
+              }
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="workspace-name">Nome do Workspace</Label>
+                <Input
+                  id="workspace-name"
+                  type="text"
+                  placeholder="Ex: Minha Empresa"
+                  value={workspaceName}
+                  onChange={(e) => {
+                    setWorkspaceName(e.target.value);
+                    setError('');
+                  }}
+                  disabled={isLoading}
+                  autoFocus
+                />
+                {error && (
+                  <p className="text-sm text-destructive">{error}</p>
+                )}
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  'Criar Workspace'
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  );
+}

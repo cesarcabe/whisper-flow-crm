@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import SetupWorkspace from "./pages/SetupWorkspace";
 import WorkspaceAdmin from "./pages/WorkspaceAdmin";
 import AcceptInvitation from "./pages/AcceptInvitation";
 import NotFound from "./pages/NotFound";
@@ -16,7 +17,7 @@ import { Loader2 } from "lucide-react";
 // QueryClient instance - stable reference
 const queryClient = new QueryClient();
 
-// Protected Route wrapper
+// Protected Route wrapper (requires auth + workspace)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const { workspaceId, loading: workspaceLoading } = useWorkspace();
@@ -33,16 +34,34 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/auth" replace />;
   }
 
-  // If user has no workspace, show a message
+  // If user has no workspace, redirect to setup
   if (!workspaceId) {
+    return <Navigate to="/setup-workspace" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// Setup Route wrapper (requires auth, but NOT workspace)
+function SetupRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
+  const { workspaceId, loading: workspaceLoading } = useWorkspace();
+
+  if (authLoading || workspaceLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-foreground mb-2">Sem Workspace</h2>
-          <p className="text-muted-foreground">Você precisa ser adicionado a um workspace para continuar.</p>
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // If user already has workspace, go to home
+  if (workspaceId) {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
@@ -84,6 +103,14 @@ function AppRoutes() {
           <ProtectedRoute>
             <WorkspaceAdmin />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/setup-workspace"
+        element={
+          <SetupRoute>
+            <SetupWorkspace />
+          </SetupRoute>
         }
       />
       <Route
