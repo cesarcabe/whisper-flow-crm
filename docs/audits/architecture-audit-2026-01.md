@@ -50,144 +50,158 @@ O projeto é um **CRM com integração WhatsApp** construído em React + TypeScr
 ## 2. LISTA DE ACHADOS TÉCNICOS
 
 ### Achado #1: God Component - KanbanView.tsx
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | Componente com 567+ linhas, gerenciando múltiplos domínios (pipelines, stages, contacts, classes, groups) |
-| **Local** | `src/components/kanban/KanbanView.tsx` |
-| **Princípio Violado** | SRP (Single Responsibility), Clean Architecture (UI faz tudo) |
-| **Risco** | 🔴 **Alto** |
-| **Consequência** | Dificuldade de manutenção, testes impossíveis, regressões frequentes |
+
+| Aspecto               | Detalhes                                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Problema**          | Componente com 567+ linhas, gerenciando múltiplos domínios (pipelines, stages, contacts, classes, groups) |
+| **Local**             | `src/components/kanban/KanbanView.tsx`                                                                    |
+| **Princípio Violado** | SRP (Single Responsibility), Clean Architecture (UI faz tudo)                                             |
+| **Risco**             | 🔴 **Alto**                                                                                               |
+| **Consequência**      | Dificuldade de manutenção, testes impossíveis, regressões frequentes                                      |
 
 ### Achado #2: Hook God Service - usePipelines.ts
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | Hook com 413 linhas gerenciando pipelines, stages E cards. Combina fetch, mutations, regras de posição |
-| **Local** | `src/hooks/usePipelines.ts` |
-| **Princípio Violado** | SRP, DIP (dependência direta do Supabase) |
-| **Risco** | 🔴 **Alto** |
-| **Consequência** | Impossível testar unitariamente, acoplamento forte |
+
+| Aspecto               | Detalhes                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Problema**          | Hook com 413 linhas gerenciando pipelines, stages E cards. Combina fetch, mutations, regras de posição |
+| **Local**             | `src/hooks/usePipelines.ts`                                                                            |
+| **Princípio Violado** | SRP, DIP (dependência direta do Supabase)                                                              |
+| **Risco**             | 🔴 **Alto**                                                                                            |
+| **Consequência**      | Impossível testar unitariamente, acoplamento forte                                                     |
 
 ### Achado #3: Regras de Negócio em Componentes UI
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | `MessageThread.tsx` (linha 62-87) contém lógica de atualização de estágio de venda direto no componente |
-| **Local** | `src/components/whatsapp/MessageThread.tsx` |
-| **Princípio Violado** | Clean Architecture (UI fazendo mutations), SRP |
-| **Risco** | 🟠 **Médio** |
-| **Consequência** | Duplicação de lógica se mesma ação for necessária em outro lugar |
+
+| Aspecto               | Detalhes                                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Problema**          | `MessageThread.tsx` (linha 62-87) contém lógica de atualização de estágio de venda direto no componente |
+| **Local**             | `src/components/whatsapp/MessageThread.tsx`                                                             |
+| **Princípio Violado** | Clean Architecture (UI fazendo mutations), SRP                                                          |
+| **Risco**             | 🟠 **Médio**                                                                                            |
+| **Consequência**      | Duplicação de lógica se mesma ação for necessária em outro lugar                                        |
 
 ### Achado #4: Chamadas Diretas ao Supabase em Componentes
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | `KanbanView.tsx` (linha 446-460) faz `supabase.from('stages').update()` diretamente no onClick |
-| **Local** | `src/components/kanban/KanbanView.tsx:446` |
-| **Princípio Violado** | DIP, Clean Architecture (UI acessa infraestrutura) |
-| **Risco** | 🟠 **Médio** |
-| **Consequência** | Violação de encapsulamento, código não testável |
+
+| Aspecto               | Detalhes                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| **Problema**          | `KanbanView.tsx` (linha 446-460) faz `supabase.from('stages').update()` diretamente no onClick |
+| **Local**             | `src/components/kanban/KanbanView.tsx:446`                                                     |
+| **Princípio Violado** | DIP, Clean Architecture (UI acessa infraestrutura)                                             |
+| **Risco**             | 🟠 **Médio**                                                                                   |
+| **Consequência**      | Violação de encapsulamento, código não testável                                                |
 
 ### Achado #5: Duplicação de Tipos
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | `ContactClass` definida em `src/types/database.ts` E em `src/hooks/useContactClasses.ts` (linhas 7-15) |
-| **Local** | `src/types/database.ts`, `src/hooks/useContactClasses.ts` |
-| **Princípio Violado** | DRY (Don't Repeat Yourself), pode divergir |
-| **Risco** | 🟡 **Baixo** |
-| **Consequência** | Tipos podem ficar dessincronizados, bugs de tipagem |
+
+| Aspecto               | Detalhes                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Problema**          | `ContactClass` definida em `src/types/database.ts` E em `src/hooks/useContactClasses.ts` (linhas 7-15) |
+| **Local**             | `src/types/database.ts`, `src/hooks/useContactClasses.ts`                                              |
+| **Princípio Violado** | DRY (Dont Repeat Yourself), pode divergir                                                              |
+| **Risco**             | 🟡 **Baixo**                                                                                           |
+| **Consequência**      | Tipos podem ficar dessincronizados, bugs de tipagem                                                    |
 
 ### Achado #6: Acoplamento Contexto → Supabase
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | `WorkspaceContext.tsx` faz queries diretamente ao Supabase sem abstração |
-| **Local** | `src/contexts/WorkspaceContext.tsx:30-75` |
-| **Princípio Violado** | DIP (contexto de negócio depende de infraestrutura) |
-| **Risco** | 🟠 **Médio** |
-| **Consequência** | Impossível mockar para testes, lock-in ao Supabase |
+
+| Aspecto               | Detalhes                                                                 |
+| --------------------- | ------------------------------------------------------------------------ |
+| **Problema**          | `WorkspaceContext.tsx` faz queries diretamente ao Supabase sem abstração |
+| **Local**             | `src/contexts/WorkspaceContext.tsx:30-75`                                |
+| **Princípio Violado** | DIP (contexto de negócio depende de infraestrutura)                      |
+| **Risco**             | 🟠 **Médio**                                                             |
+| **Consequência**      | Impossível mockar para testes, lock-in ao Supabase                       |
 
 ### Achado #7: Toast Notifications em Hooks de Dados
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | Todos os hooks (`useContacts`, `usePipelines`, `useWorkspaceMembers`) disparam `toast.success/error` diretamente |
-| **Local** | `src/hooks/*.ts` (múltiplos arquivos) |
-| **Princípio Violado** | SRP (hooks fazem data access + UI feedback) |
-| **Risco** | 🟡 **Baixo** |
-| **Consequência** | Impossível reutilizar lógica sem mostrar toast, dificulta testes |
+
+| Aspecto               | Detalhes                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Problema**          | Todos os hooks (`useContacts`, `usePipelines`, `useWorkspaceMembers`) disparam `toast.success/error` diretamente |
+| **Local**             | `src/hooks/*.ts` (múltiplos arquivos)                                                                            |
+| **Princípio Violado** | SRP (hooks fazem data access + UI feedback)                                                                      |
+| **Risco**             | 🟡 **Baixo**                                                                                                     |
+| **Consequência**      | Impossível reutilizar lógica sem mostrar toast, dificulta testes                                                 |
 
 ### Achado #8: Edge Function Gigante - evolution-webhook
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | Arquivo com 824+ linhas, contendo múltiplos handlers de eventos misturados |
-| **Local** | `supabase/functions/evolution-webhook/index.ts` |
-| **Princípio Violado** | SRP, OCP (adicionar novo evento requer alterar arquivo existente) |
-| **Risco** | 🔴 **Alto** |
-| **Consequência** | Alto risco de bugs ao adicionar features, difícil debugging |
+
+| Aspecto               | Detalhes                                                                   |
+| --------------------- | -------------------------------------------------------------------------- |
+| **Problema**          | Arquivo com 824+ linhas, contendo múltiplos handlers de eventos misturados |
+| **Local**             | `supabase/functions/evolution-webhook/index.ts`                            |
+| **Princípio Violado** | SRP, OCP (adicionar novo evento requer alterar arquivo existente)          |
+| **Risco**             | 🔴 **Alto**                                                                |
+| **Consequência**      | Alto risco de bugs ao adicionar features, difícil debugging                |
 
 ### Achado #9: Ausência de Validação de Domínio
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | Não existe validação de regras de negócio antes de mutations (ex: validar phone format, email format) |
-| **Local** | Todos os hooks de criação (useContacts.createContact, usePipelines.createCard) |
-| **Princípio Violado** | Domain-Driven Design, Clean Architecture |
-| **Risco** | 🟠 **Médio** |
-| **Consequência** | Dados inválidos podem ser inseridos, dependência de validação do DB |
+
+| Aspecto               | Detalhes                                                                                              |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Problema**          | Não existe validação de regras de negócio antes de mutations (ex: validar phone format, email format) |
+| **Local**             | Todos os hooks de criação (useContacts.createContact, usePipelines.createCard)                        |
+| **Princípio Violado** | Domain-Driven Design, Clean Architecture                                                              |
+| **Risco**             | 🟠 **Médio**                                                                                          |
+| **Consequência**      | Dados inválidos podem ser inseridos, dependência de validação do DB                                   |
 
 ### Achado #10: Estado Duplicado entre Hooks
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | `usePipelines` e `useConversationStages` buscam os mesmos pipelines independentemente |
-| **Local** | `src/hooks/usePipelines.ts`, `src/hooks/useConversationStages.ts` |
-| **Princípio Violado** | DRY, ineficiência de recursos |
-| **Risco** | 🟠 **Médio** |
-| **Consequência** | Dados dessincronizados, requests duplicados, inconsistência de UI |
+
+| Aspecto               | Detalhes                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| **Problema**          | `usePipelines` e `useConversationStages` buscam os mesmos pipelines independentemente |
+| **Local**             | `src/hooks/usePipelines.ts`, `src/hooks/useConversationStages.ts`                     |
+| **Princípio Violado** | DRY, ineficiência de recursos                                                         |
+| **Risco**             | 🟠 **Médio**                                                                          |
+| **Consequência**      | Dados dessincronizados, requests duplicados, inconsistência de UI                     |
 
 ### Achado #11: MessageInput com Lógica de Envio
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | Componente de input contém toda a lógica de envio de mensagem (texto, imagem, áudio) |
-| **Local** | `src/components/whatsapp/MessageInput.tsx` (435 linhas) |
-| **Princípio Violado** | SRP (componente UI faz data mutations) |
-| **Risco** | 🟠 **Médio** |
-| **Consequência** | Componente não reutilizável, difícil de testar |
+
+| Aspecto               | Detalhes                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| **Problema**          | Componente de input contém toda a lógica de envio de mensagem (texto, imagem, áudio) |
+| **Local**             | `src/components/whatsapp/MessageInput.tsx` (435 linhas)                              |
+| **Princípio Violado** | SRP (componente UI faz data mutations)                                               |
+| **Risco**             | 🟠 **Médio**                                                                         |
+| **Consequência**      | Componente não reutilizável, difícil de testar                                       |
 
 ### Achado #12: Falta de Camada de Repositório
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | Queries SQL espalhadas por toda a aplicação sem abstração |
-| **Local** | Todos os hooks e alguns componentes |
-| **Princípio Violado** | Clean Architecture, DIP |
-| **Risco** | 🔴 **Alto** |
-| **Consequência** | Mudanças no schema requerem alterações em múltiplos arquivos |
+
+| Aspecto               | Detalhes                                                     |
+| --------------------- | ------------------------------------------------------------ |
+| **Problema**          | Queries SQL espalhadas por toda a aplicação sem abstração    |
+| **Local**             | Todos os hooks e alguns componentes                          |
+| **Princípio Violado** | Clean Architecture, DIP                                      |
+| **Risco**             | 🔴 **Alto**                                                  |
+| **Consequência**      | Mudanças no schema requerem alterações em múltiplos arquivos |
 
 ### Achado #13: useConversations com Lógica Complexa de Batching
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | Hook contém lógica complexa de batching inline (deveria ser utilitário) |
-| **Local** | `src/hooks/useConversations.ts:60-108` |
-| **Princípio Violado** | SRP, reusabilidade |
-| **Risco** | 🟡 **Baixo** |
-| **Consequência** | Lógica não reutilizável para outros hooks que podem precisar de batching |
+
+| Aspecto               | Detalhes                                                                 |
+| --------------------- | ------------------------------------------------------------------------ |
+| **Problema**          | Hook contém lógica complexa de batching inline (deveria ser utilitário)  |
+| **Local**             | `src/hooks/useConversations.ts:60-108`                                   |
+| **Princípio Violado** | SRP, reusabilidade                                                       |
+| **Risco**             | 🟡 **Baixo**                                                             |
+| **Consequência**      | Lógica não reutilizável para outros hooks que podem precisar de batching |
 
 ### Achado #14: Realtime Subscriptions Não Centralizadas
-| Aspecto | Detalhes |
-|---------|----------|
-| **Problema** | Cada hook gerencia suas próprias subscriptions sem padrão centralizado |
-| **Local** | `useConversations.ts:142-244`, `useMessages.ts:67-122` |
-| **Princípio Violado** | DRY, gerenciamento de recursos |
-| **Risco** | 🟠 **Médio** |
-| **Consequência** | Memory leaks potenciais, subscriptions duplicadas, complexidade |
+
+| Aspecto               | Detalhes                                                               |
+| --------------------- | ---------------------------------------------------------------------- |
+| **Problema**          | Cada hook gerencia suas próprias subscriptions sem padrão centralizado |
+| **Local**             | `useConversations.ts:142-244`, `useMessages.ts:67-122`                 |
+| **Princípio Violado** | DRY, gerenciamento de recursos                                         |
+| **Risco**             | 🟠 **Médio**                                                           |
+| **Consequência**      | Memory leaks potenciais, subscriptions duplicadas, complexidade        |
 
 ---
 
 ## 3. NOTA GERAL DE ARQUITETURA
 
-| Critério | Nota (0-10) | Observação |
-|----------|-------------|------------|
-| Separação de Camadas | 3 | Quase inexistente |
-| SOLID Compliance | 4 | Violações de SRP e DIP frequentes |
-| Testabilidade | 2 | Quase impossível testar unitariamente |
-| Manutenibilidade | 5 | Funciona, mas frágil |
-| Escalabilidade | 4 | Problemas surgirão com crescimento |
-| Reutilização | 4 | Componentes muito específicos |
-| **NOTA FINAL** | **3.7/10** | Arquitetura funcional mas com débito técnico significativo |
+| Critério             | Nota (0-10) | Observação                                                 |
+| -------------------- | ----------- | ---------------------------------------------------------- |
+| Separação de Camadas | 3           | Quase inexistente                                          |
+| SOLID Compliance     | 4           | Violações de SRP e DIP frequentes                          |
+| Testabilidade        | 2           | Quase impossível testar unitariamente                      |
+| Manutenibilidade     | 5           | Funciona, mas frágil                                       |
+| Escalabilidade       | 4           | Problemas surgirão com crescimento                         |
+| Reutilização         | 4           | Componentes muito específicos                              |
+| **NOTA FINAL**       | **3.7/10**  | Arquitetura funcional mas com débito técnico significativo |
 
 ---
 
@@ -218,6 +232,7 @@ O projeto é um **CRM com integração WhatsApp** construído em React + TypeScr
    - `KanbanBoardSelector` (seleção de board type)
 
 3. **Criar camada de repositório**:
+
    ```
    src/repositories/
    ├── PipelineRepository.ts
@@ -399,4 +414,4 @@ A nota **3.7/10** reflete uma arquitetura que funciona mas não escala bem. Com 
 
 ---
 
-*Documento gerado em 09/01/2026 - Auditoria de Arquitetura v1.0*
+_Documento gerado em 09/01/2026 - Auditoria de Arquitetura v1.0_
