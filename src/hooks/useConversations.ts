@@ -58,11 +58,16 @@ export function useConversations(whatsappNumberId: string | null) {
 
       // Fetch contacts in batch with contact_class
       const contactIds = [...new Set(convData.map(c => c.contact_id))];
-      const { data: contactsData } = await supabase
+      const { data: contactsData, error: contactsError } = await supabase
         .from('contacts')
         .select('*, contact_class:contact_classes(id, name, color)')
         .in('id', contactIds);
 
+      if (contactsError) {
+        console.error('[useConversations] Error fetching contacts:', contactsError);
+      }
+      console.log('[useConversations] Fetched contacts:', contactsData?.length, 'for', contactIds.length, 'conversation IDs');
+      
       const contactsMap = new Map(contactsData?.map(c => [c.id, c]) || []);
 
       // Fetch stages for conversations that have stage_id
