@@ -4,6 +4,7 @@ import { Pipeline, Stage, Card, PipelineWithStages, StageWithCards } from '@/typ
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
+import { calculateNextStagePosition, calculateNextCardPosition } from '@/core/use-cases/pipeline/calculateCardPosition';
 
 export function usePipelines() {
   const { user } = useAuth();
@@ -197,11 +198,8 @@ export function usePipelines() {
     if (!workspaceId) return false;
 
     try {
-      // Get max position
-      const maxPosition = activePipeline?.stages.reduce(
-        (max, s) => Math.max(max, s.position),
-        -1
-      ) ?? -1;
+      // Get next position using pure function
+      const nextPosition = calculateNextStagePosition(activePipeline?.stages || []);
 
       const { error } = await supabase
         .from('stages')
@@ -210,7 +208,7 @@ export function usePipelines() {
           workspace_id: workspaceId,
           name,
           color: color || '#6B7280',
-          position: maxPosition + 1,
+          position: nextPosition,
         });
 
       if (error) {
@@ -307,9 +305,9 @@ export function usePipelines() {
     if (!activePipeline || !workspaceId) return null;
 
     try {
-      // Get max position in stage
+      // Get next position using pure function
       const stage = activePipeline.stages.find(s => s.id === stageId);
-      const maxPosition = stage?.cards.reduce((max, c) => Math.max(max, c.position), -1) ?? -1;
+      const nextPosition = calculateNextCardPosition(stage?.cards || []);
 
       const { data, error } = await supabase
         .from('cards')
@@ -319,7 +317,7 @@ export function usePipelines() {
           contact_id: contactId,
           title,
           description,
-          position: maxPosition + 1,
+          position: nextPosition,
         })
         .select()
         .single();
