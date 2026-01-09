@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useContacts } from '@/hooks/useContacts';
@@ -53,6 +52,7 @@ export function KanbanView() {
     createPipeline,
     deletePipeline,
     createStage,
+    updateStage,
     deleteStage,
     moveCard,
     createCard,
@@ -443,11 +443,11 @@ export function KanbanView() {
             <Button
               onClick={async () => {
                 if (editStageId) {
-                  const { error } = await supabase
-                    .from('stages')
-                    .update({ name: editStageName, color: editStageColor })
-                    .eq('id', editStageId);
-                  if (!error) {
+                  const success = await updateStage(editStageId, { 
+                    name: editStageName, 
+                    color: editStageColor 
+                  });
+                  if (success) {
                     setShowEditStage(false);
                     // Refetch stages without reload
                     if (stagePipeline?.id) {
