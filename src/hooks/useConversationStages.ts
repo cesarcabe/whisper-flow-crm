@@ -275,6 +275,35 @@ export function useConversationStages() {
     await fetchPipelineWithConversations(pipeline.id);
   };
 
+  /**
+   * Updates a conversation's stage in the database.
+   * Does NOT trigger toast - caller is responsible for side effects.
+   * @returns true on success, false on error
+   */
+  const updateConversationStage = async (conversationId: string, stageId: string | null): Promise<boolean> => {
+    try {
+      const { error } = await supabase
+        .from('conversations')
+        .update({ stage_id: stageId })
+        .eq('id', conversationId);
+
+      if (error) {
+        console.error('[ConversationStages] Error updating conversation stage:', error);
+        return false;
+      }
+
+      // Refresh pipeline data after update
+      if (activePipeline) {
+        await fetchPipelineWithConversations(activePipeline.id);
+      }
+
+      return true;
+    } catch (err) {
+      console.error('[ConversationStages] Exception updating conversation stage:', err);
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (user && workspaceId) {
       fetchPipelines();
@@ -289,5 +318,6 @@ export function useConversationStages() {
     fetchPipelines,
     fetchPipelineWithConversations,
     moveConversation,
+    updateConversationStage,
   };
 }
