@@ -615,6 +615,48 @@ export type Database = {
         }
         Relationships: []
       }
+      message_reactions: {
+        Row: {
+          created_at: string | null
+          emoji: string
+          id: string
+          message_id: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          emoji: string
+          id?: string
+          message_id: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string | null
+          emoji?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_reactions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string
@@ -625,6 +667,8 @@ export type Database = {
           id: string
           is_outgoing: boolean | null
           media_url: string | null
+          quoted_message: Json | null
+          reply_to_id: string | null
           sent_by_user_id: string | null
           status: string | null
           type: string | null
@@ -640,6 +684,8 @@ export type Database = {
           id?: string
           is_outgoing?: boolean | null
           media_url?: string | null
+          quoted_message?: Json | null
+          reply_to_id?: string | null
           sent_by_user_id?: string | null
           status?: string | null
           type?: string | null
@@ -655,6 +701,8 @@ export type Database = {
           id?: string
           is_outgoing?: boolean | null
           media_url?: string | null
+          quoted_message?: Json | null
+          reply_to_id?: string | null
           sent_by_user_id?: string | null
           status?: string | null
           type?: string | null
@@ -667,6 +715,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
           {
