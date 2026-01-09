@@ -226,23 +226,23 @@ export function usePipelines() {
     }
   };
 
-  const updateStage = async (id: string, updates: Partial<Stage>) => {
-    if (!activePipeline) return false;
-
+  /**
+   * Updates a stage in the database.
+   * Does NOT trigger toast or refetch - caller is responsible for side effects.
+   * @returns true on success, false on error
+   */
+  const updateStage = async (stageId: string, data: Partial<Stage>): Promise<boolean> => {
     try {
       const { error } = await supabase
         .from('stages')
-        .update(updates)
-        .eq('id', id);
+        .update(data)
+        .eq('id', stageId);
 
       if (error) {
         console.error('[CRM Kanban] Error updating stage:', error);
-        toast.error('Erro ao atualizar estágio');
         return false;
       }
 
-      toast.success('Estágio atualizado!');
-      await fetchPipelineWithStages(activePipeline.id);
       return true;
     } catch (err) {
       console.error('[CRM Kanban] Exception updating stage:', err);
