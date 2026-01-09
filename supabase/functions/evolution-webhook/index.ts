@@ -637,8 +637,13 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true, ignored: true });
       }
 
+      // Check if message is outgoing FIRST (needed to filter pushName)
+      const isFromMe = data?.key?.fromMe === true;
+
       // Extract pushName from payload (Evolution API sends this with messages)
-      const pushName = safeString(
+      // IMPORTANT: Only use pushName for RECEIVED messages (fromMe: false)
+      // For sent messages, pushName is the sender's name (our own WhatsApp), not the contact
+      const pushName = isFromMe ? null : safeString(
         data?.pushName ?? 
         data?.message?.pushName ?? 
         data?.contact?.name ?? 
@@ -704,8 +709,6 @@ Deno.serve(async (req: Request) => {
             null,
         ) ?? "";
 
-      const isFromMe = data?.key?.fromMe === true;
-
       // Detect message type and extract media URL
       let messageType = "text";
       let mediaUrl: string | null = null;
@@ -749,8 +752,8 @@ Deno.serve(async (req: Request) => {
         needsMediaDownload = true;
       }
 
-      // Download and store media if needed (for received messages only)
-      if (needsMediaDownload && !isFromMe && instanceName && data?.key) {
+      // Download and store media if needed (for both sent and received messages)
+      if (needsMediaDownload && instanceName && data?.key) {
         try {
           const storedUrl = await downloadAndStoreMedia(
             supabase,
