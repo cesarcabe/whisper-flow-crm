@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useMessages, Message } from '@/hooks/useMessages';
 import { usePipelines } from '@/hooks/usePipelines';
-import { supabase } from '@/integrations/supabase/client';
+import { useConversationStages } from '@/hooks/useConversationStages';
 import { MessageInput } from './MessageInput';
 import { MessageBubble } from './MessageBubble';
 import { ForwardMessageDialog } from './ForwardMessageDialog';
@@ -40,6 +40,7 @@ interface MessageThreadProps {
 export function MessageThread({ conversationId, contact, isGroup, connectionStatus = 'unknown', currentStageId }: MessageThreadProps) {
   const { messages, loading, loadingMore, error, hasMore, loadMore, refetch } = useMessages(conversationId);
   const { activePipeline } = usePipelines();
+  const { updateConversationStage } = useConversationStages();
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef(true);
@@ -64,14 +65,10 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
     
     setIsUpdatingStage(true);
     try {
-      const { error } = await supabase
-        .from('conversations')
-        .update({ stage_id: newStageId })
-        .eq('id', conversationId);
+      const success = await updateConversationStage(conversationId, newStageId);
 
-      if (error) {
+      if (!success) {
         toast.error('Erro ao atualizar estágio');
-        console.error('[MessageThread] Error updating stage:', error);
       } else {
         const stageName = newStageId 
           ? stages.find(s => s.id === newStageId)?.name 
