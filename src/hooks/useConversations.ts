@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Tables } from '@/integrations/supabase/types';
 
+
 export type Conversation = Tables<'conversations'>;
 export type Contact = Tables<'contacts'> & {
   contact_class?: {
@@ -56,19 +57,27 @@ export function useConversations(whatsappNumberId: string | null) {
         return;
       }
 
-      // Fetch contacts in batch with contact_class
+      // Fetch contacts in batches (avoid URL length limits with large IN clauses)
       const contactIds = [...new Set(convData.map(c => c.contact_id))];
-      const { data: contactsData, error: contactsError } = await supabase
-        .from('contacts')
-        .select('*, contact_class:contact_classes(id, name, color)')
-        .in('id', contactIds);
-
-      if (contactsError) {
-        console.error('[useConversations] Error fetching contacts:', contactsError);
-      }
-      console.log('[useConversations] Fetched contacts:', contactsData?.length, 'for', contactIds.length, 'conversation IDs');
+      const BATCH_SIZE = 100;
+      const contactsData: Array<Contact & { contact_class: unknown }> = [];
       
-      const contactsMap = new Map(contactsData?.map(c => [c.id, c]) || []);
+      for (let i = 0; i < contactIds.length; i += BATCH_SIZE) {
+        const batch = contactIds.slice(i, i + BATCH_SIZE);
+        const { data, error } = await supabase
+          .from('contacts')
+          .select('*, contact_class:contact_classes(id, name, color)')
+          .in('id', batch);
+        
+        if (error) {
+          console.error('[useConversations] Error fetching contacts batch:', error);
+        }
+        if (data) {
+          contactsData.push(...(data as Array<Contact & { contact_class: unknown }>));
+        }
+      }
+      
+      const contactsMap = new Map(contactsData.map(c => [c.id, c]) || []);
 
       // Fetch stages for conversations that have stage_id
       const stageIds = [...new Set(convData.filter(c => c.stage_id).map(c => c.stage_id!))];
@@ -81,16 +90,25 @@ export function useConversations(whatsappNumberId: string | null) {
         stagesMap = new Map(stagesData?.map(s => [s.id, s]) || []);
       }
 
-      // Fetch last message preview for each conversation (efficient batch)
+      // Fetch last message preview for each conversation in batches
       const convIds = convData.map(c => c.id);
-      const { data: messagesData } = await supabase
-        .from('messages')
-        .select('conversation_id, body')
-        .in('conversation_id', convIds)
-        .order('created_at', { ascending: false });
+      const messagesData: Array<{ conversation_id: string; body: string | null }> = [];
+      
+      for (let i = 0; i < convIds.length; i += BATCH_SIZE) {
+        const batch = convIds.slice(i, i + BATCH_SIZE);
+        const { data } = await supabase
+          .from('messages')
+          .select('conversation_id, body')
+          .in('conversation_id', batch)
+          .order('created_at', { ascending: false });
+        
+        if (data) {
+          messagesData.push(...data);
+        }
+      }
 
       const lastMessageMap = new Map<string, string>();
-      messagesData?.forEach(m => {
+      messagesData.forEach(m => {
         if (!lastMessageMap.has(m.conversation_id)) {
           lastMessageMap.set(m.conversation_id, m.body?.substring(0, 50) || '');
         }
