@@ -1,27 +1,37 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Send, Loader2, Smile, Image, Mic, Trash2, X } from 'lucide-react';
+import { Send, Loader2, Smile, Image, Mic, Trash2, X, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { cn } from '@/lib/utils';
+import { Message } from '@/hooks/useMessages';
 
 interface MessageInputProps {
   conversationId: string;
   disabled?: boolean;
   onMessageSent?: () => void;
+  replyingTo?: Message | null;
+  onClearReply?: () => void;
 }
 
 const MAX_IMAGE_SIZE_MB = 10;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-export function MessageInput({ conversationId, disabled, onMessageSent }: MessageInputProps) {
+export function MessageInput({ 
+  conversationId, 
+  disabled, 
+  onMessageSent,
+  replyingTo,
+  onClearReply 
+}: MessageInputProps) {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const {
     isRecording,
@@ -31,6 +41,13 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
     cancelRecording,
     error: recordingError,
   } = useAudioRecorder();
+
+  // Focus textarea when replying
+  useEffect(() => {
+    if (replyingTo && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [replyingTo]);
 
   // Format recording duration
   const formatDuration = (seconds: number) => {
@@ -79,7 +96,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
     const text = message.trim();
     if (!text || sending) return;
 
-    console.log('[WA_SEND]', { conversationId });
+    console.log('[WA_SEND]', { conversationId, replyToId: replyingTo?.id });
     setSending(true);
 
     try {
@@ -87,6 +104,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
         body: {
           conversationId,
           message: text,
+          replyToId: replyingTo?.id,
         },
       });
 
@@ -102,6 +120,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
       }
 
       setMessage('');
+      onClearReply?.();
       // Realtime subscription handles adding new messages - no refetch needed
     } catch (err: any) {
       console.error('[WA_SEND] error', err);
@@ -109,7 +128,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
     } finally {
       setSending(false);
     }
-  }, [message, conversationId, sending, onMessageSent]);
+  }, [message, conversationId, sending, replyingTo?.id, onClearReply]);
 
   const handleSendImage = useCallback(async () => {
     if (!selectedImage || sending) return;
@@ -154,6 +173,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
 
       clearImage();
       setMessage('');
+      onClearReply?.();
       // Realtime subscription handles adding new messages - no refetch needed
     } catch (err: any) {
       console.error('[WA_IMAGE] error', err);
@@ -161,7 +181,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
     } finally {
       setSending(false);
     }
-  }, [selectedImage, conversationId, message, sending, onMessageSent, clearImage]);
+  }, [selectedImage, conversationId, message, sending, clearImage, onClearReply]);
 
   const handleSend = useCallback(() => {
     if (selectedImage) {
@@ -236,7 +256,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
     } finally {
       setSending(false);
     }
-  }, [conversationId, stopRecording, onMessageSent]);
+  }, [conversationId, stopRecording]);
 
   const handleCancelRecording = useCallback(() => {
     console.log('[WA_AUDIO] cancel');
@@ -300,6 +320,29 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
 
   return (
     <div className="flex flex-col">
+      {/* Reply preview */}
+      {replyingTo && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border-l-4 border-primary">
+          <Reply className="h-4 w-4 text-primary flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-primary truncate">
+              {replyingTo.is_outgoing ? 'Você' : 'Contato'}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {replyingTo.body || (replyingTo.type === 'image' ? '📷 Imagem' : '🎤 Áudio')}
+            </p>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={onClearReply}
+            className="h-6 w-6"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       {/* Image preview */}
       {imagePreview && (
         <div className="px-3 pt-3 pb-1">
@@ -352,6 +395,7 @@ export function MessageInput({ conversationId, disabled, onMessageSent }: Messag
           <Image className="h-5 w-5" />
         </Button>
         <Textarea
+          ref={textareaRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}

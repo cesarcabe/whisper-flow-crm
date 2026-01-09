@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, ArrowDown, ArrowUp, Users, MoreVertical, WifiOff, User, Archive, Trash2, Tag } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, ArrowDown, ArrowUp, Users, MoreVertical, WifiOff, User, Archive, Trash2, Tag, Lock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,41 +19,13 @@ import { useMessages, Message } from '@/hooks/useMessages';
 import { usePipelines } from '@/hooks/usePipelines';
 import { supabase } from '@/integrations/supabase/client';
 import { MessageInput } from './MessageInput';
-import { AudioPlayer } from './AudioPlayer';
-import { ImageViewer } from './ImageViewer';
+import { MessageBubble } from './MessageBubble';
+import { ForwardMessageDialog } from './ForwardMessageDialog';
 import { Tables } from '@/integrations/supabase/types';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-
-// Regex para detectar URLs
-const URL_REGEX = /(https?:\/\/[^\s]+)/g;
-
-function renderMessageWithLinks(text: string, isOutgoing: boolean) {
-  const parts = text.split(URL_REGEX);
-  
-  return parts.map((part, index) => {
-    if (part.match(URL_REGEX)) {
-      return (
-        <a
-          key={index}
-          href={part}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn(
-            'underline hover:opacity-80 break-all',
-            isOutgoing ? 'text-blue-200' : 'text-primary'
-          )}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {part}
-        </a>
-      );
-    }
-    return <span key={index}>{part}</span>;
-  });
-}
 
 type Contact = Tables<'contacts'>;
 
@@ -74,6 +46,12 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isUpdatingStage, setIsUpdatingStage] = useState(false);
   const prevMessagesLengthRef = useRef(0);
+  
+  // Reply state
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  
+  // Forward state
+  const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
 
   const name = contact?.name || 'Contato desconhecido';
   
@@ -107,6 +85,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
       setIsUpdatingStage(false);
     }
   };
+  
   const initials = isGroup 
     ? 'GP' 
     : name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -115,6 +94,16 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior });
+    }
+  }, []);
+
+  // Scroll to a specific message
+  const scrollToMessage = useCallback((messageId: string) => {
+    const element = document.getElementById(`message-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element.classList.add('animate-pulse');
+      setTimeout(() => element.classList.remove('animate-pulse'), 1500);
     }
   }, []);
 
@@ -139,6 +128,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
   useEffect(() => {
     isInitialLoadRef.current = true;
     prevMessagesLengthRef.current = 0;
+    setReplyingTo(null);
   }, [conversationId]);
 
   // Track scroll position to show/hide scroll button
@@ -283,7 +273,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
       {/* Messages - scrollable area */}
       <div className="flex-1 min-h-0 overflow-hidden relative">
         <ScrollArea ref={scrollRef} className="h-full" onScrollCapture={handleScroll}>
-          <div className="p-4 bg-[hsl(var(--chat-bg))]">
+          <div className="p-4 whatsapp-chat-bg min-h-full">
             {hasMore && (
               <div className="flex justify-center mb-4">
                 <Button
@@ -309,7 +299,24 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
                 <p className="text-muted-foreground">Nenhuma mensagem ainda</p>
               </div>
             ) : (
-              <MessagesWithDateSeparators messages={messages} />
+              <>
+                {/* Encryption notice */}
+                <div className="flex justify-center mb-4">
+                  <div className="bg-amber-100/80 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 
+                                  text-[11px] px-3 py-1.5 rounded-lg max-w-[280px] text-center flex items-center gap-2">
+                    <Lock className="h-3 w-3 flex-shrink-0" />
+                    <span>As mensagens são protegidas com criptografia de ponta a ponta.</span>
+                  </div>
+                </div>
+                
+                <MessagesWithDateSeparators 
+                  messages={messages}
+                  conversationId={conversationId}
+                  onReply={setReplyingTo}
+                  onForward={setForwardMessage}
+                  onScrollToMessage={scrollToMessage}
+                />
+              </>
             )}
             
             {/* Scroll anchor */}
@@ -338,9 +345,22 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
             <span className="text-sm">Conexão WhatsApp inativa. Reconecte para enviar mensagens.</span>
           </div>
         ) : (
-          <MessageInput conversationId={conversationId} />
+          <MessageInput 
+            conversationId={conversationId}
+            replyingTo={replyingTo}
+            onClearReply={() => setReplyingTo(null)}
+          />
         )}
       </div>
+
+      {/* Forward Dialog */}
+      <ForwardMessageDialog
+        open={!!forwardMessage}
+        onOpenChange={(open) => !open && setForwardMessage(null)}
+        messageBody={forwardMessage?.body || ''}
+        messageType={forwardMessage?.type || 'text'}
+        currentConversationId={conversationId}
+      />
     </div>
   );
 }
@@ -361,7 +381,21 @@ function DateSeparator({ date }: { date: Date }) {
   );
 }
 
-function MessagesWithDateSeparators({ messages }: { messages: Message[] }) {
+interface MessagesWithDateSeparatorsProps {
+  messages: Message[];
+  conversationId: string;
+  onReply: (message: Message) => void;
+  onForward: (message: Message) => void;
+  onScrollToMessage: (messageId: string) => void;
+}
+
+function MessagesWithDateSeparators({ 
+  messages, 
+  conversationId,
+  onReply, 
+  onForward,
+  onScrollToMessage 
+}: MessagesWithDateSeparatorsProps) {
   const groupedMessages = useMemo(() => {
     // Sort messages chronologically (oldest first) for correct display
     const sortedMessages = [...messages].sort(
@@ -391,86 +425,17 @@ function MessagesWithDateSeparators({ messages }: { messages: Message[] }) {
           <DateSeparator date={new Date(group.date)} />
           {group.messages.map(message => (
             <div key={message.id} className="mb-2">
-              <MessageBubble message={message} />
+              <MessageBubble 
+                message={message}
+                conversationId={conversationId}
+                onReply={onReply}
+                onForward={onForward}
+                onScrollToMessage={onScrollToMessage}
+              />
             </div>
           ))}
         </div>
       ))}
-    </div>
-  );
-}
-
-function MessageBubble({ message }: { message: Message }) {
-  const isOutgoing = message.is_outgoing;
-  const time = format(new Date(message.created_at), 'HH:mm', { locale: ptBR });
-  const isAudio = message.type === 'audio';
-  const isImage = message.type === 'image';
-
-  const renderContent = () => {
-    // Audio message
-    if (isAudio && message.media_url) {
-      return <AudioPlayer src={message.media_url} isOutgoing={isOutgoing} />;
-    }
-    if (isAudio) {
-      return (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>🎤</span>
-          <span>Áudio indisponível</span>
-        </div>
-      );
-    }
-
-    // Image message
-    if (isImage && message.media_url) {
-      return (
-        <ImageViewer
-          src={message.media_url}
-          caption={message.body !== '📷 Imagem' ? message.body : undefined}
-          isOutgoing={isOutgoing}
-        />
-      );
-    }
-    if (isImage) {
-      return (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>📷</span>
-          <span>Imagem indisponível</span>
-        </div>
-      );
-    }
-
-    // Text message
-    return (
-      <p className="text-sm whitespace-pre-wrap break-words">
-        {renderMessageWithLinks(message.body || '', isOutgoing)}
-      </p>
-    );
-  };
-
-  return (
-    <div className={cn('flex', isOutgoing ? 'justify-end' : 'justify-start')}>
-      <div
-        className={cn(
-          'max-w-[70%] px-3 py-2 rounded-2xl',
-          isOutgoing
-            ? 'bg-[hsl(var(--message-sent))] text-[hsl(var(--message-sent-text))] rounded-br-md'
-            : 'bg-[hsl(var(--message-received))] text-[hsl(var(--message-received-text))] rounded-bl-md shadow-sm'
-        )}
-      >
-        {renderContent()}
-        <div className={cn('flex items-center gap-1 mt-1', isOutgoing ? 'justify-end' : 'justify-start')}>
-          <span className="text-xs opacity-70">{time}</span>
-          {isOutgoing && message.status && (
-            <span className="text-xs opacity-70">
-              {message.status === 'sending' && '⏳'}
-              {message.status === 'sent' && '✓'}
-              {message.status === 'delivered' && '✓✓'}
-              {message.status === 'read' && <span className="text-primary">✓✓</span>}
-              {message.status === 'failed' && <span className="text-destructive">✕</span>}
-            </span>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
