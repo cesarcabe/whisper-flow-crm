@@ -15,7 +15,9 @@ import { ReactionPicker } from './ReactionPicker';
 import { useMessageReactions } from '@/hooks/useMessageReactions';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Message } from '@/hooks/useMessages';
+import { LegacyMessage } from '@/hooks/useMessages';
+
+type Message = LegacyMessage;
 
 // Regex para detectar URLs
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;

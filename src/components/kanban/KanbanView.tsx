@@ -17,7 +17,7 @@ import { CreatePipelineDialog } from './dialogs/CreatePipelineDialog';
 import { CreateStageDialog } from './dialogs/CreateStageDialog';
 import { CreateCardDialog } from './dialogs/CreateCardDialog';
 import { CreateContactDialog } from './dialogs/CreateContactDialog';
-import { Card, BoardViewType } from '@/types/database';
+import { Card, BoardViewType, Contact } from '@/types/database';
 import { Loader2, Users, TrendingUp, UsersRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -338,7 +338,7 @@ export function KanbanView() {
       <CreateCardDialog
         open={showCreateCard}
         onOpenChange={setShowCreateCard}
-        contacts={contacts}
+        contacts={contacts as unknown as Contact[]}
         onSubmit={async (contactId, title, description) => {
           if (selectedStageId) {
             await createCard(selectedStageId, contactId, title, description);

@@ -288,7 +288,7 @@ export function CRMLayout() {
               </div>
               <MessageThread 
                 conversationId={selectedConversationId} 
-                contact={selectedConversation?.contact} 
+                contact={selectedConversation?.contact as any} 
                 connectionStatus={connectionStatus}
                 currentStageId={selectedConversation?.stage_id}
               />

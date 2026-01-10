@@ -2,25 +2,57 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Tables } from '@/integrations/supabase/types';
+import { Conversation } from '@/core/domain/entities/Conversation';
+import { Contact } from '@/core/domain/entities/Contact';
+import { ConversationMapper } from '@/infra/supabase/mappers/ConversationMapper';
+import { ContactMapper } from '@/infra/supabase/mappers/ContactMapper';
 
+type ConversationRow = Tables<'conversations'>;
+type ContactRow = Tables<'contacts'>;
 
-export type Conversation = Tables<'conversations'>;
-export type Contact = Tables<'contacts'> & {
-  contact_class?: {
+// Re-export domain entities for consumers that need them
+export { Conversation } from '@/core/domain/entities/Conversation';
+export { Contact } from '@/core/domain/entities/Contact';
+
+/**
+ * Interface for conversation with related data
+ * Uses snake_case to maintain compatibility with existing components
+ */
+export interface ConversationWithContact {
+  id: string;
+  contact_id: string;
+  whatsapp_number_id: string | null;
+  workspace_id: string;
+  pipeline_id: string | null;
+  stage_id: string | null;
+  last_message_at: string | null;
+  unread_count: number | null;
+  is_typing: boolean | null;
+  is_group: boolean | null;
+  remote_jid: string | null;
+  created_at: string;
+  updated_at: string;
+  contact?: {
     id: string;
     name: string;
-    color: string | null;
+    phone: string;
+    avatar_url: string | null;
+    contact_class_id: string | null;
+    contact_class?: {
+      id: string;
+      name: string;
+      color: string | null;
+    } | null;
   } | null;
-};
-
-export interface ConversationWithContact extends Conversation {
-  contact?: Contact | null;
   lastMessagePreview?: string;
   stage?: {
     id: string;
     name: string;
     color: string | null;
   } | null;
+  // Domain entities for advanced usage
+  _domainConversation?: Conversation;
+  _domainContact?: Contact | null;
 }
 
 export function useConversations(whatsappNumberId: string | null) {
@@ -60,7 +92,7 @@ export function useConversations(whatsappNumberId: string | null) {
       // Fetch contacts in batches (avoid URL length limits with large IN clauses)
       const contactIds = [...new Set(convData.map(c => c.contact_id))];
       const BATCH_SIZE = 100;
-      const contactsData: Array<Contact & { contact_class: unknown }> = [];
+      const contactsData: Array<ContactRow & { contact_class: { id: string; name: string; color: string | null } | null }> = [];
       
       for (let i = 0; i < contactIds.length; i += BATCH_SIZE) {
         const batch = contactIds.slice(i, i + BATCH_SIZE);
@@ -73,11 +105,11 @@ export function useConversations(whatsappNumberId: string | null) {
           console.error('[useConversations] Error fetching contacts batch:', error);
         }
         if (data) {
-          contactsData.push(...(data as Array<Contact & { contact_class: unknown }>));
+          contactsData.push(...(data as Array<ContactRow & { contact_class: { id: string; name: string; color: string | null } | null }>));
         }
       }
       
-      const contactsMap = new Map(contactsData.map(c => [c.id, c]) || []);
+      const contactsMap = new Map(contactsData.map(c => [c.id, c]));
 
       // Fetch stages for conversations that have stage_id
       const stageIds = [...new Set(convData.filter(c => c.stage_id).map(c => c.stage_id!))];
@@ -114,19 +146,57 @@ export function useConversations(whatsappNumberId: string | null) {
         }
       });
 
+      // Convert to output format with domain entities attached
       const conversationsWithData: ConversationWithContact[] = convData.map(conv => {
         const contactRaw = contactsMap.get(conv.contact_id);
-        const contact = contactRaw ? {
-          ...contactRaw,
-          contact_class: Array.isArray(contactRaw.contact_class) 
+        
+        // Handle contact_class which might be an array from the join
+        let contactClass: { id: string; name: string; color: string | null } | null = null;
+        if (contactRaw?.contact_class) {
+          contactClass = Array.isArray(contactRaw.contact_class) 
             ? contactRaw.contact_class[0] 
-            : contactRaw.contact_class,
-        } as Contact : null;
+            : contactRaw.contact_class;
+        }
+
+        // Create domain entities for advanced usage
+        const domainConversation = ConversationMapper.toDomain(conv);
+        let domainContact: Contact | null = null;
+        if (contactRaw) {
+          try {
+            domainContact = ContactMapper.toDomain(contactRaw);
+          } catch (e) {
+            console.warn('[useConversations] Failed to map contact:', e);
+          }
+        }
+
         return {
-          ...conv,
-          contact,
+          // Legacy format (snake_case)
+          id: conv.id,
+          contact_id: conv.contact_id,
+          whatsapp_number_id: conv.whatsapp_number_id,
+          workspace_id: conv.workspace_id,
+          pipeline_id: conv.pipeline_id,
+          stage_id: conv.stage_id,
+          last_message_at: conv.last_message_at,
+          unread_count: conv.unread_count,
+          is_typing: conv.is_typing,
+          is_group: conv.is_group,
+          remote_jid: conv.remote_jid,
+          created_at: conv.created_at,
+          updated_at: conv.updated_at,
+          contact: contactRaw ? {
+            id: contactRaw.id,
+            name: contactRaw.name,
+            phone: contactRaw.phone,
+            avatar_url: contactRaw.avatar_url,
+            contact_class_id: contactRaw.contact_class_id,
+            contact_class: contactClass,
+          } : null,
           lastMessagePreview: lastMessageMap.get(conv.id) || '',
           stage: conv.stage_id ? stagesMap.get(conv.stage_id) || null : null,
+          // Domain entities attached
+          _domainConversation: domainConversation,
+          _domainContact: domainContact,
         };
       });
 
@@ -160,12 +230,20 @@ export function useConversations(whatsappNumberId: string | null) {
           filter: `whatsapp_number_id=eq.${whatsappNumberId}`,
         },
         (payload) => {
-          const updated = payload.new as Conversation;
+          const updatedRow = payload.new as ConversationRow;
+          
           // Update only the affected conversation in-place
           setConversations((prev) => {
             const updated_list = prev.map((c) =>
-              c.id === updated.id
-                ? { ...c, ...updated, contact: c.contact, lastMessagePreview: c.lastMessagePreview }
+              c.id === updatedRow.id
+                ? { 
+                    ...c, 
+                    ...updatedRow,
+                    contact: c.contact, 
+                    lastMessagePreview: c.lastMessagePreview,
+                    stage: c.stage,
+                    _domainConversation: ConversationMapper.toDomain(updatedRow),
+                  }
                 : c
             );
             // Re-sort by last_message_at descending
@@ -187,20 +265,40 @@ export function useConversations(whatsappNumberId: string | null) {
           filter: `whatsapp_number_id=eq.${whatsappNumberId}`,
         },
         (payload) => {
-          const newConv = payload.new as Conversation;
+          const newRow = payload.new as ConversationRow;
+          
           // Fetch contact for new conversation, then add to list
           supabase
             .from('contacts')
             .select('*')
-            .eq('id', newConv.contact_id)
+            .eq('id', newRow.contact_id)
             .single()
-            .then(({ data: contact }) => {
+            .then(({ data: contactRow }) => {
+              let domainContact: Contact | null = null;
+              if (contactRow) {
+                try {
+                  domainContact = ContactMapper.toDomain(contactRow);
+                } catch (e) {
+                  console.warn('[useConversations] Failed to map contact:', e);
+                }
+              }
+              
               setConversations((prev) => {
-                if (prev.some((c) => c.id === newConv.id)) return prev;
+                if (prev.some((c) => c.id === newRow.id)) return prev;
                 const newItem: ConversationWithContact = {
-                  ...newConv,
-                  contact: contact as Contact | null,
+                  ...newRow,
+                  contact: contactRow ? {
+                    id: contactRow.id,
+                    name: contactRow.name,
+                    phone: contactRow.phone,
+                    avatar_url: contactRow.avatar_url,
+                    contact_class_id: contactRow.contact_class_id,
+                    contact_class: null,
+                  } : null,
                   lastMessagePreview: '',
+                  stage: null,
+                  _domainConversation: ConversationMapper.toDomain(newRow),
+                  _domainContact: domainContact,
                 };
                 return [newItem, ...prev];
               });
@@ -222,7 +320,7 @@ export function useConversations(whatsappNumberId: string | null) {
           setConversations((prev) => {
             const idx = prev.findIndex((c) => c.id === msg.conversation_id);
             if (idx === -1) return prev;
-            const updated = {
+            const updated: ConversationWithContact = {
               ...prev[idx],
               lastMessagePreview: msg.body?.substring(0, 50) || '',
               last_message_at: msg.created_at,
