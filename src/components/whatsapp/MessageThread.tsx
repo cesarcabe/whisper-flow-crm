@@ -15,9 +15,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { useMessages, LegacyMessage } from '@/hooks/useMessages';
-
-type Message = LegacyMessage;
+import { useMessages, Message } from '@/hooks/useMessages';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useConversationStages } from '@/hooks/useConversationStages';
 import { MessageInput } from './MessageInput';
@@ -356,7 +354,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
         open={!!forwardMessage}
         onOpenChange={(open) => !open && setForwardMessage(null)}
         messageBody={forwardMessage?.body || ''}
-        messageType={forwardMessage?.type || 'text'}
+        messageType={forwardMessage?.type.getValue() || 'text'}
         currentConversationId={conversationId}
       />
     </div>

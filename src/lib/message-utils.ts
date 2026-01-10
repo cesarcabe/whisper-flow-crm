@@ -8,19 +8,20 @@ export interface MessageGroup<T> {
 /**
  * Agrupa mensagens por data, ordenando cronologicamente
  * Função pura - sem side effects
+ * Aceita entidades com createdAt: Date
  */
-export function groupMessagesByDate<T extends { created_at: string }>(
+export function groupMessagesByDate<T extends { createdAt: Date }>(
   messages: T[]
 ): MessageGroup<T>[] {
   // Ordenar cronologicamente (mais antigas primeiro)
   const sorted = [...messages].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
   );
   
   const groups: MessageGroup<T>[] = [];
   
   sorted.forEach(message => {
-    const dateKey = formatDateKey(new Date(message.created_at));
+    const dateKey = formatDateKey(message.createdAt);
     const existingGroup = groups.find(g => g.date === dateKey);
     
     if (existingGroup) {
