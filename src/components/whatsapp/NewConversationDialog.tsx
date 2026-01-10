@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Loader2, Search, UserPlus, MessageSquare } from 'lucide-react';
 import {
   Dialog,
@@ -7,14 +7,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useContacts } from '@/hooks/useContacts';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { useCreateConversation } from '@/hooks/useCreateConversation';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { getInitials } from '@/lib/normalize';
 
 interface NewConversationDialogProps {
   open: boolean;
@@ -32,7 +31,15 @@ export function NewConversationDialog({
   const { contacts, loading: contactsLoading } = useContacts();
   const { workspaceId } = useWorkspace();
   const [searchQuery, setSearchQuery] = useState('');
-  const [creating, setCreating] = useState(false);
+
+  const { createConversation, creating } = useCreateConversation({
+    whatsappNumberId,
+    workspaceId,
+    onSuccess: (conversationId) => {
+      onConversationCreated(conversationId);
+      onOpenChange(false);
+    },
+  });
 
   const filteredContacts = useMemo(() => {
     if (!searchQuery.trim()) return contacts;
@@ -42,68 +49,6 @@ export function NewConversationDialog({
       c.phone?.toLowerCase().includes(query)
     );
   }, [contacts, searchQuery]);
-
-  const handleSelectContact = useCallback(async (contactId: string, contactPhone: string) => {
-    if (!whatsappNumberId || !workspaceId) {
-      toast.error('Selecione uma conexão WhatsApp ativa');
-      return;
-    }
-
-    setCreating(true);
-
-    try {
-      // Check if conversation already exists
-      const { data: existingConv, error: checkError } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('contact_id', contactId)
-        .eq('whatsapp_number_id', whatsappNumberId)
-        .maybeSingle();
-
-      if (checkError) {
-        console.error('[NewConversation] check_error', checkError);
-        throw new Error('Erro ao verificar conversa existente');
-      }
-
-      if (existingConv) {
-        toast.info('Conversa já existe');
-        onConversationCreated(existingConv.id);
-        onOpenChange(false);
-        return;
-      }
-
-      // Format remote_jid from phone number
-      const cleanPhone = contactPhone.replace(/\D/g, '');
-      const remoteJid = `${cleanPhone}@s.whatsapp.net`;
-
-      // Create new conversation
-      const { data: newConv, error: createError } = await supabase
-        .from('conversations')
-        .insert({
-          contact_id: contactId,
-          whatsapp_number_id: whatsappNumberId,
-          workspace_id: workspaceId,
-          remote_jid: remoteJid,
-          is_group: false,
-        })
-        .select('id')
-        .single();
-
-      if (createError) {
-        console.error('[NewConversation] create_error', createError);
-        throw new Error('Erro ao criar conversa');
-      }
-
-      toast.success('Conversa criada!');
-      onConversationCreated(newConv.id);
-      onOpenChange(false);
-    } catch (err: any) {
-      console.error('[NewConversation] error', err);
-      toast.error(err.message || 'Erro ao criar conversa');
-    } finally {
-      setCreating(false);
-    }
-  }, [whatsappNumberId, workspaceId, onConversationCreated, onOpenChange]);
 
   const handleClose = () => {
     if (!creating) {
@@ -159,14 +104,14 @@ export function NewConversationDialog({
                 {filteredContacts.map((contact) => (
                   <button
                     key={contact.id}
-                    onClick={() => handleSelectContact(contact.id, contact.phone)}
+                    onClick={() => createConversation(contact.id, contact.phone)}
                     disabled={creating}
                     className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors disabled:opacity-50"
                   >
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={contact.avatar_url || undefined} />
                       <AvatarFallback className="bg-primary/10 text-primary">
-                        {contact.name?.substring(0, 2).toUpperCase() || '??'}
+                        {getInitials(contact.name)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 text-left min-w-0">
