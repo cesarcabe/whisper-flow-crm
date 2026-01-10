@@ -1,8 +1,27 @@
-import { Tables } from '@/integrations/supabase/types';
-import { Message, MessageProps, MessageStatus } from '@/core/domain/entities/Message';
+import { Tables, Json } from '@/integrations/supabase/types';
+import { Message, MessageProps, MessageStatus, QuotedMessage } from '@/core/domain/entities/Message';
 import { MessageType } from '@/core/domain/value-objects/MessageType';
 
 type MessageRow = Tables<'messages'>;
+
+/**
+ * Parses quoted_message JSON from database
+ */
+function parseQuotedMessage(json: Json | null): QuotedMessage | null {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
+  
+  const obj = json as Record<string, unknown>;
+  
+  // Validate required fields exist
+  if (!obj.id) return null;
+  
+  return {
+    id: String(obj.id),
+    body: String(obj.body || ''),
+    type: String(obj.type || 'text'),
+    isOutgoing: Boolean(obj.is_outgoing),
+  };
+}
 
 /**
  * Mapper para converter entre Message (domain) e messages (database)
@@ -25,6 +44,8 @@ export class MessageMapper {
       mediaUrl: row.media_url,
       externalId: row.external_id,
       errorMessage: row.error_message,
+      replyToId: row.reply_to_id,
+      quotedMessage: parseQuotedMessage(row.quoted_message),
       createdAt: new Date(row.created_at),
     };
 

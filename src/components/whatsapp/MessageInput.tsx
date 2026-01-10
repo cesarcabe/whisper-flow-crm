@@ -6,9 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { cn } from '@/lib/utils';
-import { LegacyMessage } from '@/hooks/useMessages';
-
-type Message = LegacyMessage;
+import { Message } from '@/core/domain/entities/Message';
 
 interface MessageInputProps {
   conversationId: string;
@@ -328,10 +326,10 @@ export function MessageInput({
           <Reply className="h-4 w-4 text-primary flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-primary truncate">
-              {replyingTo.is_outgoing ? 'Você' : 'Contato'}
+              {replyingTo.isOutgoing ? 'Você' : 'Contato'}
             </p>
             <p className="text-xs text-muted-foreground truncate">
-              {replyingTo.body || (replyingTo.type === 'image' ? '📷 Imagem' : '🎤 Áudio')}
+              {replyingTo.body || replyingTo.getPreview()}
             </p>
           </div>
           <Button 

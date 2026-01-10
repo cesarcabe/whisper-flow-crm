@@ -14,9 +14,7 @@ import { useMessageReactions } from '@/hooks/useMessageReactions';
 import { cn } from '@/lib/utils';
 import { formatTime } from '@/lib/date-utils';
 import { toast } from 'sonner';
-import { LegacyMessage } from '@/hooks/useMessages';
-
-type Message = LegacyMessage;
+import { Message } from '@/core/domain/entities/Message';
 
 // Regex para detectar URLs
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
@@ -46,16 +44,6 @@ function renderMessageWithLinks(text: string, isOutgoing: boolean) {
   });
 }
 
-interface QuotedMessage {
-  id: string;
-  body: string;
-  type: string;
-  is_outgoing: boolean;
-}
-
-// Extended message type with quoted_message parsed
-type MessageWithQuote = Message & { quoted_message?: QuotedMessage | Record<string, unknown> | null };
-
 interface MessageBubbleProps {
   message: Message;
   onReply?: (message: Message) => void;
@@ -65,24 +53,21 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ 
-  message: rawMessage, 
+  message, 
   onReply, 
   onForward, 
   onScrollToMessage,
   conversationId
 }: MessageBubbleProps) {
-  const message = rawMessage as MessageWithQuote;
-  const isOutgoing = message.is_outgoing;
-  const time = formatTime(new Date(message.created_at));
-  const isAudio = message.type === 'audio';
-  const isImage = message.type === 'image';
+  const isOutgoing = message.isOutgoing;
+  const time = formatTime(message.createdAt);
+  const isAudio = message.type.getValue() === 'audio';
+  const isImage = message.type.getValue() === 'image';
   const { groupedReactions, toggleReaction } = useMessageReactions(message.id);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
 
-  // Parse quoted_message safely
-  const quotedMessage = message.quoted_message && typeof message.quoted_message === 'object' 
-    ? message.quoted_message as QuotedMessage 
-    : null;
+  // Get quoted message from domain entity
+  const quotedMessage = message.quotedMessage;
 
   const handleCopy = useCallback(() => {
     if (message.body) {
@@ -97,8 +82,8 @@ export function MessageBubble({
 
   const renderContent = () => {
     // Audio message
-    if (isAudio && message.media_url) {
-      return <AudioPlayer src={message.media_url} isOutgoing={isOutgoing ?? false} />;
+    if (isAudio && message.mediaUrl) {
+      return <AudioPlayer src={message.mediaUrl} isOutgoing={isOutgoing} />;
     }
     if (isAudio) {
       return (
@@ -110,12 +95,12 @@ export function MessageBubble({
     }
 
     // Image message
-    if (isImage && message.media_url) {
+    if (isImage && message.mediaUrl) {
       return (
         <ImageViewer
-          src={message.media_url}
+          src={message.mediaUrl}
           caption={message.body !== '📷 Imagem' ? message.body : undefined}
-          isOutgoing={isOutgoing ?? false}
+          isOutgoing={isOutgoing}
         />
       );
     }
@@ -131,7 +116,7 @@ export function MessageBubble({
     // Text message
     return (
       <p className="text-sm whitespace-pre-wrap break-words">
-        {renderMessageWithLinks(message.body || '', isOutgoing ?? false)}
+        {renderMessageWithLinks(message.body || '', isOutgoing)}
       </p>
     );
   };
@@ -198,12 +183,10 @@ export function MessageBubble({
                   onClick={() => onScrollToMessage?.(quotedMessage.id)}
                 >
                   <p className="font-medium text-[11px] opacity-80 mb-0.5">
-                    {quotedMessage.is_outgoing ? 'Você' : 'Contato'}
+                    {quotedMessage.isOutgoing ? 'Você' : 'Contato'}
                   </p>
                   <p className="truncate opacity-70">
-                    {quotedMessage.type === 'image' ? '📷 Imagem' : 
-                     quotedMessage.type === 'audio' ? '🎤 Áudio' : 
-                     quotedMessage.body || '📎 Mídia'}
+                    {message.getQuotedPreview()}
                   </p>
                 </div>
               )}

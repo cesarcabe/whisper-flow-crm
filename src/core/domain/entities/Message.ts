@@ -2,6 +2,16 @@ import { MessageType } from '../value-objects/MessageType';
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
+/**
+ * Represents a quoted message in a reply
+ */
+export interface QuotedMessage {
+  id: string;
+  body: string;
+  type: string;
+  isOutgoing: boolean;
+}
+
 export interface MessageProps {
   id: string;
   conversationId: string;
@@ -15,6 +25,8 @@ export interface MessageProps {
   mediaUrl: string | null;
   externalId: string | null;
   errorMessage: string | null;
+  replyToId: string | null;
+  quotedMessage: QuotedMessage | null;
   createdAt: Date;
 }
 
@@ -42,6 +54,8 @@ export class Message {
   get mediaUrl(): string | null { return this.props.mediaUrl; }
   get externalId(): string | null { return this.props.externalId; }
   get errorMessage(): string | null { return this.props.errorMessage; }
+  get replyToId(): string | null { return this.props.replyToId; }
+  get quotedMessage(): QuotedMessage | null { return this.props.quotedMessage; }
   get createdAt(): Date { return this.props.createdAt; }
   
   // Computed properties
@@ -82,6 +96,28 @@ export class Message {
 
   wasSuccessfullySent(): boolean {
     return ['sent', 'delivered', 'read'].includes(this.props.status);
+  }
+
+  /**
+   * Checks if this message is a reply to another message
+   */
+  isReply(): boolean {
+    return this.props.replyToId !== null;
+  }
+
+  /**
+   * Gets a preview of the quoted message
+   */
+  getQuotedPreview(): string | null {
+    if (!this.props.quotedMessage) return null;
+    const quoted = this.props.quotedMessage;
+    
+    if (quoted.type === 'image') return '📷 Imagem';
+    if (quoted.type === 'audio') return '🎤 Áudio';
+    if (quoted.type === 'video') return '🎬 Vídeo';
+    if (quoted.type === 'document') return '📄 Documento';
+    
+    return quoted.body || '📎 Mídia';
   }
 
   getPreview(maxLength: number = 50): string {

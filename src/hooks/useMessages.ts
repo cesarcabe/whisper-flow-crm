@@ -5,39 +5,16 @@ import { Tables } from '@/integrations/supabase/types';
 import { Message } from '@/core/domain/entities/Message';
 import { MessageMapper } from '@/infra/supabase/mappers/MessageMapper';
 
-// Re-export domain entity
+// Re-export domain entity for convenience
 export { Message } from '@/core/domain/entities/Message';
 
 type MessageRow = Tables<'messages'>;
-
-/**
- * Legacy message format for backward compatibility
- */
-export interface LegacyMessage {
-  id: string;
-  conversation_id: string;
-  workspace_id: string;
-  whatsapp_number_id: string | null;
-  sent_by_user_id: string | null;
-  body: string;
-  type: string | null;
-  status: string | null;
-  is_outgoing: boolean | null;
-  media_url: string | null;
-  external_id: string | null;
-  error_message: string | null;
-  quoted_message: unknown | null;
-  reply_to_id: string | null;
-  created_at: string;
-  // Domain entity for advanced usage
-  _domain?: Message;
-}
 
 const PAGE_SIZE = 50;
 
 export function useMessages(conversationId: string | null) {
   const { workspaceId } = useWorkspace();
-  const [messages, setMessages] = useState<LegacyMessage[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,24 +49,25 @@ export function useMessages(conversationId: string | null) {
       const rows = data || [];
       setHasMore(rows.length === PAGE_SIZE);
 
-      // Convert to legacy format with domain entities attached
-      const messagesWithDomain: LegacyMessage[] = rows.map(row => {
-        let domain: Message | undefined;
+      // Convert to domain entities
+      const domainMessages: Message[] = rows.map(row => {
         try {
-          domain = MessageMapper.toDomain(row);
+          return MessageMapper.toDomain(row);
         } catch (e) {
-          console.warn('[useMessages] Failed to map message:', e);
+          console.warn('[useMessages] Failed to map message:', row.id, e);
+          // Return a minimal Message object in case of mapping failure
+          return MessageMapper.toDomain({
+            ...row,
+            type: row.type || 'text',
+            status: row.status || 'sent',
+          });
         }
-        return {
-          ...row,
-          _domain: domain,
-        };
       });
 
       if (append) {
-        setMessages(prev => [...prev, ...messagesWithDomain]);
+        setMessages(prev => [...prev, ...domainMessages]);
       } else {
-        setMessages(messagesWithDomain);
+        setMessages(domainMessages);
       }
     } catch (err: any) {
       console.error('[useMessages]', 'fetch_error', err);
@@ -131,19 +109,16 @@ export function useMessages(conversationId: string | null) {
           const newRow = payload.new as MessageRow;
           console.log('[Realtime]', 'event', { table: 'messages', type: payload.eventType, id: newRow?.id });
           
-          let domain: Message | undefined;
           try {
-            domain = MessageMapper.toDomain(newRow);
+            const newMessage = MessageMapper.toDomain(newRow);
+            
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMessage.id)) return prev;
+              return [newMessage, ...prev];
+            });
           } catch (e) {
-            console.warn('[useMessages] Failed to map message:', e);
+            console.warn('[useMessages] Failed to map realtime message:', e);
           }
-          
-          const newMessage: LegacyMessage = { ...newRow, _domain: domain };
-          
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMessage.id)) return prev;
-            return [newMessage, ...prev];
-          });
         }
       )
       .on(
@@ -158,16 +133,12 @@ export function useMessages(conversationId: string | null) {
           const updatedRow = payload.new as MessageRow;
           console.log('[Realtime]', 'event', { table: 'messages', type: payload.eventType, id: updatedRow?.id });
           
-          let domain: Message | undefined;
           try {
-            domain = MessageMapper.toDomain(updatedRow);
+            const updatedMessage = MessageMapper.toDomain(updatedRow);
+            setMessages((prev) => prev.map((m) => (m.id === updatedMessage.id ? updatedMessage : m)));
           } catch (e) {
-            console.warn('[useMessages] Failed to map message:', e);
+            console.warn('[useMessages] Failed to map realtime update:', e);
           }
-          
-          const updatedMessage: LegacyMessage = { ...updatedRow, _domain: domain };
-          
-          setMessages((prev) => prev.map((m) => (m.id === updatedMessage.id ? updatedMessage : m)));
         }
       )
       .subscribe((status) => {
