@@ -1,7 +1,9 @@
 import { PipelineHeader } from '../PipelineHeader';
 import { CRMLayout } from '@/components/crm/CRMLayout';
 import type { KanbanView } from '@/hooks/useKanbanState';
-import type { Pipeline } from '@/types/database';
+import { Tables } from '@/integrations/supabase/types';
+
+type Pipeline = Tables<'pipelines'>;
 
 interface ChatViewProps {
   pipelines: Pipeline[];

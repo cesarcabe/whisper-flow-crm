@@ -1,21 +1,26 @@
-// Database types matching Supabase schema
+/**
+ * Database types for entities that don't have domain equivalents
+ * 
+ * NOTE: For domain entities (Contact, Conversation, Message, Pipeline, Stage),
+ * use @/core/domain/entities instead.
+ * 
+ * For UI-specific types (BoardViewType, StageWithCards, etc.),
+ * use @/types/ui instead.
+ */
+
+// ============ Enum Types ============
 
 export type AppRole = 'admin' | 'member';
 export type WorkspaceRole = 'owner' | 'admin' | 'agent';
-export type ContactStatus = 'active' | 'inactive' | 'blocked';
 export type CardPriority = 'low' | 'medium' | 'high' | 'urgent';
-export type MessageType = 'text' | 'image' | 'document' | 'audio' | 'video';
-export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 export type WhatsAppNumberStatus = 'connected' | 'disconnected' | 'error';
 export type RecurrenceStatus = 'new' | 'active' | 'warming' | 'cold' | 'lost';
 export type SegmentType = 'broadcast' | 'filter';
 export type CatalogStatus = 'active' | 'inactive';
 export type CatalogSendStatus = 'queued' | 'sending' | 'sent' | 'failed';
 
-// Board view types
-export type BoardViewType = 'relationship' | 'stage' | 'groups';
+// ============ Workspace Types ============
 
-// Workspace types
 export interface Workspace {
   id: string;
   name: string;
@@ -50,28 +55,7 @@ export interface UserRole {
   created_at: string;
 }
 
-export interface Pipeline {
-  id: string;
-  workspace_id: string | null;
-  name: string;
-  description: string | null;
-  color: string;
-  created_by: string | null;
-  owner_user_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Stage {
-  id: string;
-  pipeline_id: string;
-  workspace_id: string | null;
-  name: string;
-  color: string;
-  position: number;
-  created_at: string;
-  updated_at: string;
-}
+// ============ Classification Types ============
 
 export interface ContactClass {
   id: string;
@@ -83,7 +67,6 @@ export interface ContactClass {
   updated_at: string;
 }
 
-// Group Classes (for WhatsApp groups classification)
 export interface GroupClass {
   id: string;
   workspace_id: string;
@@ -94,39 +77,7 @@ export interface GroupClass {
   updated_at: string;
 }
 
-export interface Contact {
-  id: string;
-  workspace_id: string | null;
-  user_id: string;
-  name: string;
-  phone: string;
-  email: string | null;
-  avatar_url: string | null;
-  status: ContactStatus;
-  tags: string[]; // deprecated, use contact_tags
-  notes: string | null;
-  contact_class_id: string | null; // For leads (relationship classification)
-  group_class_id: string | null; // For groups (group type classification)
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Card {
-  id: string;
-  stage_id: string;
-  workspace_id: string | null;
-  contact_id: string;
-  title: string;
-  description: string | null;
-  priority: CardPriority;
-  position: number;
-  assigned_to: string | null;
-  due_date: string | null;
-  created_at: string;
-  updated_at: string;
-  // Joined data
-  contact?: Contact;
-}
+// ============ WhatsApp Types ============
 
 export interface WhatsAppNumber {
   id: string;
@@ -143,37 +94,7 @@ export interface WhatsAppNumber {
   updated_at: string;
 }
 
-export interface Conversation {
-  id: string;
-  workspace_id: string | null;
-  contact_id: string;
-  whatsapp_number_id: string | null;
-  pipeline_id: string | null;
-  stage_id: string | null;
-  last_message_at: string | null;
-  unread_count: number;
-  is_typing: boolean;
-  created_at: string;
-  updated_at: string;
-  // Joined data
-  contact?: Contact;
-}
-
-export interface Message {
-  id: string;
-  conversation_id: string;
-  workspace_id: string | null;
-  whatsapp_number_id: string | null;
-  sent_by_user_id: string | null;
-  body: string;
-  type: MessageType;
-  status: MessageStatus;
-  is_outgoing: boolean;
-  media_url: string | null;
-  external_id: string | null;
-  error_message: string | null;
-  created_at: string;
-}
+// ============ Tag Types ============
 
 export interface Tag {
   id: string;
@@ -184,7 +105,6 @@ export interface Tag {
   created_at: string;
 }
 
-// Contact Tags (many-to-many)
 export interface ContactTag {
   id: string;
   workspace_id: string;
@@ -193,7 +113,8 @@ export interface ContactTag {
   created_at: string;
 }
 
-// Segments for broadcast
+// ============ Segment Types ============
+
 export interface Segment {
   id: string;
   workspace_id: string;
@@ -212,7 +133,8 @@ export interface SegmentMember {
   created_at: string;
 }
 
-// Catalogs
+// ============ Catalog Types ============
+
 export interface Catalog {
   id: string;
   workspace_id: string;
@@ -250,7 +172,8 @@ export interface CatalogSend {
   created_at: string;
 }
 
-// Purchases and Recurrence
+// ============ Purchase & Recurrence Types ============
+
 export interface Purchase {
   id: string;
   workspace_id: string;
@@ -269,18 +192,4 @@ export interface CustomerRecurrence {
   avg_days_between_purchases: number | null;
   status: RecurrenceStatus;
   updated_at: string;
-}
-
-// Extended types for Kanban
-export interface StageWithCards extends Stage {
-  cards: Card[];
-}
-
-export interface PipelineWithStages extends Pipeline {
-  stages: StageWithCards[];
-}
-
-// Extended types for Contact Classes (Relationship Board)
-export interface ContactClassWithContacts extends ContactClass {
-  contacts: Contact[];
 }

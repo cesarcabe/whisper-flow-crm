@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BoardViewType } from '@/types/database';
+import { BoardViewType } from '@/types/ui';
 
 // ===== Types =====
 export interface KanbanDialogState {

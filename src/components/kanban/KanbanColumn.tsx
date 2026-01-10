@@ -1,6 +1,6 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { StageWithCards, Card } from '@/types/database';
+import { StageWithCards, Card } from '@/types/ui';
 import { KanbanCard } from './KanbanCard';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Plus, Pencil, Trash2 } from 'lucide-react';

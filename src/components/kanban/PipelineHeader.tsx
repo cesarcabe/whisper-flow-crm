@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Pipeline } from '@/types/database';
+import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
+
+type Pipeline = Tables<'pipelines'>;
 import {
   Select,
   SelectContent,
