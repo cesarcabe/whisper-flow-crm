@@ -6,7 +6,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { cn } from '@/lib/utils';
-import { Message } from '@/hooks/useMessages';
+import { LegacyMessage } from '@/hooks/useMessages';
+
+type Message = LegacyMessage;
 
 interface MessageInputProps {
   conversationId: string;

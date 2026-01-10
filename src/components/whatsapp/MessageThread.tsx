@@ -15,7 +15,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { useMessages, Message } from '@/hooks/useMessages';
+import { useMessages, LegacyMessage } from '@/hooks/useMessages';
+
+type Message = LegacyMessage;
 import { usePipelines } from '@/hooks/usePipelines';
 import { useConversationStages } from '@/hooks/useConversationStages';
 import { MessageInput } from './MessageInput';
