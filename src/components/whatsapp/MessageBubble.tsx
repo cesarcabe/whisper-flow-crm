@@ -1,7 +1,5 @@
 import { useState, useCallback } from 'react';
 import { Reply, Copy, Forward, Trash2, SmilePlus, Check, CheckCheck } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -14,6 +12,7 @@ import { ImageViewer } from './ImageViewer';
 import { ReactionPicker } from './ReactionPicker';
 import { useMessageReactions } from '@/hooks/useMessageReactions';
 import { cn } from '@/lib/utils';
+import { formatTime } from '@/lib/date-utils';
 import { toast } from 'sonner';
 import { LegacyMessage } from '@/hooks/useMessages';
 
@@ -74,7 +73,7 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const message = rawMessage as MessageWithQuote;
   const isOutgoing = message.is_outgoing;
-  const time = format(new Date(message.created_at), 'HH:mm', { locale: ptBR });
+  const time = formatTime(new Date(message.created_at));
   const isAudio = message.type === 'audio';
   const isImage = message.type === 'image';
   const { groupedReactions, toggleReaction } = useMessageReactions(message.id);

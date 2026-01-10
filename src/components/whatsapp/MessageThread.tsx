@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { Loader2, AlertTriangle, RefreshCw, ArrowDown, ArrowUp, Users, MoreVertical, WifiOff, User, Archive, Trash2, Tag, Lock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -24,10 +24,11 @@ import { MessageInput } from './MessageInput';
 import { MessageBubble } from './MessageBubble';
 import { ForwardMessageDialog } from './ForwardMessageDialog';
 import { Tables } from '@/integrations/supabase/types';
-import { format, isToday, isYesterday } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { formatDateLabel } from '@/lib/date-utils';
+import { groupMessagesByDate } from '@/lib/message-utils';
+import { getInitials } from '@/lib/normalize';
 
 type Contact = Tables<'contacts'>;
 
@@ -85,9 +86,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
     }
   };
   
-  const initials = isGroup 
-    ? 'GP' 
-    : name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const initials = isGroup ? 'GP' : getInitials(name);
 
   // Scroll to bottom function
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
@@ -364,17 +363,11 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
   );
 }
 
-function getDateLabel(date: Date): string {
-  if (isToday(date)) return 'Hoje';
-  if (isYesterday(date)) return 'Ontem';
-  return format(date, "d 'de' MMMM", { locale: ptBR });
-}
-
 function DateSeparator({ date }: { date: Date }) {
   return (
     <div className="flex items-center justify-center my-4">
       <div className="bg-muted/80 text-muted-foreground text-xs px-3 py-1 rounded-full shadow-sm">
-        {getDateLabel(date)}
+        {formatDateLabel(date)}
       </div>
     </div>
   );
@@ -395,27 +388,7 @@ function MessagesWithDateSeparators({
   onForward,
   onScrollToMessage 
 }: MessagesWithDateSeparatorsProps) {
-  const groupedMessages = useMemo(() => {
-    // Sort messages chronologically (oldest first) for correct display
-    const sortedMessages = [...messages].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-    
-    const groups: { date: string; messages: Message[] }[] = [];
-    
-    sortedMessages.forEach(message => {
-      const dateKey = format(new Date(message.created_at), 'yyyy-MM-dd');
-      const existingGroup = groups.find(g => g.date === dateKey);
-      
-      if (existingGroup) {
-        existingGroup.messages.push(message);
-      } else {
-        groups.push({ date: dateKey, messages: [message] });
-      }
-    });
-    
-    return groups;
-  }, [messages]);
+  const groupedMessages = groupMessagesByDate(messages);
 
   return (
     <div className="flex flex-col gap-2">
