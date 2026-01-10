@@ -2,9 +2,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ConversationWithContact } from '@/hooks/useConversations';
-import { format, isToday, isYesterday } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { formatMessageTime } from '@/lib/date-utils';
+import { getInitials } from '@/lib/normalize';
 import { Users, WifiOff } from 'lucide-react';
 
 interface ConversationItemProps {
@@ -13,24 +13,12 @@ interface ConversationItemProps {
   onClick: () => void;
 }
 
-function formatMessageTime(date: Date): string {
-  if (isToday(date)) {
-    return format(date, 'HH:mm');
-  }
-  if (isYesterday(date)) {
-    return 'Ontem';
-  }
-  return format(date, 'dd/MM/yy');
-}
-
 export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
   const contact = conversation.contact;
   const isGroup = (conversation as any).is_group === true;
   const isOrphan = !conversation.whatsapp_number_id;
   const name = contact?.name || 'Contato desconhecido';
-  const initials = isGroup 
-    ? 'GP' 
-    : name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const initials = isGroup ? 'GP' : getInitials(name);
   const lastMessageAt = conversation.last_message_at;
   const unreadCount = conversation.unread_count || 0;
 
