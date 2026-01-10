@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Loader2, Search, Forward } from 'lucide-react';
 import {
   Dialog,
@@ -9,19 +9,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-
-interface ConversationItem {
-  id: string;
-  contact: {
-    name: string;
-    phone: string;
-    avatar_url: string | null;
-  } | null;
-}
+import { useForwardMessage } from '@/hooks/useForwardMessage';
+import { getInitials } from '@/lib/normalize';
 
 interface ForwardMessageDialogProps {
   open: boolean;
@@ -39,77 +30,29 @@ export function ForwardMessageDialog({
   currentConversationId,
 }: ForwardMessageDialogProps) {
   const { workspaceId } = useWorkspace();
-  const [conversations, setConversations] = useState<ConversationItem[]>([]);
-  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [forwarding, setForwarding] = useState<string | null>(null);
 
-  // Fetch conversations when dialog opens
-  useEffect(() => {
-    if (!open || !workspaceId) return;
-
-    const fetchConversations = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('conversations')
-          .select('id, contact:contacts(name, phone, avatar_url)')
-          .eq('workspace_id', workspaceId)
-          .neq('id', currentConversationId)
-          .order('last_message_at', { ascending: false })
-          .limit(50);
-
-        if (error) throw error;
-        setConversations((data || []) as unknown as ConversationItem[]);
-      } catch (err) {
-        console.error('[ForwardDialog] fetch error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchConversations();
-  }, [open, workspaceId, currentConversationId]);
-
-  // Filter conversations (exclude current one)
-  const filteredConversations = conversations.filter(conv => {
-    if (!search.trim()) return true;
-    const name = conv.contact?.name?.toLowerCase() || '';
-    return name.includes(search.toLowerCase());
+  const {
+    conversations,
+    loading,
+    forwarding,
+    forwardMessage,
+    filterConversations,
+  } = useForwardMessage({
+    workspaceId,
+    currentConversationId,
+    isOpen: open,
   });
 
+  const filteredConversations = useMemo(
+    () => filterConversations(search),
+    [filterConversations, search]
+  );
+
   const handleForward = async (targetConversationId: string) => {
-    if (forwarding) return;
-    
-    setForwarding(targetConversationId);
-    
-    try {
-      // Only forward text messages for now
-      if (messageType !== 'text') {
-        toast.error('Apenas mensagens de texto podem ser encaminhadas');
-        return;
-      }
-
-      const forwardedText = `⤵️ Mensagem encaminhada\n\n${messageBody}`;
-
-      const { data, error } = await supabase.functions.invoke('whatsapp-send', {
-        body: {
-          conversationId: targetConversationId,
-          message: forwardedText,
-        },
-      });
-
-      if (error || !data?.ok) {
-        throw new Error(data?.message || 'Erro ao encaminhar');
-      }
-
-      toast.success('Mensagem encaminhada');
+    const success = await forwardMessage(targetConversationId, messageBody, messageType);
+    if (success) {
       onOpenChange(false);
-    } catch (err: any) {
-      console.error('[Forward] error:', err);
-      toast.error('Erro ao encaminhar mensagem');
-    } finally {
-      setForwarding(null);
     }
   };
 
@@ -149,7 +92,6 @@ export function ForwardMessageDialog({
               <div className="space-y-1">
                 {filteredConversations.map((conv) => {
                   const name = conv.contact?.name || 'Contato';
-                  const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                   const isForwarding = forwarding === conv.id;
 
                   return (
@@ -163,9 +105,9 @@ export function ForwardMessageDialog({
                       )}
                     >
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={conv.contact?.avatar_url || undefined} />
+                        <AvatarImage src={conv.contact?.avatarUrl || undefined} />
                         <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                          {initials}
+                          {getInitials(name)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 text-left">

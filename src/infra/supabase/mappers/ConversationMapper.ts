@@ -16,6 +16,8 @@ export class ConversationMapper {
       workspaceId: row.workspace_id,
       contactId: row.contact_id,
       whatsappNumberId: row.whatsapp_number_id,
+      remoteJid: row.remote_jid,
+      isGroup: row.is_group ?? false,
       pipelineId: row.pipeline_id,
       stageId: row.stage_id,
       lastMessageAt: row.last_message_at ? new Date(row.last_message_at) : null,
@@ -31,11 +33,13 @@ export class ConversationMapper {
   /**
    * Converte uma entidade de domínio para formato de inserção no banco
    */
-  static toInsert(conversation: Conversation): Omit<ConversationRow, 'id' | 'created_at' | 'updated_at' | 'remote_jid' | 'is_group'> {
+  static toInsert(conversation: Conversation): Omit<ConversationRow, 'id' | 'created_at' | 'updated_at'> {
     return {
       workspace_id: conversation.workspaceId,
       contact_id: conversation.contactId,
       whatsapp_number_id: conversation.whatsappNumberId,
+      remote_jid: conversation.remoteJid,
+      is_group: conversation.isGroup,
       pipeline_id: conversation.pipelineId,
       stage_id: conversation.stageId,
       last_message_at: conversation.lastMessageAt?.toISOString() ?? null,

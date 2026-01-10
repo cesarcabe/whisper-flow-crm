@@ -3,6 +3,8 @@ export interface ConversationProps {
   workspaceId: string;
   contactId: string;
   whatsappNumberId: string | null;
+  remoteJid: string | null;
+  isGroup: boolean;
   pipelineId: string | null;
   stageId: string | null;
   lastMessageAt: Date | null;
@@ -28,6 +30,8 @@ export class Conversation {
   get workspaceId(): string { return this.props.workspaceId; }
   get contactId(): string { return this.props.contactId; }
   get whatsappNumberId(): string | null { return this.props.whatsappNumberId; }
+  get remoteJid(): string | null { return this.props.remoteJid; }
+  get isGroup(): boolean { return this.props.isGroup; }
   get pipelineId(): string | null { return this.props.pipelineId; }
   get stageId(): string | null { return this.props.stageId; }
   get lastMessageAt(): Date | null { return this.props.lastMessageAt; }
