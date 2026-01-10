@@ -17,8 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Contact } from '@/types/database';
+import { Tables } from '@/integrations/supabase/types';
 import { Loader2, UserPlus } from 'lucide-react';
+
+type Contact = Tables<'contacts'>;
 
 interface CreateCardDialogProps {
   open: boolean;

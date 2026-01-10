@@ -18,8 +18,10 @@ import { DeleteConfirmDialog } from './dialogs/DeleteConfirmDialog';
 import { EditStageDialog } from './dialogs/EditStageDialog';
 import { EditClassDialog } from './dialogs/EditClassDialog';
 import { ContactDetailsDialog } from './dialogs/ContactDetailsDialog';
-import { Contact } from '@/types/database';
+import { Tables } from '@/integrations/supabase/types';
 import { Loader2 } from 'lucide-react';
+
+type Contact = Tables<'contacts'>;
 
 export function KanbanView() {
   const { profile, signOut } = useAuth();

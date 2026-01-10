@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Card } from '@/types/database';
+import { Card } from '@/types/ui';
 import { Avatar } from '@/components/crm/Avatar';
 import { cn } from '@/lib/utils';
 import { Calendar, MessageSquare, AlertCircle } from 'lucide-react';

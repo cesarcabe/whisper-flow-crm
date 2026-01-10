@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Users, TrendingUp, UsersRound } from 'lucide-react';
-import { BoardViewType } from '@/types/database';
+import { BoardViewType } from '@/types/ui';
 
 interface BoardTypeSelectorProps {
   boardType: BoardViewType;

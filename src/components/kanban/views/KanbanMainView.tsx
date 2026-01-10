@@ -1,4 +1,4 @@
-import { BoardViewType } from '@/types/database';
+import { BoardViewType } from '@/types/ui';
 import { RelationshipBoard } from '../RelationshipBoard';
 import { StageBoard } from '../StageBoard';
 import { GroupsBoard } from '../GroupsBoard';

@@ -12,7 +12,7 @@ import {
   DragOverEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { PipelineWithStages, Card } from '@/types/database';
+import { PipelineWithStages, Card } from '@/types/ui';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanCard } from './KanbanCard';
 import { Plus } from 'lucide-react';

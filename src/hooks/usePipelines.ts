@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Pipeline, Stage, Card, PipelineWithStages, StageWithCards } from '@/types/database';
+import { Tables } from '@/integrations/supabase/types';
+import { StageWithCards, PipelineWithStages, Card } from '@/types/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
 import { calculateNextStagePosition, calculateNextCardPosition } from '@/core/use-cases/pipeline/calculateCardPosition';
+
+type Pipeline = Tables<'pipelines'>;
+type Stage = Tables<'stages'>;
 
 export function usePipelines() {
   const { user } = useAuth();

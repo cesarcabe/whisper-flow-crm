@@ -3,7 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
-import { Stage, Pipeline } from '@/types/database';
+import { Tables } from '@/integrations/supabase/types';
+
+type Stage = Tables<'stages'>;
+type Pipeline = Tables<'pipelines'>;
 
 export interface ConversationWithStage {
   id: string | null; // null if no conversation exists yet

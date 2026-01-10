@@ -3,7 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { GroupConversation } from '@/hooks/useGroupConversations';
-import { GroupClass } from '@/types/database';
+import { Tables } from '@/integrations/supabase/types';
+
+type GroupClass = Tables<'group_classes'>;
 
 export interface GroupWithClass extends GroupConversation {
   group_class_id: string | null;
