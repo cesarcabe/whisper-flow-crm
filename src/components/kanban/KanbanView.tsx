@@ -1,5 +1,3 @@
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useContacts } from '@/hooks/useContacts';
@@ -7,43 +5,47 @@ import { useContactClasses } from '@/hooks/useContactClasses';
 import { useConversationStages } from '@/hooks/useConversationStages';
 import { useGroupClasses } from '@/hooks/useGroupClasses';
 import { useAuth } from '@/contexts/AuthContext';
+import { useKanbanState } from '@/hooks/useKanbanState';
 import { PipelineHeader } from './PipelineHeader';
-import { KanbanBoard } from './KanbanBoard';
-import { RelationshipBoard } from './RelationshipBoard';
-import { StageBoard } from './StageBoard';
-import { GroupsBoard } from './GroupsBoard';
-import { CRMLayout } from '@/components/crm/CRMLayout';
+import { BoardTypeSelector } from './BoardTypeSelector';
+import { ChatView } from './views/ChatView';
+import { KanbanMainView } from './views/KanbanMainView';
 import { CreatePipelineDialog } from './dialogs/CreatePipelineDialog';
 import { CreateStageDialog } from './dialogs/CreateStageDialog';
 import { CreateCardDialog } from './dialogs/CreateCardDialog';
 import { CreateContactDialog } from './dialogs/CreateContactDialog';
-import { Card, BoardViewType, Contact } from '@/types/database';
-import { Loader2, Users, TrendingUp, UsersRound } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { DeleteConfirmDialog } from './dialogs/DeleteConfirmDialog';
+import { EditStageDialog } from './dialogs/EditStageDialog';
+import { EditClassDialog } from './dialogs/EditClassDialog';
+import { ContactDetailsDialog } from './dialogs/ContactDetailsDialog';
+import { Contact } from '@/types/database';
+import { Loader2 } from 'lucide-react';
 
 export function KanbanView() {
-  const [searchParams] = useSearchParams();
   const { profile, signOut } = useAuth();
+  
+  // Centralized state management
+  const {
+    currentView,
+    setCurrentView,
+    boardType,
+    setBoardType,
+    dialogs,
+    openDialog,
+    closeDialog,
+    setDialogOpen,
+    editStage,
+    editClass,
+    setEditStageName,
+    setEditStageColor,
+    setEditClassName,
+    setEditClassColor,
+    selectedItems,
+    clearStageToDelete,
+    handlers,
+  } = useKanbanState();
+  
+  // Data hooks
   const {
     pipelines,
     activePipeline,
@@ -54,7 +56,6 @@ export function KanbanView() {
     createStage,
     updateStage,
     deleteStage,
-    moveCard,
     createCard,
   } = usePipelines();
   
@@ -84,105 +85,9 @@ export function KanbanView() {
     unclassifiedGroups,
     loading: groupsLoading,
     moveGroup,
-    createGroupClass,
   } = useGroupClasses();
 
-  // Check if URL has whatsapp param to auto-switch to chat view
-  const whatsappFromUrl = searchParams.get('whatsapp');
-  const [currentView, setCurrentView] = useState<'kanban' | 'chat'>(whatsappFromUrl ? 'chat' : 'kanban');
-  const [boardType, setBoardType] = useState<BoardViewType>('relationship');
-
-  // Auto-switch to chat view when whatsapp param is present
-  useEffect(() => {
-    if (whatsappFromUrl) {
-      setCurrentView('chat');
-    }
-  }, [whatsappFromUrl]);
-  
-  // Dialog states
-  const [showCreatePipeline, setShowCreatePipeline] = useState(false);
-  const [showCreateStage, setShowCreateStage] = useState(false);
-  const [showCreateCard, setShowCreateCard] = useState(false);
-  const [showCreateContact, setShowCreateContact] = useState(false);
-  const [showDeletePipeline, setShowDeletePipeline] = useState(false);
-  const [showDeleteStage, setShowDeleteStage] = useState(false);
-  const [showCreateClass, setShowCreateClass] = useState(false);
-  
-  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
-  const [stageToDelete, setStageToDelete] = useState<string | null>(null);
-
-  // Edit Stage dialog state
-  const [showEditStage, setShowEditStage] = useState(false);
-  const [editStageId, setEditStageId] = useState<string | null>(null);
-  const [editStageName, setEditStageName] = useState('');
-  const [editStageColor, setEditStageColor] = useState('#6B7280');
-
-  // Edit Class dialog state
-  const [showEditClass, setShowEditClass] = useState(false);
-  const [editClassId, setEditClassId] = useState<string | null>(null);
-  const [editClassName, setEditClassName] = useState('');
-  const [editClassColor, setEditClassColor] = useState('#6B7280');
-
-  // Contact details dialog state
-  const [showContactDetails, setShowContactDetails] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<any>(null);
-
-  // Listen for crm:open-chat event
-  useEffect(() => {
-    const handleOpenChat = (e: CustomEvent<{ contactId: string; conversationId: string | null }>) => {
-      console.log('crm:open-chat received', e.detail);
-      localStorage.setItem('crm:selectedContactId', e.detail.contactId);
-      if (e.detail.conversationId) {
-        localStorage.setItem('crm:selectedConversationId', e.detail.conversationId);
-      }
-      setCurrentView('chat');
-    };
-    window.addEventListener('crm:open-chat', handleOpenChat as EventListener);
-    return () => window.removeEventListener('crm:open-chat', handleOpenChat as EventListener);
-  }, []);
-
-  const handleAddCard = (stageId: string) => {
-    setSelectedStageId(stageId);
-    setShowCreateCard(true);
-  };
-
-  const handleEditStage = (stageId: string) => {
-    const stage = stagePipeline?.stages.find((s: any) => s.id === stageId);
-    if (stage) {
-      setEditStageId(stageId);
-      setEditStageName(stage.name);
-      setEditStageColor(stage.color || '#6B7280');
-      setShowEditStage(true);
-    }
-  };
-
-  const handleEditClass = (classId: string) => {
-    const cls = contactClasses.find((c) => c.id === classId);
-    if (cls) {
-      setEditClassId(classId);
-      setEditClassName(cls.name);
-      setEditClassColor(cls.color || '#6B7280');
-      setShowEditClass(true);
-    }
-  };
-
-  const handleContactClick = (contact: any) => {
-    setSelectedContact(contact);
-    setShowContactDetails(true);
-  };
-
-  const handleDeleteStage = (stageId: string) => {
-    setStageToDelete(stageId);
-    setShowDeleteStage(true);
-  };
-
-  const handleCardClick = (card: Card) => {
-    const contact = contacts.find((c) => c.id === card.contact_id);
-    if (contact) {
-      handleContactClick(contact);
-    }
-  };
-
+  // Loading state
   const loading = pipelinesLoading || classesLoading || stagesLoading || groupsLoading;
 
   if (loading) {
@@ -196,138 +101,89 @@ export function KanbanView() {
     );
   }
 
+  // Chat View
   if (currentView === 'chat') {
     return (
-      <div className="h-screen flex flex-col overflow-hidden">
-        <PipelineHeader
-          pipelines={pipelines}
-          activePipeline={activePipeline}
-          onSelectPipeline={setActivePipeline}
-          onCreatePipeline={() => setShowCreatePipeline(true)}
-          onEditPipeline={() => {}}
-          onDeletePipeline={() => setShowDeletePipeline(true)}
-          onViewChange={setCurrentView}
-          currentView={currentView}
-          userName={profile?.full_name || undefined}
-          onSignOut={signOut}
-        />
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <CRMLayout />
-        </div>
-      </div>
+      <ChatView
+        pipelines={pipelines}
+        activePipeline={activePipeline}
+        onSelectPipeline={setActivePipeline}
+        onCreatePipeline={() => openDialog('showCreatePipeline')}
+        onDeletePipeline={() => openDialog('showDeletePipeline')}
+        onViewChange={setCurrentView}
+        currentView={currentView}
+        userName={profile?.full_name || undefined}
+        onSignOut={signOut}
+      />
     );
   }
 
+  // Kanban View
   return (
     <div className="h-screen flex flex-col bg-background">
       <PipelineHeader
         pipelines={pipelines}
         activePipeline={activePipeline}
         onSelectPipeline={setActivePipeline}
-        onCreatePipeline={() => setShowCreatePipeline(true)}
+        onCreatePipeline={() => openDialog('showCreatePipeline')}
         onEditPipeline={() => {}}
-        onDeletePipeline={() => setShowDeletePipeline(true)}
+        onDeletePipeline={() => openDialog('showDeletePipeline')}
         onViewChange={setCurrentView}
         currentView={currentView}
         userName={profile?.full_name || undefined}
         onSignOut={signOut}
       />
 
-      {/* Board Type Toggle */}
-      <div className="px-4 py-2 border-b border-border flex items-center gap-2 flex-wrap">
-        <span className="text-sm text-muted-foreground mr-2">Visualizar:</span>
-        <Button
-          variant={boardType === 'relationship' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setBoardType('relationship')}
-          className="gap-2"
-        >
-          <Users className="h-4 w-4" />
-          Relacionamento
-        </Button>
-        <Button
-          variant={boardType === 'stage' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setBoardType('stage')}
-          className="gap-2"
-        >
-          <TrendingUp className="h-4 w-4" />
-          Estágios de Venda
-        </Button>
-        <Button
-          variant={boardType === 'groups' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setBoardType('groups')}
-          className="gap-2"
-        >
-          <UsersRound className="h-4 w-4" />
-          Grupos
-        </Button>
-      </div>
+      <BoardTypeSelector boardType={boardType} onBoardTypeChange={setBoardType} />
 
       <main className="flex-1 overflow-hidden">
-        {boardType === 'relationship' ? (
-          <RelationshipBoard
-            contactClasses={contactClasses}
-            contactsByClass={contactsByClass}
-            unclassifiedContacts={unclassifiedContacts}
-            onMoveContact={moveContact}
-            onContactClick={handleContactClick}
-            onAddClass={() => setShowCreateClass(true)}
-            onEditClass={handleEditClass}
-            onDeleteClass={deleteContactClass}
-          />
-        ) : boardType === 'groups' ? (
-          <GroupsBoard
-            contactClasses={groupClasses}
-            groupsByClass={groupsByClass}
-            unclassifiedGroups={unclassifiedGroups}
-            onMoveGroup={moveGroup}
-            onGroupClick={(group) => {
-              localStorage.setItem('crm:selectedContactId', group.contact_id);
-              localStorage.setItem('crm:selectedConversationId', group.id);
-              setCurrentView('chat');
-            }}
-            onAddClass={() => setShowCreateClass(true)}
-            onEditClass={handleEditClass}
-            onDeleteClass={deleteContactClass}
-          />
-        ) : stagePipeline ? (
-          <StageBoard
-            pipeline={stagePipeline}
-            onMoveConversation={moveConversation}
-            onConversationClick={(conv) => {
-              const contact = contacts.find((c) => c.id === conv.contact_id);
-              if (contact) handleContactClick(contact);
-            }}
-            onAddStage={() => setShowCreateStage(true)}
-            onEditStage={handleEditStage}
-            onDeleteStage={handleDeleteStage}
-          />
-        ) : (
-          <div className="h-full flex items-center justify-center">
-            <p className="text-muted-foreground">Nenhum pipeline selecionado</p>
-          </div>
-        )}
+        <KanbanMainView
+          boardType={boardType}
+          // Relationship
+          contactClasses={contactClasses}
+          contactsByClass={contactsByClass}
+          unclassifiedContacts={unclassifiedContacts}
+          onMoveContact={moveContact}
+          onContactClick={handlers.handleContactClick}
+          onAddClass={() => openDialog('showCreateClass')}
+          onEditClass={(classId) => handlers.handleEditClass(classId, contactClasses)}
+          onDeleteClass={deleteContactClass}
+          // Groups
+          groupClasses={groupClasses}
+          groupsByClass={groupsByClass}
+          unclassifiedGroups={unclassifiedGroups}
+          onMoveGroup={moveGroup}
+          onGroupClick={handlers.handleGroupClick}
+          // Stage
+          stagePipeline={stagePipeline}
+          onMoveConversation={moveConversation}
+          onConversationClick={(conv) => {
+            const contact = contacts.find((c) => c.id === conv.contact_id);
+            if (contact) handlers.handleContactClick(contact);
+          }}
+          onAddStage={() => openDialog('showCreateStage')}
+          onEditStage={(stageId) => handlers.handleEditStage(stageId, stagePipeline?.stages || [])}
+          onDeleteStage={handlers.handleDeleteStage}
+        />
       </main>
 
       {/* Dialogs */}
       <CreatePipelineDialog
-        open={showCreatePipeline}
-        onOpenChange={setShowCreatePipeline}
+        open={dialogs.showCreatePipeline}
+        onOpenChange={(open) => setDialogOpen('showCreatePipeline', open)}
         onSubmit={async (name, description) => {
           await createPipeline(name, description);
         }}
       />
 
       <CreateStageDialog
-        open={showCreateStage || showCreateClass}
+        open={dialogs.showCreateStage || dialogs.showCreateClass}
         onOpenChange={(open) => {
-          setShowCreateStage(open);
-          setShowCreateClass(open);
+          setDialogOpen('showCreateStage', open);
+          setDialogOpen('showCreateClass', open);
         }}
         onSubmit={async (name, color) => {
-          if (showCreateClass) {
+          if (dialogs.showCreateClass) {
             await createContactClass(name, color);
           } else if (activePipeline) {
             await createStage(activePipeline.id, name, color);
@@ -336,232 +192,110 @@ export function KanbanView() {
       />
 
       <CreateCardDialog
-        open={showCreateCard}
-        onOpenChange={setShowCreateCard}
+        open={dialogs.showCreateCard}
+        onOpenChange={(open) => setDialogOpen('showCreateCard', open)}
         contacts={contacts as unknown as Contact[]}
         onSubmit={async (contactId, title, description) => {
-          if (selectedStageId) {
-            await createCard(selectedStageId, contactId, title, description);
+          if (selectedItems.stageId) {
+            await createCard(selectedItems.stageId, contactId, title, description);
           }
         }}
         onCreateContact={() => {
-          setShowCreateCard(false);
-          setShowCreateContact(true);
+          closeDialog('showCreateCard');
+          openDialog('showCreateContact');
         }}
       />
 
       <CreateContactDialog
-        open={showCreateContact}
-        onOpenChange={setShowCreateContact}
+        open={dialogs.showCreateContact}
+        onOpenChange={(open) => setDialogOpen('showCreateContact', open)}
         onSubmit={async (contact) => {
           await createContact(contact as any);
-          setShowCreateContact(false);
-          setShowCreateCard(true);
+          closeDialog('showCreateContact');
+          openDialog('showCreateCard');
         }}
       />
 
-      <AlertDialog open={showDeletePipeline} onOpenChange={setShowDeletePipeline}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Deletar Pipeline?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={async () => {
-                if (activePipeline) {
-                  await deletePipeline(activePipeline.id);
-                }
-              }}
-            >
-              Deletar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={dialogs.showDeletePipeline}
+        onOpenChange={(open) => setDialogOpen('showDeletePipeline', open)}
+        title="Deletar Pipeline?"
+        description="Esta ação não pode ser desfeita."
+        onConfirm={async () => {
+          if (activePipeline) {
+            await deletePipeline(activePipeline.id);
+          }
+        }}
+      />
 
-      <AlertDialog open={showDeleteStage} onOpenChange={setShowDeleteStage}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Deletar Estágio?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={async () => {
-                if (stageToDelete) {
-                  await deleteStage(stageToDelete);
-                  setStageToDelete(null);
-                }
-              }}
-            >
-              Deletar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={dialogs.showDeleteStage}
+        onOpenChange={(open) => setDialogOpen('showDeleteStage', open)}
+        title="Deletar Estágio?"
+        description="Esta ação não pode ser desfeita."
+        onConfirm={async () => {
+          if (selectedItems.stageToDelete) {
+            await deleteStage(selectedItems.stageToDelete);
+            clearStageToDelete();
+          }
+        }}
+      />
 
-      {/* Edit Stage Dialog */}
-      <Dialog open={showEditStage} onOpenChange={setShowEditStage}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar Estágio</DialogTitle>
-            <DialogDescription>Altere o nome e cor do estágio</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="stage-name">Nome</Label>
-              <Input
-                id="stage-name"
-                value={editStageName}
-                onChange={(e) => setEditStageName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="stage-color">Cor</Label>
-              <Input
-                id="stage-color"
-                type="color"
-                value={editStageColor}
-                onChange={(e) => setEditStageColor(e.target.value)}
-                className="h-10 w-20"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditStage(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={async () => {
-                if (editStageId) {
-                  const success = await updateStage(editStageId, { 
-                    name: editStageName, 
-                    color: editStageColor 
-                  });
-                  if (success) {
-                    setShowEditStage(false);
-                    // Refetch stages without reload
-                    if (stagePipeline?.id) {
-                      await fetchPipelineWithConversations(stagePipeline.id);
-                    }
-                    toast.success('Estágio atualizado!');
-                  } else {
-                    toast.error('Erro ao atualizar estágio');
-                  }
-                }
-              }}
-            >
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditStageDialog
+        open={dialogs.showEditStage}
+        onOpenChange={(open) => setDialogOpen('showEditStage', open)}
+        stageId={editStage.id}
+        name={editStage.name}
+        color={editStage.color}
+        onNameChange={setEditStageName}
+        onColorChange={setEditStageColor}
+        onSave={async () => {
+          if (editStage.id) {
+            const success = await updateStage(editStage.id, {
+              name: editStage.name,
+              color: editStage.color,
+            });
+            if (success) {
+              closeDialog('showEditStage');
+              if (stagePipeline?.id) {
+                await fetchPipelineWithConversations(stagePipeline.id);
+              }
+              toast.success('Estágio atualizado!');
+            } else {
+              toast.error('Erro ao atualizar estágio');
+            }
+          }
+        }}
+      />
 
-      {/* Edit Class Dialog */}
-      <Dialog open={showEditClass} onOpenChange={setShowEditClass}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar Classe</DialogTitle>
-            <DialogDescription>Altere o nome e cor da classe</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="class-name">Nome</Label>
-              <Input
-                id="class-name"
-                value={editClassName}
-                onChange={(e) => setEditClassName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="class-color">Cor</Label>
-              <Input
-                id="class-color"
-                type="color"
-                value={editClassColor}
-                onChange={(e) => setEditClassColor(e.target.value)}
-                className="h-10 w-20"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditClass(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={async () => {
-                if (editClassId) {
-                  const success = await updateContactClass(editClassId, { 
-                    name: editClassName, 
-                    color: editClassColor 
-                  });
-                  if (success) {
-                    setShowEditClass(false);
-                    toast.success('Classe atualizada!');
-                  }
-                }
-              }}
-            >
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditClassDialog
+        open={dialogs.showEditClass}
+        onOpenChange={(open) => setDialogOpen('showEditClass', open)}
+        classId={editClass.id}
+        name={editClass.name}
+        color={editClass.color}
+        onNameChange={setEditClassName}
+        onColorChange={setEditClassColor}
+        onSave={async () => {
+          if (editClass.id) {
+            const success = await updateContactClass(editClass.id, {
+              name: editClass.name,
+              color: editClass.color,
+            });
+            if (success) {
+              closeDialog('showEditClass');
+              toast.success('Classe atualizada!');
+            }
+          }
+        }}
+      />
 
-      {/* Contact Details Dialog */}
-      <Dialog open={showContactDetails} onOpenChange={setShowContactDetails}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Detalhes do Contato</DialogTitle>
-          </DialogHeader>
-          {selectedContact && (
-            <div className="space-y-4 py-4">
-              <div>
-                <Label className="text-muted-foreground">Nome</Label>
-                <p className="font-medium">{selectedContact.name}</p>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">Telefone</Label>
-                <p className="font-medium">{selectedContact.phone || '-'}</p>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">Email</Label>
-                <p className="font-medium">{selectedContact.email || '-'}</p>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">Tags</Label>
-                <p className="font-medium">
-                  {selectedContact.tags?.length > 0
-                    ? selectedContact.tags.join(', ')
-                    : '-'}
-                </p>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">Notas</Label>
-                <p className="font-medium">{selectedContact.notes || '-'}</p>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">Classe</Label>
-                <p className="font-medium">
-                  {contactClasses.find((c) => c.id === selectedContact.contact_class_id)?.name || 'Sem classificação'}
-                </p>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button onClick={() => setShowContactDetails(false)}>Fechar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ContactDetailsDialog
+        open={dialogs.showContactDetails}
+        onOpenChange={(open) => setDialogOpen('showContactDetails', open)}
+        contact={selectedItems.contact}
+        contactClasses={contactClasses}
+      />
     </div>
   );
 }
