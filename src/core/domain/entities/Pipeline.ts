@@ -28,7 +28,7 @@ export class Pipeline {
   get description(): string | null { return this.props.description; }
   get color(): string { return this.props.color; }
   get createdBy(): string | null { return this.props.createdBy; }
-  get ownerUserId(): string | null { return this.props.ownerUserId; }
+  get ownerId(): string | null { return this.props.ownerUserId; }
   get createdAt(): Date { return this.props.createdAt; }
   get updatedAt(): Date { return this.props.updatedAt; }
   
