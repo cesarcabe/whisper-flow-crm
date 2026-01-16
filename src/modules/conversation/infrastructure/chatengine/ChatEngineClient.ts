@@ -7,18 +7,24 @@ import {
   MoveToStagePayload,
   ChatEngineListResponse
 } from './types';
+import { CHATENGINE_ENDPOINTS, AUTH_ERROR_CODES } from './config';
 
 /**
  * HTTP Client for ChatEngine API
  * Handles all communication with the external ChatEngine backend
+ * 
+ * Authentication: JWT Bearer token (HS256)
+ * Required JWT claims: workspace_id
+ * 
+ * Base URL: https://chatengine.newflow.me
  */
 export class ChatEngineClient {
   private baseUrl: string;
-  private apiKey: string;
+  private jwtToken: string;
 
-  constructor(baseUrl: string, apiKey: string) {
+  constructor(baseUrl: string, jwtToken: string) {
     this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
-    this.apiKey = apiKey;
+    this.jwtToken = jwtToken;
   }
 
   private async request<T>(
@@ -29,7 +35,7 @@ export class ChatEngineClient {
     
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`,
+      'Authorization': `Bearer ${this.jwtToken}`,
       ...options.headers,
     };
 
@@ -39,8 +45,20 @@ export class ChatEngineClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-      throw new Error(`ChatEngine API error: ${error.message || response.statusText}`);
+      const errorBody = await response.json().catch(() => ({ message: 'Unknown error' }));
+      
+      // Handle specific auth errors
+      if (response.status === AUTH_ERROR_CODES.UNAUTHORIZED) {
+        throw new Error('ChatEngine: Token ausente, inválido ou assinatura incorreta (401)');
+      }
+      if (response.status === AUTH_ERROR_CODES.FORBIDDEN) {
+        throw new Error('ChatEngine: Token válido, mas sem workspace_id (403)');
+      }
+      if (response.status === AUTH_ERROR_CODES.SERVER_ERROR) {
+        throw new Error('ChatEngine: Servidor sem JWT_SECRET configurado (500)');
+      }
+      
+      throw new Error(`ChatEngine API error: ${errorBody.message || response.statusText}`);
     }
 
     return response.json();
@@ -48,26 +66,32 @@ export class ChatEngineClient {
 
   // ==================== Conversations ====================
 
+  /**
+   * GET /api/chat/conversations
+   * Lista conversas do workspace (workspace_id vem do JWT)
+   */
   async getConversations(
-    workspaceId: string, 
     whatsappNumberId?: string,
     limit?: number,
     offset?: number
   ): Promise<ChatEngineListResponse<ChatEngineConversationDTO>> {
-    const params = new URLSearchParams({ workspace_id: workspaceId });
+    const params = new URLSearchParams();
     if (whatsappNumberId) params.append('whatsapp_number_id', whatsappNumberId);
     if (limit) params.append('limit', limit.toString());
     if (offset) params.append('offset', offset.toString());
 
-    return this.request<ChatEngineListResponse<ChatEngineConversationDTO>>(
-      `/conversations?${params.toString()}`
-    );
+    const queryString = params.toString();
+    const endpoint = queryString 
+      ? `${CHATENGINE_ENDPOINTS.CONVERSATIONS}?${queryString}`
+      : CHATENGINE_ENDPOINTS.CONVERSATIONS;
+
+    return this.request<ChatEngineListResponse<ChatEngineConversationDTO>>(endpoint);
   }
 
   async getConversation(conversationId: string): Promise<ChatEngineConversationDTO | null> {
     try {
       return await this.request<ChatEngineConversationDTO>(
-        `/conversations/${conversationId}`
+        `${CHATENGINE_ENDPOINTS.CONVERSATIONS}/${conversationId}`
       );
     } catch {
       return null;
@@ -75,24 +99,23 @@ export class ChatEngineClient {
   }
 
   async getConversationsByStage(stageId: string): Promise<ChatEngineConversationDTO[]> {
+    const params = new URLSearchParams({ stage_id: stageId });
     const response = await this.request<ChatEngineListResponse<ChatEngineConversationDTO>>(
-      `/conversations?stage_id=${stageId}`
+      `${CHATENGINE_ENDPOINTS.CONVERSATIONS}?${params.toString()}`
     );
     return response.data;
   }
 
   async getConversationsWithoutStage(
-    workspaceId: string, 
     whatsappNumberId?: string
   ): Promise<ChatEngineConversationDTO[]> {
     const params = new URLSearchParams({ 
-      workspace_id: workspaceId,
       stage_id: 'null' // Special value to indicate no stage
     });
     if (whatsappNumberId) params.append('whatsapp_number_id', whatsappNumberId);
 
     const response = await this.request<ChatEngineListResponse<ChatEngineConversationDTO>>(
-      `/conversations?${params.toString()}`
+      `${CHATENGINE_ENDPOINTS.CONVERSATIONS}?${params.toString()}`
     );
     return response.data;
   }
@@ -102,7 +125,7 @@ export class ChatEngineClient {
     payload: MoveToStagePayload
   ): Promise<void> {
     await this.request<void>(
-      `/conversations/${conversationId}/stage`,
+      `${CHATENGINE_ENDPOINTS.CONVERSATIONS}/${conversationId}/stage`,
       {
         method: 'PATCH',
         body: JSON.stringify(payload),
@@ -112,24 +135,28 @@ export class ChatEngineClient {
 
   async markAsRead(conversationId: string): Promise<void> {
     await this.request<void>(
-      `/conversations/${conversationId}/read`,
+      `${CHATENGINE_ENDPOINTS.CONVERSATIONS}/${conversationId}/read`,
       { method: 'POST' }
     );
   }
 
   // ==================== Messages ====================
 
+  /**
+   * GET /api/chat/messages?conversation_id=xxx
+   * Lista mensagens de uma conversa
+   */
   async getMessages(
     conversationId: string, 
     limit?: number, 
     before?: string
   ): Promise<ChatEngineMessageDTO[]> {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ conversation_id: conversationId });
     if (limit) params.append('limit', limit.toString());
     if (before) params.append('before', before);
 
     const response = await this.request<ChatEngineListResponse<ChatEngineMessageDTO>>(
-      `/conversations/${conversationId}/messages?${params.toString()}`
+      `${CHATENGINE_ENDPOINTS.MESSAGES}?${params.toString()}`
     );
     return response.data;
   }
@@ -137,7 +164,7 @@ export class ChatEngineClient {
   async getMessage(messageId: string): Promise<ChatEngineMessageDTO | null> {
     try {
       return await this.request<ChatEngineMessageDTO>(
-        `/messages/${messageId}`
+        `${CHATENGINE_ENDPOINTS.MESSAGES}/${messageId}`
       );
     } catch {
       return null;
@@ -146,50 +173,94 @@ export class ChatEngineClient {
 
   async getMessageByExternalId(externalId: string): Promise<ChatEngineMessageDTO | null> {
     try {
-      return await this.request<ChatEngineMessageDTO>(
-        `/messages/external/${externalId}`
+      const params = new URLSearchParams({ external_id: externalId });
+      const response = await this.request<ChatEngineListResponse<ChatEngineMessageDTO>>(
+        `${CHATENGINE_ENDPOINTS.MESSAGES}?${params.toString()}`
       );
+      return response.data[0] || null;
     } catch {
       return null;
     }
   }
 
+  /**
+   * GET /api/chat/messages/{messageId}/context
+   * Obtém contexto de uma mensagem (mensagens anteriores/posteriores)
+   */
+  async getMessageContext(messageId: string): Promise<ChatEngineMessageDTO[]> {
+    const response = await this.request<ChatEngineListResponse<ChatEngineMessageDTO>>(
+      CHATENGINE_ENDPOINTS.MESSAGE_CONTEXT(messageId)
+    );
+    return response.data;
+  }
+
+  /**
+   * POST /api/chat/messages
+   * Envia mensagem de texto
+   */
   async sendTextMessage(payload: SendTextMessagePayload): Promise<ChatEngineMessageDTO> {
     return this.request<ChatEngineMessageDTO>(
-      '/messages/text',
+      CHATENGINE_ENDPOINTS.MESSAGES,
       {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          type: 'text',
+        }),
       }
     );
   }
 
+  /**
+   * POST /api/chat/attachments
+   * Envia imagem como anexo
+   */
   async sendImage(payload: SendImagePayload): Promise<ChatEngineMessageDTO> {
     return this.request<ChatEngineMessageDTO>(
-      '/messages/image',
+      CHATENGINE_ENDPOINTS.ATTACHMENTS,
       {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          conversation_id: payload.conversation_id,
+          type: 'image',
+          content_base64: payload.image_base64,
+          mime_type: payload.mime_type,
+          caption: payload.caption,
+          reply_to_id: payload.reply_to_id,
+        }),
       }
     );
   }
 
+  /**
+   * POST /api/chat/attachments
+   * Envia áudio como anexo
+   */
   async sendAudio(payload: SendAudioPayload): Promise<ChatEngineMessageDTO> {
     return this.request<ChatEngineMessageDTO>(
-      '/messages/audio',
+      CHATENGINE_ENDPOINTS.ATTACHMENTS,
       {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          conversation_id: payload.conversation_id,
+          type: 'audio',
+          content_base64: payload.audio_base64,
+          mime_type: payload.mime_type,
+        }),
       }
     );
   }
 
+  /**
+   * POST /api/chat/messages/{messageId}/forward
+   * Encaminha mensagem para outra conversa
+   */
   async forwardMessage(
     messageId: string, 
     targetConversationId: string
   ): Promise<ChatEngineMessageDTO> {
     return this.request<ChatEngineMessageDTO>(
-      `/messages/${messageId}/forward`,
+      `${CHATENGINE_ENDPOINTS.MESSAGES}/${messageId}/forward`,
       {
         method: 'POST',
         body: JSON.stringify({ target_conversation_id: targetConversationId }),
@@ -197,31 +268,53 @@ export class ChatEngineClient {
     );
   }
 
+  // ==================== Media ====================
+
+  /**
+   * GET /api/chat/media?url=xxx
+   * Obtém URL de mídia (proxy para Evolution/WhatsApp)
+   */
+  async getMediaUrl(mediaUrl: string): Promise<string> {
+    const params = new URLSearchParams({ url: mediaUrl });
+    const response = await this.request<{ url: string }>(
+      `${CHATENGINE_ENDPOINTS.MEDIA}?${params.toString()}`
+    );
+    return response.url;
+  }
+
   // ==================== Utilities ====================
 
   async countMessagesByConversation(conversationId: string): Promise<number> {
+    const params = new URLSearchParams({ 
+      conversation_id: conversationId,
+      count_only: 'true'
+    });
     const response = await this.request<{ count: number }>(
-      `/conversations/${conversationId}/messages/count`
+      `${CHATENGINE_ENDPOINTS.MESSAGES}?${params.toString()}`
     );
     return response.count;
   }
 
   async countConversationsByStage(stageId: string): Promise<number> {
+    const params = new URLSearchParams({ 
+      stage_id: stageId,
+      count_only: 'true'
+    });
     const response = await this.request<{ count: number }>(
-      `/stages/${stageId}/conversations/count`
+      `${CHATENGINE_ENDPOINTS.CONVERSATIONS}?${params.toString()}`
     );
     return response.count;
   }
 
-  async countUnreadConversations(
-    workspaceId: string, 
-    whatsappNumberId?: string
-  ): Promise<number> {
-    const params = new URLSearchParams({ workspace_id: workspaceId });
+  async countUnreadConversations(whatsappNumberId?: string): Promise<number> {
+    const params = new URLSearchParams({ 
+      unread_only: 'true',
+      count_only: 'true'
+    });
     if (whatsappNumberId) params.append('whatsapp_number_id', whatsappNumberId);
 
     const response = await this.request<{ count: number }>(
-      `/conversations/unread/count?${params.toString()}`
+      `${CHATENGINE_ENDPOINTS.CONVERSATIONS}?${params.toString()}`
     );
     return response.count;
   }

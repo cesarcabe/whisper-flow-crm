@@ -2,31 +2,59 @@
  * ChatEngine Configuration
  * 
  * This file contains the configuration for the ChatEngine API client.
- * The actual values should be provided via environment variables or
- * injected through the ConversationProvider.
+ * Authentication uses JWT Bearer tokens signed with HS256.
  */
 
 export interface ChatEngineConfig {
+  /** Base URL of the ChatEngine API (e.g., https://chatengine.newflow.me) */
   baseUrl: string;
-  apiKey: string;
+  /** JWT token for authentication (must include workspace_id claim) */
+  jwtToken: string;
 }
 
 /**
- * Default configuration (can be overridden in ConversationProvider)
+ * Default configuration (populated from environment variables)
  * 
- * IMPORTANT: These are placeholders. Real values should come from:
- * - Environment variables (VITE_CHATENGINE_API_URL, VITE_CHATENGINE_API_KEY)
- * - Or passed directly to ConversationProvider
+ * Required env vars:
+ * - VITE_CHATENGINE_API_URL: Base URL of ChatEngine
+ * - VITE_CHATENGINE_JWT_TOKEN: Pre-generated JWT token with workspace_id claim
  */
 export const DEFAULT_CHATENGINE_CONFIG: ChatEngineConfig = {
-  // Will be populated when ChatEngine URL is provided
   baseUrl: import.meta.env.VITE_CHATENGINE_API_URL || '',
-  apiKey: import.meta.env.VITE_CHATENGINE_API_KEY || '',
+  jwtToken: import.meta.env.VITE_CHATENGINE_JWT_TOKEN || '',
 };
 
 /**
  * Check if ChatEngine is configured
  */
 export function isChatEngineConfigured(config: ChatEngineConfig = DEFAULT_CHATENGINE_CONFIG): boolean {
-  return Boolean(config.baseUrl && config.apiKey);
+  return Boolean(config.baseUrl && config.jwtToken);
 }
+
+/**
+ * ChatEngine API endpoints (based on confirmed routes)
+ */
+export const CHATENGINE_ENDPOINTS = {
+  // Conversations
+  CONVERSATIONS: '/api/chat/conversations',
+  
+  // Messages
+  MESSAGES: '/api/chat/messages',
+  MESSAGE_CONTEXT: (messageId: string) => `/api/chat/messages/${messageId}/context`,
+  
+  // Media/Attachments
+  ATTACHMENTS: '/api/chat/attachments',
+  MEDIA: '/api/chat/media',
+  
+  // Webhook (for reference - used by Evolution API)
+  WEBHOOK: '/api/webhooks/whatsapp',
+} as const;
+
+/**
+ * ChatEngine authentication error codes
+ */
+export const AUTH_ERROR_CODES = {
+  UNAUTHORIZED: 401,    // Token ausente, inválido ou assinatura incorreta
+  FORBIDDEN: 403,       // Token válido, mas sem workspace_id
+  SERVER_ERROR: 500,    // Servidor sem CHATENGINE_JWT_SECRET configurado
+} as const;
