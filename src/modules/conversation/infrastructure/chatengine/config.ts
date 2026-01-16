@@ -13,21 +13,30 @@ export interface ChatEngineConfig {
 }
 
 /**
- * Default configuration (populated from environment variables)
- * 
- * Required env vars:
- * - VITE_CHATENGINE_API_URL: Base URL of ChatEngine
- * - VITE_CHATENGINE_JWT_TOKEN: Pre-generated JWT token with workspace_id claim
+ * ChatEngine Base URL
+ */
+export const CHATENGINE_BASE_URL = 'https://chatengine.newflow.me';
+
+/**
+ * Default configuration (populated from environment variables or token service)
  */
 export const DEFAULT_CHATENGINE_CONFIG: ChatEngineConfig = {
-  baseUrl: import.meta.env.VITE_CHATENGINE_API_URL || '',
-  jwtToken: import.meta.env.VITE_CHATENGINE_JWT_TOKEN || '',
+  baseUrl: import.meta.env.VITE_CHATENGINE_API_URL || CHATENGINE_BASE_URL,
+  jwtToken: '', // Token is fetched dynamically via edge function
 };
 
 /**
- * Check if ChatEngine is configured
+ * Check if ChatEngine is configured (has base URL)
+ * Note: Token is fetched dynamically, so we only check baseUrl
  */
 export function isChatEngineConfigured(config: ChatEngineConfig = DEFAULT_CHATENGINE_CONFIG): boolean {
+  return Boolean(config.baseUrl);
+}
+
+/**
+ * Check if we have a valid token
+ */
+export function hasValidToken(config: ChatEngineConfig): boolean {
   return Boolean(config.baseUrl && config.jwtToken);
 }
 

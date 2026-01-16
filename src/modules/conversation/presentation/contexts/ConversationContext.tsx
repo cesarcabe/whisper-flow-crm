@@ -1,9 +1,10 @@
-import { createContext, useContext, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useMemo, ReactNode, useEffect, useState } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { ConversationService } from '../../application/services/ConversationService';
 import { SupabaseConversationRepository } from '../../infrastructure/supabase/SupabaseConversationRepository';
 import { SupabaseMessageRepository } from '../../infrastructure/supabase/SupabaseMessageRepository';
-import { ChatEngineConfig, DEFAULT_CHATENGINE_CONFIG, isChatEngineConfigured } from '../../infrastructure/chatengine/config';
+import { CHATENGINE_BASE_URL } from '../../infrastructure/chatengine/config';
+import { useChatEngineToken } from '../hooks/useChatEngineToken';
 
 /**
  * ConversationContext Type
@@ -12,6 +13,7 @@ interface ConversationContextType {
   service: ConversationService;
   workspaceId: string | null;
   isChatEngineEnabled: boolean;
+  isTokenLoading: boolean;
 }
 
 /**
@@ -25,8 +27,8 @@ const ConversationContext = createContext<ConversationContextType | null>(null);
  */
 interface ConversationProviderProps {
   children: ReactNode;
-  /** Optional ChatEngine configuration. If not provided, uses Supabase as fallback */
-  chatEngineConfig?: ChatEngineConfig;
+  /** Override ChatEngine base URL (defaults to production URL) */
+  chatEngineBaseUrl?: string;
 }
 
 /**
@@ -34,40 +36,29 @@ interface ConversationProviderProps {
  * 
  * Features:
  * - Creates ConversationService with appropriate repositories
- * - Uses ChatEngine if configured, otherwise falls back to Supabase
- * - Recreates service when workspaceId changes
- * 
- * Usage:
- * ```tsx
- * <ConversationProvider>
- *   <App />
- * </ConversationProvider>
- * 
- * // Or with custom ChatEngine config
- * <ConversationProvider chatEngineConfig={{ baseUrl: '...', apiKey: '...' }}>
- *   <App />
- * </ConversationProvider>
- * ```
+ * - Automatically fetches JWT tokens for ChatEngine
+ * - Recreates service when workspaceId or token changes
  */
 export function ConversationProvider({ 
   children, 
-  chatEngineConfig = DEFAULT_CHATENGINE_CONFIG 
+  chatEngineBaseUrl = CHATENGINE_BASE_URL 
 }: ConversationProviderProps) {
   const { workspaceId } = useWorkspace();
-
-  const isChatEngineEnabled = isChatEngineConfigured(chatEngineConfig);
+  const { token, isLoading: isTokenLoading } = useChatEngineToken(workspaceId);
+  
+  // Track if ChatEngine is properly configured
+  const isChatEngineEnabled = Boolean(chatEngineBaseUrl && token);
 
   // Create service instance
-  // Memoized to prevent unnecessary recreation
+  // Memoized and recreated when token changes
   const service = useMemo(() => {
     // Always create repositories - they implement the ports
     const conversationRepo = new SupabaseConversationRepository();
     const messageRepo = new SupabaseMessageRepository();
 
     // Create service with or without ChatEngine config
-    // Map ChatEngineConfig to what ConversationService expects
     const chatEngineServiceConfig = isChatEngineEnabled 
-      ? { baseUrl: chatEngineConfig.baseUrl, apiKey: chatEngineConfig.jwtToken }
+      ? { baseUrl: chatEngineBaseUrl, apiKey: token! }
       : undefined;
 
     return new ConversationService(
@@ -76,13 +67,14 @@ export function ConversationProvider({
       workspaceId ?? '',
       chatEngineServiceConfig
     );
-  }, [workspaceId, chatEngineConfig, isChatEngineEnabled]);
+  }, [workspaceId, chatEngineBaseUrl, token, isChatEngineEnabled]);
 
   const contextValue = useMemo(() => ({
     service,
     workspaceId,
     isChatEngineEnabled,
-  }), [service, workspaceId, isChatEngineEnabled]);
+    isTokenLoading,
+  }), [service, workspaceId, isChatEngineEnabled, isTokenLoading]);
 
   return (
     <ConversationContext.Provider value={contextValue}>
@@ -95,20 +87,6 @@ export function ConversationProvider({
  * Hook to access ConversationService
  * 
  * @throws Error if used outside ConversationProvider
- * 
- * Usage:
- * ```tsx
- * function MyComponent() {
- *   const { service, isChatEngineEnabled } = useConversation();
- *   
- *   const handleSend = async () => {
- *     const result = await service.sendTextMessage(conversationId, 'Hello');
- *     if (result.success) {
- *       console.log('Sent:', result.data);
- *     }
- *   };
- * }
- * ```
  */
 export function useConversation(): ConversationContextType {
   const context = useContext(ConversationContext);

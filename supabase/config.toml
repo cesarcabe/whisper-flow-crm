@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.whatsapp-disconnect-instance]
 verify_jwt = false
+
+[functions.chatengine-token]
+verify_jwt = false
