@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Tables } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
-
-type Pipeline = Tables<'pipelines'>;
 import {
   Select,
   SelectContent,
@@ -29,6 +27,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Settings, Pencil, Trash2, LayoutGrid, MessageSquare, LogOut, User, Users } from 'lucide-react';
 import { usePipelines } from '@/hooks/usePipelines';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { WorkspaceSelector } from '@/modules/workspace';
+
+type Pipeline = Tables<'pipelines'>;
 
 interface PipelineHeaderProps {
   pipelines: Pipeline[];
@@ -59,6 +61,7 @@ export function PipelineHeader({
   const [editName, setEditName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const { updatePipeline } = usePipelines();
+  const { workspaces, activeWorkspace, selectWorkspace } = useWorkspace();
 
   const handleOpenEditDialog = () => {
     if (activePipeline) {
@@ -78,14 +81,14 @@ export function PipelineHeader({
 
   return (
     <header className="h-16 bg-card border-b border-border flex items-center justify-between px-4 gap-4">
-      {/* Left: Pipeline Selector */}
+      {/* Left: Workspace Selector + Pipeline Selector */}
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-            <LayoutGrid className="h-4 w-4 text-primary" />
-          </div>
-          <span className="font-semibold text-lg hidden sm:block">CRM</span>
-        </div>
+        {/* Workspace Selector */}
+        <WorkspaceSelector
+          workspaces={workspaces}
+          activeWorkspace={activeWorkspace}
+          onSelectWorkspace={selectWorkspace}
+        />
 
         <div className="h-6 w-px bg-border hidden sm:block" />
 

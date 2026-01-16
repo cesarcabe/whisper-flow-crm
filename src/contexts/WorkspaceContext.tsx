@@ -1,12 +1,31 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Workspace, WorkspaceMember } from '@/types/database';
+import { 
+  Workspace, 
+  WorkspaceMember, 
+  SupabaseWorkspaceRepository,
+  WorkspaceWithMembership,
+} from '@/modules/workspace';
+
+const ACTIVE_WORKSPACE_KEY = 'crm_active_workspace_id';
 
 interface WorkspaceContextType {
+  // Multi-workspace support
+  workspaces: WorkspaceWithMembership[];
+  
+  // Active workspace (for backward compatibility)
+  activeWorkspace: Workspace | null;
+  activeMembership: WorkspaceMember | null;
+  
+  // Legacy alias (for backward compatibility)
   workspace: Workspace | null;
   workspaceMember: WorkspaceMember | null;
   workspaceId: string | null;
+  
+  // Actions
+  selectWorkspace: (workspaceId: string) => Promise<void>;
+  
+  // State
   loading: boolean;
   refetchWorkspace: () => Promise<void>;
 }
@@ -15,83 +34,106 @@ const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefin
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [workspaceMember, setWorkspaceMember] = useState<WorkspaceMember | null>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspaceWithMembership[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() => {
+    // Initialize from localStorage
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(ACTIVE_WORKSPACE_KEY);
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
 
-  const fetchWorkspace = async () => {
+  const repository = new SupabaseWorkspaceRepository();
+
+  const fetchWorkspaces = useCallback(async () => {
     if (!user) {
-      setWorkspace(null);
-      setWorkspaceMember(null);
+      setWorkspaces([]);
+      setActiveWorkspaceId(null);
       setLoading(false);
       return;
     }
 
+    setLoading(true);
+
     try {
-      // First, get user's workspace membership
-      const { data: memberData, error: memberError } = await supabase
-        .from('workspace_members')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // Fetch workspaces and memberships in parallel
+      const [workspaceList, membershipList] = await Promise.all([
+        repository.findByUserId(user.id),
+        repository.findMembershipsByUserId(user.id),
+      ]);
 
-      if (memberError) {
-        console.error('[Workspace] Error fetching workspace member:', memberError);
-        setLoading(false);
-        return;
-      }
+      // Combine workspace with its membership
+      const combined: WorkspaceWithMembership[] = workspaceList
+        .map(workspace => {
+          const membership = membershipList.find(m => m.workspaceId === workspace.id);
+          if (!membership) return null;
+          return { workspace, membership };
+        })
+        .filter((item): item is WorkspaceWithMembership => item !== null);
 
-      if (memberData) {
-        setWorkspaceMember({
-          id: memberData.id,
-          workspace_id: memberData.workspace_id,
-          user_id: memberData.user_id,
-          role: memberData.role as 'owner' | 'admin' | 'agent',
-          created_at: memberData.created_at,
-        });
+      setWorkspaces(combined);
+
+      // Auto-select workspace if needed
+      if (combined.length > 0) {
+        const savedId = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
+        const savedExists = combined.some(w => w.workspace.id === savedId);
         
-        // Fetch workspace separately to avoid RLS join issues
-        const { data: workspaceData, error: workspaceError } = await supabase
-          .from('workspaces')
-          .select('*')
-          .eq('id', memberData.workspace_id)
-          .maybeSingle();
-
-        if (workspaceError) {
-          console.error('[Workspace] Error fetching workspace:', workspaceError);
-        }
-        
-        if (workspaceData) {
-          setWorkspace({
-            id: workspaceData.id,
-            name: workspaceData.name,
-            city: workspaceData.city,
-            state: workspaceData.state,
-            created_by: workspaceData.created_by,
-            created_at: workspaceData.created_at,
-            updated_at: workspaceData.updated_at,
-          });
+        if (savedId && savedExists) {
+          setActiveWorkspaceId(savedId);
+        } else {
+          // Default to first workspace
+          const firstId = combined[0].workspace.id;
+          setActiveWorkspaceId(firstId);
+          localStorage.setItem(ACTIVE_WORKSPACE_KEY, firstId);
         }
       }
     } catch (err) {
-      console.error('[Workspace] Exception fetching workspace:', err);
+      console.error('[WorkspaceContext] Error fetching workspaces:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  const selectWorkspace = useCallback(async (workspaceId: string) => {
+    const exists = workspaces.some(w => w.workspace.id === workspaceId);
+    if (!exists) {
+      console.error('[WorkspaceContext] Workspace not found:', workspaceId);
+      return;
+    }
+
+    setActiveWorkspaceId(workspaceId);
+    localStorage.setItem(ACTIVE_WORKSPACE_KEY, workspaceId);
+  }, [workspaces]);
 
   useEffect(() => {
-    fetchWorkspace();
-  }, [user]);
+    fetchWorkspaces();
+  }, [fetchWorkspaces]);
+
+  // Derive active workspace and membership from state
+  const activeWorkspaceData = workspaces.find(w => w.workspace.id === activeWorkspaceId);
+  const activeWorkspace = activeWorkspaceData?.workspace ?? null;
+  const activeMembership = activeWorkspaceData?.membership ?? null;
 
   return (
     <WorkspaceContext.Provider
       value={{
-        workspace,
-        workspaceMember,
-        workspaceId: workspace?.id || null,
+        // Multi-workspace
+        workspaces,
+        activeWorkspace,
+        activeMembership,
+        
+        // Legacy aliases for backward compatibility
+        workspace: activeWorkspace,
+        workspaceMember: activeMembership,
+        workspaceId: activeWorkspace?.id ?? null,
+        
+        // Actions
+        selectWorkspace,
+        
+        // State
         loading,
-        refetchWorkspace: fetchWorkspace,
+        refetchWorkspace: fetchWorkspaces,
       }}
     >
       {children}
