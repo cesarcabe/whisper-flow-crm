@@ -1,10 +1,10 @@
-import { createContext, useContext, useMemo, ReactNode, useEffect, useState } from 'react';
+import { createContext, useContext, useMemo, ReactNode } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { ConversationService } from '../../application/services/ConversationService';
 import { SupabaseConversationRepository } from '../../infrastructure/supabase/SupabaseConversationRepository';
 import { SupabaseMessageRepository } from '../../infrastructure/supabase/SupabaseMessageRepository';
 import { CHATENGINE_BASE_URL } from '../../infrastructure/chatengine/config';
-import { useChatEngineToken } from '../hooks/useChatEngineToken';
+import { useChatEngineJwt } from '../hooks/useChatEngineJwt';
 
 /**
  * ConversationContext Type
@@ -44,10 +44,10 @@ export function ConversationProvider({
   chatEngineBaseUrl = CHATENGINE_BASE_URL 
 }: ConversationProviderProps) {
   const { workspaceId } = useWorkspace();
-  const { token, isLoading: isTokenLoading } = useChatEngineToken(workspaceId);
+  const { token, isLoading: isTokenLoading, isConfigured } = useChatEngineJwt(workspaceId);
   
-  // Track if ChatEngine is properly configured
-  const isChatEngineEnabled = Boolean(chatEngineBaseUrl && token);
+  // Track if ChatEngine is properly configured (has URL, secret, and valid token)
+  const isChatEngineEnabled = Boolean(chatEngineBaseUrl && isConfigured && token);
 
   // Create service instance
   // Memoized and recreated when token changes

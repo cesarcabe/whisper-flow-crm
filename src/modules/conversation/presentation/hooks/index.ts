@@ -4,5 +4,5 @@
 export { useConversation, useConversationService } from './useConversationService';
 export { useConversations, type LegacyConversationWithContact } from './useConversations';
 export { useMessages } from './useMessages';
-export { useChatEngineToken } from './useChatEngineToken';
+export { useChatEngineJwt } from './useChatEngineJwt';
 export { useSendMessage } from './useSendMessage';
