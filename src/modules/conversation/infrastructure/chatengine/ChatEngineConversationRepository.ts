@@ -21,14 +21,14 @@ export class ChatEngineConversationRepository implements ConversationRepository 
   }
 
   async findByWorkspaceId(
-    workspaceId: string,
+    _workspaceId: string,
     filters?: ConversationFilters,
     _orderBy?: ConversationOrderBy,
     limit?: number,
     offset?: number
   ): Promise<Conversation[]> {
+    // workspace_id comes from JWT token, not as parameter
     const response = await this.client.getConversations(
-      workspaceId,
       filters?.whatsappNumberId,
       limit,
       offset
@@ -53,8 +53,9 @@ export class ChatEngineConversationRepository implements ConversationRepository 
     return ChatEngineMapper.toConversationDomainList(dtos);
   }
 
-  async findWithoutStage(workspaceId: string, whatsappNumberId?: string): Promise<Conversation[]> {
-    const dtos = await this.client.getConversationsWithoutStage(workspaceId, whatsappNumberId);
+  async findWithoutStage(_workspaceId: string, whatsappNumberId?: string): Promise<Conversation[]> {
+    // workspace_id comes from JWT token, not as parameter
+    const dtos = await this.client.getConversationsWithoutStage(whatsappNumberId);
     return ChatEngineMapper.toConversationDomainList(dtos);
   }
 
@@ -106,7 +107,8 @@ export class ChatEngineConversationRepository implements ConversationRepository 
     return this.client.countConversationsByStage(stageId);
   }
 
-  async countUnread(workspaceId: string, whatsappNumberId?: string): Promise<number> {
-    return this.client.countUnreadConversations(workspaceId, whatsappNumberId);
+  async countUnread(_workspaceId: string, whatsappNumberId?: string): Promise<number> {
+    // workspace_id comes from JWT token, not as parameter
+    return this.client.countUnreadConversations(whatsappNumberId);
   }
 }

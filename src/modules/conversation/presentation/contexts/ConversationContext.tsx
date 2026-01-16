@@ -65,11 +65,16 @@ export function ConversationProvider({
     const messageRepo = new SupabaseMessageRepository();
 
     // Create service with or without ChatEngine config
+    // Map ChatEngineConfig to what ConversationService expects
+    const chatEngineServiceConfig = isChatEngineEnabled 
+      ? { baseUrl: chatEngineConfig.baseUrl, apiKey: chatEngineConfig.jwtToken }
+      : undefined;
+
     return new ConversationService(
       conversationRepo,
       messageRepo,
       workspaceId ?? '',
-      isChatEngineEnabled ? chatEngineConfig : undefined
+      chatEngineServiceConfig
     );
   }, [workspaceId, chatEngineConfig, isChatEngineEnabled]);
 
