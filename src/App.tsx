@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
+import { ConversationProvider } from "@/modules/conversation";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import SetupWorkspace from "./pages/SetupWorkspace";
@@ -137,7 +138,9 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <WorkspaceProvider>
-              <AppRoutes />
+              <ConversationProvider>
+                <AppRoutes />
+              </ConversationProvider>
             </WorkspaceProvider>
           </AuthProvider>
         </BrowserRouter>

@@ -3,3 +3,4 @@ export { ChatEngineMapper } from './ChatEngineMapper';
 export { ChatEngineMessageRepository } from './ChatEngineMessageRepository';
 export { ChatEngineConversationRepository } from './ChatEngineConversationRepository';
 export * from './types';
+export * from './config';
