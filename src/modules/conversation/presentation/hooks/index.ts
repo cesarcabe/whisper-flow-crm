@@ -5,3 +5,4 @@ export { useConversation, useConversationService } from './useConversationServic
 export { useConversations, type LegacyConversationWithContact } from './useConversations';
 export { useMessages } from './useMessages';
 export { useChatEngineToken } from './useChatEngineToken';
+export { useSendMessage } from './useSendMessage';
