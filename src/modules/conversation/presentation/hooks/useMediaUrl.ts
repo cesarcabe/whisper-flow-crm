@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useConversation } from '../contexts/ConversationContext';
 
 /**
@@ -65,16 +65,16 @@ export function useMediaUrl(
       setError(null);
 
       try {
-        // Access ChatEngine client through service (it's private, so we need to work around)
-        // For now, we'll use the service's getMediaUrl if available
-        // This requires exposing the method in ConversationService
-        
-        // Temporarily use fallback until service is updated
         console.log('[useMediaUrl] Fetching media URL', { providerMessageId, attachmentId });
         
-        // For now, just use fallback - we'll update ConversationService to expose this
-        setUrl(fallbackUrl ?? null);
-        
+        const result = await service.getMediaUrl(providerMessageId, attachmentId);
+        if (result.success) {
+          mediaUrlCache.set(cacheKey, result.data);
+          setUrl(result.data);
+        } else {
+          // Fallback to original URL on error
+          setUrl(fallbackUrl ?? null);
+        }
       } catch (err: any) {
         console.error('[useMediaUrl] Error fetching media URL:', err);
         setError(err.message || 'Erro ao carregar mídia');
@@ -124,10 +124,27 @@ export function useMediaUrlDirect(
       return;
     }
 
-    // For now, just pass through the URL
-    // ChatEngine proxy will be integrated when ConversationService exposes the method
-    setUrl(mediaUrl);
-    
+    // Fetch proxied URL from ChatEngine
+    const fetchProxiedUrl = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const result = await service.getMediaUrlByUrl(mediaUrl);
+        if (result.success) {
+          mediaUrlCache.set(mediaUrl, result.data);
+          setUrl(result.data);
+        } else {
+          setUrl(mediaUrl); // Fallback to original
+        }
+      } catch {
+        setUrl(mediaUrl); // Fallback to original on error
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProxiedUrl();
   }, [mediaUrl, isChatEngineEnabled, service]);
 
   return { url, loading, error };
