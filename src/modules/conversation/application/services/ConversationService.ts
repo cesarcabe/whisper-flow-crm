@@ -57,31 +57,16 @@ export class ConversationService {
     }
   }
 
-  // ==================== Conversation Operations ====================
+  // ==================== Conversation Operations (Supabase) ====================
 
   /**
-   * List conversations - Prioritizes ChatEngine when available
-   * Falls back to Supabase repository when ChatEngine fails or is not configured
+   * List conversations - Uses Supabase directly for optimal performance
+   * Supabase provides faster reads and native realtime support
    */
   async listConversations(
     whatsappNumberId?: string
   ): Promise<Result<Conversation[]>> {
-    // Try ChatEngine first if configured
-    if (this.chatEngineClient) {
-      try {
-        console.log('[ConversationService] Fetching conversations from ChatEngine');
-        const response = await this.chatEngineClient.getConversations(whatsappNumberId);
-        const conversations = ChatEngineMapper.toConversationDomainList(response.data);
-        return { success: true, data: conversations };
-      } catch (chatEngineError) {
-        console.warn('[ConversationService] ChatEngine failed, falling back to Supabase:', chatEngineError);
-        // Fall through to Supabase fallback
-      }
-    }
-
-    // Fallback: Supabase repository
     try {
-      console.log('[ConversationService] Fetching conversations from Supabase');
       const filters: ConversationFilters = {};
       if (whatsappNumberId) {
         filters.whatsappNumberId = whatsappNumberId;
@@ -101,19 +86,6 @@ export class ConversationService {
   }
 
   async getConversation(conversationId: string): Promise<Result<Conversation | null>> {
-    // Try ChatEngine first if configured
-    if (this.chatEngineClient) {
-      try {
-        const dto = await this.chatEngineClient.getConversation(conversationId);
-        if (!dto) return { success: true, data: null };
-        const conversation = ChatEngineMapper.toConversationDomain(dto);
-        return { success: true, data: conversation };
-      } catch (chatEngineError) {
-        console.warn('[ConversationService] ChatEngine failed for getConversation, falling back to Supabase:', chatEngineError);
-      }
-    }
-
-    // Fallback: Supabase
     try {
       const conversation = await this.conversationRepo.findById(conversationId);
       return { success: true, data: conversation };
@@ -123,18 +95,6 @@ export class ConversationService {
   }
 
   async getConversationsByStage(stageId: string): Promise<Result<Conversation[]>> {
-    // Try ChatEngine first if configured
-    if (this.chatEngineClient) {
-      try {
-        const dtos = await this.chatEngineClient.getConversationsByStage(stageId);
-        const conversations = ChatEngineMapper.toConversationDomainList(dtos);
-        return { success: true, data: conversations };
-      } catch (chatEngineError) {
-        console.warn('[ConversationService] ChatEngine failed for getConversationsByStage, falling back to Supabase:', chatEngineError);
-      }
-    }
-
-    // Fallback: Supabase
     try {
       const conversations = await this.conversationRepo.findByStageId(stageId);
       return { success: true, data: conversations };
@@ -144,18 +104,6 @@ export class ConversationService {
   }
 
   async getInboxConversations(whatsappNumberId?: string): Promise<Result<Conversation[]>> {
-    // Try ChatEngine first if configured
-    if (this.chatEngineClient) {
-      try {
-        const dtos = await this.chatEngineClient.getConversationsWithoutStage(whatsappNumberId);
-        const conversations = ChatEngineMapper.toConversationDomainList(dtos);
-        return { success: true, data: conversations };
-      } catch (chatEngineError) {
-        console.warn('[ConversationService] ChatEngine failed for getInboxConversations, falling back to Supabase:', chatEngineError);
-      }
-    }
-
-    // Fallback: Supabase
     try {
       const conversations = await this.conversationRepo.findWithoutStage(
         this.workspaceId,
@@ -192,35 +140,15 @@ export class ConversationService {
   // ==================== Message Operations ====================
 
   /**
-   * Get messages - Prioritizes ChatEngine when available
-   * Supports both offset-based (Supabase) and cursor-based (ChatEngine) pagination
-   * 
-   * @param conversationId - The conversation ID
-   * @param limit - Number of messages to fetch
-   * @param offsetOrCursor - For Supabase: offset number. For ChatEngine: cursor string (message ID)
+   * Get messages - Uses Supabase directly for reads (offset-based pagination)
+   * ChatEngine is only used for sending messages
    */
   async getMessages(
     conversationId: string,
     limit: number = 50,
-    offsetOrCursor: number | string = 0
+    offset: number = 0
   ): Promise<Result<Message[]>> {
-    // Try ChatEngine first if configured
-    if (this.chatEngineClient) {
-      try {
-        console.log('[ConversationService] Fetching messages from ChatEngine', { conversationId, limit, cursor: offsetOrCursor });
-        const before = typeof offsetOrCursor === 'string' ? offsetOrCursor : undefined;
-        const messageDTOs = await this.chatEngineClient.getMessages(conversationId, limit, before);
-        const messages = ChatEngineMapper.toMessageDomainList(messageDTOs, this.workspaceId);
-        return { success: true, data: messages };
-      } catch (chatEngineError) {
-        console.warn('[ConversationService] ChatEngine failed for getMessages, falling back to Supabase:', chatEngineError);
-      }
-    }
-
-    // Fallback: Supabase repository (offset-based)
     try {
-      console.log('[ConversationService] Fetching messages from Supabase', { conversationId, limit, offset: offsetOrCursor });
-      const offset = typeof offsetOrCursor === 'number' ? offsetOrCursor : 0;
       const messages = await this.messageRepo.findByConversationId(
         conversationId,
         { limit, offset }
@@ -427,15 +355,10 @@ export class ConversationService {
     }
   }
 
-  // ==================== Counts ====================
+  // ==================== Counts (Supabase) ====================
 
   async countUnread(whatsappNumberId?: string): Promise<Result<number>> {
     try {
-      if (this.chatEngineClient) {
-        const count = await this.chatEngineClient.countUnreadConversations(whatsappNumberId);
-        return { success: true, data: count };
-      }
-
       const count = await this.conversationRepo.countUnread(
         this.workspaceId,
         whatsappNumberId
@@ -448,11 +371,6 @@ export class ConversationService {
 
   async countByStage(stageId: string): Promise<Result<number>> {
     try {
-      if (this.chatEngineClient) {
-        const count = await this.chatEngineClient.countConversationsByStage(stageId);
-        return { success: true, data: count };
-      }
-
       const count = await this.conversationRepo.countByStageId(stageId);
       return { success: true, data: count };
     } catch (error) {
