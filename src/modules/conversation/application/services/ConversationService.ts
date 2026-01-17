@@ -298,10 +298,123 @@ export class ConversationService {
     }
   }
 
+  // ==================== File Upload (FormData) ====================
+
+  /**
+   * Upload file attachment using FormData
+   * This is the recommended approach for file uploads
+   * 
+   * @param file - File to upload
+   * @param conversationId - Target conversation
+   * @param caption - Optional caption
+   */
+  async uploadAttachment(
+    file: File,
+    conversationId: string,
+    caption?: string
+  ): Promise<Result<{ attachmentId: string; storageUrl: string }>> {
+    try {
+      if (this.chatEngineClient) {
+        console.log('[ConversationService] Uploading attachment via ChatEngine', {
+          fileName: file.name,
+          size: file.size,
+          type: file.type,
+        });
+        const dto = await this.chatEngineClient.uploadAttachment(file, conversationId, caption);
+        return { 
+          success: true, 
+          data: { 
+            attachmentId: dto.id, 
+            storageUrl: dto.storage_url 
+          } 
+        };
+      }
+
+      throw new Error('ChatEngine not configured - use edge function directly');
+    } catch (error) {
+      console.error('[ConversationService] uploadAttachment error:', error);
+      return { success: false, error: error as Error };
+    }
+  }
+
+  /**
+   * Send message with previously uploaded attachment
+   */
+  async sendAttachmentMessage(
+    conversationId: string,
+    attachmentId: string,
+    caption?: string,
+    replyToId?: string
+  ): Promise<Result<Message>> {
+    try {
+      if (this.chatEngineClient) {
+        const dto = await this.chatEngineClient.sendAttachmentMessage(
+          conversationId,
+          attachmentId,
+          caption,
+          replyToId
+        );
+        const message = ChatEngineMapper.toMessageDomain(dto, this.workspaceId);
+        return { success: true, data: message };
+      }
+
+      throw new Error('ChatEngine not configured - use edge function directly');
+    } catch (error) {
+      return { success: false, error: error as Error };
+    }
+  }
+
+  // ==================== Media Proxy ====================
+
+  /**
+   * Get proxied media URL
+   * 
+   * @param providerMessageId - Message ID from provider (e.g., Evolution)
+   * @param attachmentId - Optional attachment ID
+   */
+  async getMediaUrl(
+    providerMessageId: string,
+    attachmentId?: string
+  ): Promise<Result<string>> {
+    try {
+      if (this.chatEngineClient) {
+        const url = await this.chatEngineClient.getMediaUrl(providerMessageId, attachmentId);
+        return { success: true, data: url };
+      }
+
+      throw new Error('ChatEngine not configured');
+    } catch (error) {
+      return { success: false, error: error as Error };
+    }
+  }
+
+  /**
+   * Get proxied media URL by direct URL
+   */
+  async getMediaUrlByUrl(mediaUrl: string): Promise<Result<string>> {
+    try {
+      if (this.chatEngineClient) {
+        const url = await this.chatEngineClient.getMediaUrlByUrl(mediaUrl);
+        return { success: true, data: url };
+      }
+
+      // Fallback: return original URL
+      return { success: true, data: mediaUrl };
+    } catch (error) {
+      // On error, return original URL as fallback
+      return { success: true, data: mediaUrl };
+    }
+  }
+
   // ==================== Counts ====================
 
   async countUnread(whatsappNumberId?: string): Promise<Result<number>> {
     try {
+      if (this.chatEngineClient) {
+        const count = await this.chatEngineClient.countUnreadConversations(whatsappNumberId);
+        return { success: true, data: count };
+      }
+
       const count = await this.conversationRepo.countUnread(
         this.workspaceId,
         whatsappNumberId
@@ -314,10 +427,24 @@ export class ConversationService {
 
   async countByStage(stageId: string): Promise<Result<number>> {
     try {
+      if (this.chatEngineClient) {
+        const count = await this.chatEngineClient.countConversationsByStage(stageId);
+        return { success: true, data: count };
+      }
+
       const count = await this.conversationRepo.countByStageId(stageId);
       return { success: true, data: count };
     } catch (error) {
       return { success: false, error: error as Error };
     }
+  }
+
+  // ==================== Helpers ====================
+
+  /**
+   * Check if ChatEngine is enabled
+   */
+  get isChatEngineEnabled(): boolean {
+    return this.chatEngineClient !== null;
   }
 }

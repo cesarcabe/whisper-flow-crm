@@ -1,6 +1,7 @@
 import { 
   ChatEngineMessageDTO, 
   ChatEngineConversationDTO,
+  ChatEngineAttachmentDTO,
   SendTextMessagePayload,
   SendImagePayload,
   SendAudioPayload,
@@ -268,13 +269,114 @@ export class ChatEngineClient {
     );
   }
 
-  // ==================== Media ====================
+  // ==================== Media & Attachments ====================
 
   /**
-   * GET /api/chat/media?url=xxx
-   * Obtém URL de mídia (proxy para Evolution/WhatsApp)
+   * POST /api/chat/attachments (FormData)
+   * Upload file attachment using FormData (recommended approach)
+   * 
+   * @param file - File to upload
+   * @param conversationId - Target conversation
+   * @param caption - Optional caption for the attachment
+   * @returns Attachment metadata including the attachment_id
    */
-  async getMediaUrl(mediaUrl: string): Promise<string> {
+  async uploadAttachment(
+    file: File,
+    conversationId: string,
+    caption?: string
+  ): Promise<ChatEngineAttachmentDTO> {
+    const url = `${this.baseUrl}${CHATENGINE_ENDPOINTS.ATTACHMENTS}`;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('conversation_id', conversationId);
+    if (caption) {
+      formData.append('caption', caption);
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        // Note: Don't set Content-Type for FormData - browser sets it with boundary
+        'Authorization': `Bearer ${this.jwtToken}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({ message: 'Unknown error' }));
+      
+      if (response.status === AUTH_ERROR_CODES.UNAUTHORIZED) {
+        throw new Error('ChatEngine: Token ausente, inválido ou assinatura incorreta (401)');
+      }
+      if (response.status === AUTH_ERROR_CODES.FORBIDDEN) {
+        throw new Error('ChatEngine: Token válido, mas sem workspace_id (403)');
+      }
+      
+      throw new Error(`ChatEngine upload error: ${errorBody.message || response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * POST /api/chat/messages
+   * Send message with attachment (after uploading via uploadAttachment)
+   * 
+   * @param conversationId - Target conversation
+   * @param attachmentId - ID from uploadAttachment response
+   * @param caption - Optional caption
+   * @param replyToId - Optional message to reply to
+   */
+  async sendAttachmentMessage(
+    conversationId: string,
+    attachmentId: string,
+    caption?: string,
+    replyToId?: string
+  ): Promise<ChatEngineMessageDTO> {
+    return this.request<ChatEngineMessageDTO>(
+      CHATENGINE_ENDPOINTS.MESSAGES,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          conversation_id: conversationId,
+          attachment_id: attachmentId,
+          body: caption,
+          reply_to_id: replyToId,
+        }),
+      }
+    );
+  }
+
+  /**
+   * GET /api/chat/media
+   * Proxy para obter mídia do WhatsApp/Evolution
+   * 
+   * @param providerMessageId - ID da mensagem no provider (Evolution)
+   * @param attachmentId - ID do anexo (opcional)
+   */
+  async getMediaUrl(
+    providerMessageId: string, 
+    attachmentId?: string
+  ): Promise<string> {
+    const params = new URLSearchParams({ 
+      providerMessageId 
+    });
+    if (attachmentId) {
+      params.append('attachmentId', attachmentId);
+    }
+    
+    const response = await this.request<{ url: string }>(
+      `${CHATENGINE_ENDPOINTS.MEDIA}?${params.toString()}`
+    );
+    return response.url;
+  }
+
+  /**
+   * GET /api/chat/media (URL-based fallback)
+   * Para mídia com URL direta
+   */
+  async getMediaUrlByUrl(mediaUrl: string): Promise<string> {
     const params = new URLSearchParams({ url: mediaUrl });
     const response = await this.request<{ url: string }>(
       `${CHATENGINE_ENDPOINTS.MEDIA}?${params.toString()}`

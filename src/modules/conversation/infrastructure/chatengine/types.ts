@@ -64,6 +64,29 @@ export interface MoveToStagePayload {
   pipeline_id: string | null;
 }
 
+/**
+ * Response from file upload via FormData
+ */
+export interface ChatEngineAttachmentDTO {
+  id: string;
+  conversation_id: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  storage_url: string;
+  type: 'image' | 'audio' | 'video' | 'document';
+  created_at: string;
+}
+
+/**
+ * Media proxy response
+ */
+export interface ChatEngineMediaResponse {
+  url: string;
+  expires_at?: string;
+  mime_type?: string;
+}
+
 export interface ChatEngineListResponse<T> {
   data: T[];
   pagination?: {
