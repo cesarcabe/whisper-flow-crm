@@ -86,7 +86,15 @@ export class ChatEngineClient {
       ? `${CHATENGINE_ENDPOINTS.CONVERSATIONS}?${queryString}`
       : CHATENGINE_ENDPOINTS.CONVERSATIONS;
 
-    return this.request<ChatEngineListResponse<ChatEngineConversationDTO>>(endpoint);
+    const response = await this.request<ChatEngineListResponse<ChatEngineConversationDTO>>(endpoint);
+    
+    // Validate response structure
+    if (!response || !response.data) {
+      console.warn('[ChatEngineClient] getConversations received invalid response:', response);
+      return { data: [] };
+    }
+    
+    return response;
   }
 
   async getConversation(conversationId: string): Promise<ChatEngineConversationDTO | null> {
@@ -104,7 +112,7 @@ export class ChatEngineClient {
     const response = await this.request<ChatEngineListResponse<ChatEngineConversationDTO>>(
       `${CHATENGINE_ENDPOINTS.CONVERSATIONS}?${params.toString()}`
     );
-    return response.data;
+    return response?.data || [];
   }
 
   async getConversationsWithoutStage(
@@ -118,7 +126,7 @@ export class ChatEngineClient {
     const response = await this.request<ChatEngineListResponse<ChatEngineConversationDTO>>(
       `${CHATENGINE_ENDPOINTS.CONVERSATIONS}?${params.toString()}`
     );
-    return response.data;
+    return response?.data || [];
   }
 
   async moveToStage(
@@ -159,7 +167,7 @@ export class ChatEngineClient {
     const response = await this.request<ChatEngineListResponse<ChatEngineMessageDTO>>(
       `${CHATENGINE_ENDPOINTS.MESSAGES}?${params.toString()}`
     );
-    return response.data;
+    return response?.data || [];
   }
 
   async getMessage(messageId: string): Promise<ChatEngineMessageDTO | null> {
@@ -178,7 +186,7 @@ export class ChatEngineClient {
       const response = await this.request<ChatEngineListResponse<ChatEngineMessageDTO>>(
         `${CHATENGINE_ENDPOINTS.MESSAGES}?${params.toString()}`
       );
-      return response.data[0] || null;
+      return response?.data?.[0] || null;
     } catch {
       return null;
     }
@@ -192,7 +200,7 @@ export class ChatEngineClient {
     const response = await this.request<ChatEngineListResponse<ChatEngineMessageDTO>>(
       CHATENGINE_ENDPOINTS.MESSAGE_CONTEXT(messageId)
     );
-    return response.data;
+    return response?.data || [];
   }
 
   /**
