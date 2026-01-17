@@ -34,7 +34,11 @@ export class ChatEngineMapper {
     return Conversation.create(props);
   }
 
-  static toConversationDomainList(dtos: ChatEngineConversationDTO[]): Conversation[] {
+  static toConversationDomainList(dtos: ChatEngineConversationDTO[] | undefined | null): Conversation[] {
+    if (!dtos || !Array.isArray(dtos)) {
+      console.warn('[ChatEngineMapper] toConversationDomainList received invalid data:', dtos);
+      return [];
+    }
     return dtos.map(dto => ChatEngineMapper.toConversationDomain(dto));
   }
 
@@ -71,7 +75,11 @@ export class ChatEngineMapper {
     return Message.create(props);
   }
 
-  static toMessageDomainList(dtos: ChatEngineMessageDTO[], workspaceId: string): Message[] {
+  static toMessageDomainList(dtos: ChatEngineMessageDTO[] | undefined | null, workspaceId: string): Message[] {
+    if (!dtos || !Array.isArray(dtos)) {
+      console.warn('[ChatEngineMapper] toMessageDomainList received invalid data:', dtos);
+      return [];
+    }
     return dtos.map(dto => ChatEngineMapper.toMessageDomain(dto, workspaceId));
   }
 
