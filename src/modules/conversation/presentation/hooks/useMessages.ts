@@ -35,17 +35,16 @@ function mapModuleToCoreMessage(m: ModuleMessage): CoreMessage {
 }
 
 /**
- * useMessages hook - Integrated with ChatEngine
+ * useMessages hook - Supabase-based with Realtime updates
  * 
  * Features:
- * - Uses ChatEngine for data fetching when enabled (cursor-based pagination)
- * - Falls back to Supabase when ChatEngine is not configured (offset-based)
- * - Supabase realtime for live updates (hybrid approach)
+ * - Uses Supabase for data fetching (offset-based pagination)
+ * - Supabase realtime for live updates
  * - Backwards compatible interface for existing components
  */
 export function useMessages(conversationId: string | null) {
   const { workspaceId } = useWorkspace();
-  const { service: conversationService, isChatEngineEnabled } = useConversation();
+  const { service: conversationService } = useConversation();
   const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -53,13 +52,11 @@ export function useMessages(conversationId: string | null) {
   const [hasMore, setHasMore] = useState(true);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   
-  // For cursor-based pagination (ChatEngine)
-  const cursorRef = useRef<string | null>(null);
-  // For offset-based pagination (Supabase fallback)
+  // Offset-based pagination
   const offsetRef = useRef<number>(0);
 
   /**
-   * Fetch messages - uses cursor or offset based on ChatEngine availability
+   * Fetch messages using offset-based pagination
    */
   const fetchMessages = useCallback(async (loadMore = false) => {
     if (!workspaceId || !conversationId) {
@@ -70,7 +67,6 @@ export function useMessages(conversationId: string | null) {
 
     if (!loadMore) {
       setLoading(true);
-      cursorRef.current = null;
       offsetRef.current = 0;
     } else {
       setLoadingMore(true);
@@ -78,31 +74,12 @@ export function useMessages(conversationId: string | null) {
     setError(null);
 
     try {
-      // Determine pagination parameter
-      let paginationParam: number | string = 0;
-      
-      if (loadMore) {
-        if (isChatEngineEnabled && cursorRef.current) {
-          // ChatEngine uses cursor (message ID)
-          paginationParam = cursorRef.current;
-        } else {
-          // Supabase uses offset
-          paginationParam = offsetRef.current;
-        }
-      }
-
-      console.log('[useMessages] Fetching', { 
-        conversationId, 
-        chatEngine: isChatEngineEnabled,
-        loadMore,
-        cursor: isChatEngineEnabled ? cursorRef.current : undefined,
-        offset: !isChatEngineEnabled ? offsetRef.current : undefined
-      });
+      const offset = loadMore ? offsetRef.current : 0;
 
       const result = await conversationService.getMessages(
         conversationId, 
         PAGE_SIZE, 
-        paginationParam
+        offset
       );
       
       if (!result.success) {
@@ -112,11 +89,8 @@ export function useMessages(conversationId: string | null) {
       const moduleMessages = result.data;
       const domainMessages = moduleMessages.map(mapModuleToCoreMessage);
       
-      // Update pagination state
+      // Update offset for next page
       if (moduleMessages.length > 0) {
-        // For ChatEngine: use last message ID as cursor for next page
-        cursorRef.current = moduleMessages[moduleMessages.length - 1].id;
-        // For Supabase: update offset
         offsetRef.current += moduleMessages.length;
       }
       
@@ -134,7 +108,7 @@ export function useMessages(conversationId: string | null) {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [workspaceId, conversationId, conversationService, isChatEngineEnabled]);
+  }, [workspaceId, conversationId, conversationService]);
 
   const loadMore = useCallback(() => {
     if (!loadingMore && hasMore) {
@@ -142,7 +116,7 @@ export function useMessages(conversationId: string | null) {
     }
   }, [fetchMessages, loadingMore, hasMore]);
 
-  // Setup realtime subscription - Supabase realtime as trigger (hybrid approach)
+  // Setup realtime subscription for live updates
   useEffect(() => {
     if (!workspaceId || !conversationId) return;
 
@@ -150,8 +124,6 @@ export function useMessages(conversationId: string | null) {
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
     }
-
-    console.log('[Realtime] Subscribing to messages', { workspaceId, conversationId });
 
     channelRef.current = supabase
       .channel(`messages-${conversationId}`)
@@ -165,10 +137,7 @@ export function useMessages(conversationId: string | null) {
         },
         (payload) => {
           const newRow = payload.new as MessageRow;
-          console.log('[Realtime] New message', { id: newRow?.id, chatEngine: isChatEngineEnabled });
           
-          // For ChatEngine: Use Supabase realtime only as notification
-          // The message data should already be synced by the webhook
           try {
             const newMessage = MessageMapper.toDomain(newRow);
             
@@ -193,7 +162,6 @@ export function useMessages(conversationId: string | null) {
         },
         (payload) => {
           const updatedRow = payload.new as MessageRow;
-          console.log('[Realtime] Message updated', { id: updatedRow?.id });
           
           try {
             const updatedMessage = MessageMapper.toDomain(updatedRow);
@@ -205,18 +173,15 @@ export function useMessages(conversationId: string | null) {
           }
         }
       )
-      .subscribe((status) => {
-        console.log('[Realtime] Subscription status', { channel: 'messages', status });
-      });
+      .subscribe();
 
     return () => {
       if (channelRef.current) {
-        console.log('[Realtime] Unsubscribing from messages', { conversationId });
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
-  }, [workspaceId, conversationId, isChatEngineEnabled]);
+  }, [workspaceId, conversationId]);
 
   // Initial fetch
   useEffect(() => {
