@@ -6,3 +6,9 @@ export { useConversations, type LegacyConversationWithContact } from './useConve
 export { useMessages } from './useMessages';
 export { useChatEngineJwt } from './useChatEngineJwt';
 export { useSendMessage } from './useSendMessage';
+export { 
+  useMediaUrl, 
+  useMediaUrlDirect, 
+  clearMediaUrlCache, 
+  preloadMediaUrl 
+} from './useMediaUrl';
