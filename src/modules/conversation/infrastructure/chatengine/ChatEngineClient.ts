@@ -213,8 +213,14 @@ export class ChatEngineClient {
       {
         method: 'POST',
         body: JSON.stringify({
-          conversation_id: payload.conversationId,
+          // ✅ Contrato principal (camelCase)
+          conversationId: payload.conversationId,
           type: 'text',
+          content: payload.content,
+          replyToId: payload.replyToId,
+
+          // 🔁 Compatibilidade (snake_case legado)
+          conversation_id: payload.conversationId,
           body: payload.content,
           reply_to_id: payload.replyToId,
         }),
@@ -232,11 +238,18 @@ export class ChatEngineClient {
       {
         method: 'POST',
         body: JSON.stringify({
-          conversation_id: payload.conversationId,
+          // ✅ Contrato principal (camelCase)
+          conversationId: payload.conversationId,
           type: 'image',
+          contentBase64: payload.imageBase64,
+          mimeType: payload.mimeType,
+          caption: payload.caption,
+          replyToId: payload.replyToId,
+
+          // 🔁 Compatibilidade (snake_case legado)
+          conversation_id: payload.conversationId,
           content_base64: payload.imageBase64,
           mime_type: payload.mimeType,
-          caption: payload.caption,
           reply_to_id: payload.replyToId,
         }),
       }
@@ -253,8 +266,14 @@ export class ChatEngineClient {
       {
         method: 'POST',
         body: JSON.stringify({
-          conversation_id: payload.conversationId,
+          // ✅ Contrato principal (camelCase)
+          conversationId: payload.conversationId,
           type: 'audio',
+          contentBase64: payload.audioBase64,
+          mimeType: payload.mimeType,
+
+          // 🔁 Compatibilidade (snake_case legado)
+          conversation_id: payload.conversationId,
           content_base64: payload.audioBase64,
           mime_type: payload.mimeType,
         }),
@@ -299,7 +318,13 @@ export class ChatEngineClient {
     
     const formData = new FormData();
     formData.append('file', file);
+
+    // ✅ Contrato principal (camelCase)
+    formData.append('conversationId', conversationId);
+
+    // 🔁 Compatibilidade (snake_case legado)
     formData.append('conversation_id', conversationId);
+
     if (caption) {
       formData.append('caption', caption);
     }
@@ -341,6 +366,7 @@ export class ChatEngineClient {
   async sendAttachmentMessage(
     conversationId: string,
     attachmentId: string,
+    type: ChatEngineAttachmentDTO['type'] = 'document',
     caption?: string,
     replyToId?: string
   ): Promise<ChatEngineMessageDTO> {
@@ -349,6 +375,14 @@ export class ChatEngineClient {
       {
         method: 'POST',
         body: JSON.stringify({
+          // ✅ Contrato principal (camelCase)
+          conversationId,
+          type,
+          content: caption ?? '',
+          attachmentId,
+          replyToId,
+
+          // 🔁 Compatibilidade (snake_case legado)
           conversation_id: conversationId,
           attachment_id: attachmentId,
           body: caption,
