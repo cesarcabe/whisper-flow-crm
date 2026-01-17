@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { ConversationService } from '../../application/services/ConversationService';
 import { SupabaseConversationRepository } from '../../infrastructure/supabase/SupabaseConversationRepository';

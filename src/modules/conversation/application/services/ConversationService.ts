@@ -9,7 +9,7 @@ import { ChatEngineClient } from '../../infrastructure/chatengine/ChatEngineClie
 import { ChatEngineMapper } from '../../infrastructure/chatengine/ChatEngineMapper';
 
 /**
- * Result type for service operations
+ * Result type for service operations - Union type for success/failure handling
  */
 export type Result<T, E = Error> = 
   | { success: true; data: T }
