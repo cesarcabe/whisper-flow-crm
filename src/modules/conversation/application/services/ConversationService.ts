@@ -15,6 +15,8 @@ export type Result<T, E = Error> =
   | { success: true; data: T }
   | { success: false; error: E };
 
+export type AttachmentType = 'image' | 'audio' | 'video' | 'document';
+
 /**
  * Contact info for conversation display
  */
@@ -261,7 +263,7 @@ export class ConversationService {
     file: File,
     conversationId: string,
     caption?: string
-  ): Promise<Result<{ attachmentId: string; storageUrl: string }>> {
+  ): Promise<Result<{ attachmentId: string; storageUrl: string; attachmentType: AttachmentType }>> {
     try {
       if (this.chatEngineClient) {
         console.log('[ConversationService] Uploading attachment via ChatEngine', {
@@ -274,7 +276,8 @@ export class ConversationService {
           success: true, 
           data: { 
             attachmentId: dto.id, 
-            storageUrl: dto.storage_url 
+            storageUrl: dto.storage_url,
+            attachmentType: dto.type as AttachmentType,
           } 
         };
       }
@@ -292,6 +295,7 @@ export class ConversationService {
   async sendAttachmentMessage(
     conversationId: string,
     attachmentId: string,
+    attachmentType: AttachmentType,
     caption?: string,
     replyToId?: string
   ): Promise<Result<Message>> {
@@ -300,6 +304,7 @@ export class ConversationService {
         const dto = await this.chatEngineClient.sendAttachmentMessage(
           conversationId,
           attachmentId,
+          attachmentType,
           caption,
           replyToId
         );

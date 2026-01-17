@@ -34,12 +34,13 @@ export function useSendMessage(conversationId: string) {
       if (isChatEngineEnabled && service) {
         // Use ChatEngine via ConversationService
         const result = await service.sendTextMessage(conversationId, body, replyToId);
-        if (result.success === false) {
-          console.error('[useSendMessage] ChatEngine error:', result.error);
-          throw result.error;
+        if (result.success === true) {
+          console.log('[useSendMessage] sent via ChatEngine');
+          return true;
         }
-        console.log('[useSendMessage] sent via ChatEngine');
-        return true;
+
+        // Se ChatEngine falhar, cai pro fallback sem travar o usuário
+        console.error('[useSendMessage] ChatEngine error (will fallback):', result.error);
       }
 
       // Fallback to edge function
@@ -107,6 +108,7 @@ export function useSendMessage(conversationId: string) {
         const sendResult = await service.sendAttachmentMessage(
           conversationId,
           uploadResult.data.attachmentId,
+          uploadResult.data.attachmentType,
           caption,
           replyToId
         );
@@ -196,6 +198,7 @@ export function useSendMessage(conversationId: string) {
         const sendResult = await service.sendAttachmentMessage(
           conversationId,
           uploadResult.data.attachmentId,
+          uploadResult.data.attachmentType,
           caption
         );
         
@@ -265,7 +268,8 @@ export function useSendMessage(conversationId: string) {
 
         const sendResult = await service.sendAttachmentMessage(
           conversationId,
-          uploadResult.data.attachmentId
+          uploadResult.data.attachmentId,
+          uploadResult.data.attachmentType
         );
         
         if (!sendResult.success) {
