@@ -80,9 +80,9 @@ export class ChatEngineMessageRepository implements MessageRepository {
   async save(message: Message): Promise<Message> {
     // For sending new messages, use the appropriate method based on type
     const dto = await this.client.sendTextMessage({
-      conversation_id: message.conversationId,
-      body: message.body,
-      reply_to_id: message.replyToId ?? undefined,
+      conversationId: message.conversationId,
+      content: message.body,
+      replyToId: message.replyToId ?? undefined,
     });
     return ChatEngineMapper.toMessageDomain(dto, this.workspaceId);
   }

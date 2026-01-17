@@ -39,24 +39,26 @@ export interface ChatEngineConversationDTO {
   updated_at: string;
 }
 
+// ==================== API Payloads (camelCase for API) ====================
+
 export interface SendTextMessagePayload {
-  conversation_id: string;
-  body: string;
-  reply_to_id?: string;
+  conversationId: string;
+  content: string;
+  replyToId?: string;
 }
 
 export interface SendImagePayload {
-  conversation_id: string;
-  image_base64: string;
-  mime_type: string;
+  conversationId: string;
+  imageBase64: string;
+  mimeType: string;
   caption?: string;
-  reply_to_id?: string;
+  replyToId?: string;
 }
 
 export interface SendAudioPayload {
-  conversation_id: string;
-  audio_base64: string;
-  mime_type: string;
+  conversationId: string;
+  audioBase64: string;
+  mimeType: string;
 }
 
 export interface MoveToStagePayload {

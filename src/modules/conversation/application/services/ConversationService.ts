@@ -169,9 +169,9 @@ export class ConversationService {
       // If ChatEngine is configured, use it
       if (this.chatEngineClient) {
         const dto = await this.chatEngineClient.sendTextMessage({
-          conversation_id: conversationId,
-          body,
-          reply_to_id: replyToId,
+          conversationId,
+          content: body,
+          replyToId,
         });
         const message = ChatEngineMapper.toMessageDomain(dto, this.workspaceId);
         return { success: true, data: message };
@@ -193,9 +193,9 @@ export class ConversationService {
     try {
       if (this.chatEngineClient) {
         const dto = await this.chatEngineClient.sendImage({
-          conversation_id: conversationId,
-          image_base64: imageBase64,
-          mime_type: mimeType,
+          conversationId,
+          imageBase64,
+          mimeType,
           caption,
         });
         const message = ChatEngineMapper.toMessageDomain(dto, this.workspaceId);
@@ -216,9 +216,9 @@ export class ConversationService {
     try {
       if (this.chatEngineClient) {
         const dto = await this.chatEngineClient.sendAudio({
-          conversation_id: conversationId,
-          audio_base64: audioBase64,
-          mime_type: mimeType,
+          conversationId,
+          audioBase64,
+          mimeType,
         });
         const message = ChatEngineMapper.toMessageDomain(dto, this.workspaceId);
         return { success: true, data: message };

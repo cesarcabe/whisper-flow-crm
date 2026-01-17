@@ -91,9 +91,9 @@ export class ChatEngineMapper {
     replyToId?: string
   ): SendTextMessagePayload {
     return {
-      conversation_id: conversationId,
-      body,
-      reply_to_id: replyToId,
+      conversationId,
+      content: body,
+      replyToId,
     };
   }
 }
