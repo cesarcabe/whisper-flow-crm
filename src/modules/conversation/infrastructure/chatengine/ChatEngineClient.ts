@@ -213,10 +213,10 @@ export class ChatEngineClient {
       {
         method: 'POST',
         body: JSON.stringify({
-          conversationId: payload.conversationId,
+          conversation_id: payload.conversationId,
           type: 'text',
-          content: payload.content,
-          replyToId: payload.replyToId,
+          body: payload.content,
+          reply_to_id: payload.replyToId,
         }),
       }
     );
@@ -232,12 +232,12 @@ export class ChatEngineClient {
       {
         method: 'POST',
         body: JSON.stringify({
-          conversationId: payload.conversationId,
+          conversation_id: payload.conversationId,
           type: 'image',
-          contentBase64: payload.imageBase64,
-          mimeType: payload.mimeType,
+          content_base64: payload.imageBase64,
+          mime_type: payload.mimeType,
           caption: payload.caption,
-          replyToId: payload.replyToId,
+          reply_to_id: payload.replyToId,
         }),
       }
     );
@@ -253,10 +253,10 @@ export class ChatEngineClient {
       {
         method: 'POST',
         body: JSON.stringify({
-          conversationId: payload.conversationId,
+          conversation_id: payload.conversationId,
           type: 'audio',
-          contentBase64: payload.audioBase64,
-          mimeType: payload.mimeType,
+          content_base64: payload.audioBase64,
+          mime_type: payload.mimeType,
         }),
       }
     );
