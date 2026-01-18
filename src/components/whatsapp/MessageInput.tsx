@@ -2,9 +2,10 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Send, Loader2, Smile, Image, Mic, Trash2, X, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { useSendMessage } from '@/modules/conversation/presentation/hooks/useSendMessage';
+import { cn } from '@/lib/utils';
 import { Message } from '@/core/domain/entities/Message';
 
 interface MessageInputProps {
@@ -26,14 +27,12 @@ export function MessageInput({
   onClearReply 
 }: MessageInputProps) {
   const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  // Use the new unified send message hook
-  const { sendText, sendImage, sendAudio, sending } = useSendMessage(conversationId);
-
   const {
     isRecording,
     duration,
@@ -97,18 +96,45 @@ export function MessageInput({
     const text = message.trim();
     if (!text || sending) return;
 
+    console.log('[WA_SEND]', { conversationId, replyToId: replyingTo?.id });
+    setSending(true);
+
     try {
-      await sendText(text, replyingTo?.id);
+      const { data, error } = await supabase.functions.invoke('whatsapp-send', {
+        body: {
+          conversationId,
+          message: text,
+          replyToId: replyingTo?.id,
+        },
+      });
+
+      if (error) {
+        console.error('[WA_SEND] error', error);
+        toast.error('Erro ao enviar mensagem');
+        return;
+      }
+
+      if (!data?.ok) {
+        toast.error(data?.message || 'Erro ao enviar mensagem');
+        return;
+      }
+
       setMessage('');
       onClearReply?.();
-      onMessageSent?.();
-    } catch (err) {
+      // Realtime subscription handles adding new messages - no refetch needed
+    } catch (err: any) {
+      console.error('[WA_SEND] error', err);
       toast.error('Erro ao enviar mensagem');
+    } finally {
+      setSending(false);
     }
-  }, [message, sending, replyingTo?.id, onClearReply, onMessageSent, sendText]);
+  }, [message, conversationId, sending, replyingTo?.id, onClearReply]);
 
   const handleSendImage = useCallback(async () => {
     if (!selectedImage || sending) return;
+
+    console.log('[WA_IMAGE] sending', { conversationId, size: selectedImage.size });
+    setSending(true);
 
     try {
       // Convert to base64
@@ -125,16 +151,37 @@ export function MessageInput({
 
       const imageBase64 = await base64Promise;
 
-      await sendImage(imageBase64, selectedImage.type, message.trim() || undefined);
-      
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-image', {
+        body: {
+          conversationId,
+          imageBase64,
+          mimeType: selectedImage.type,
+          caption: message.trim() || undefined,
+        },
+      });
+
+      if (error) {
+        console.error('[WA_IMAGE] error', error);
+        toast.error('Erro ao enviar imagem');
+        return;
+      }
+
+      if (!data?.ok) {
+        toast.error(data?.message || 'Erro ao enviar imagem');
+        return;
+      }
+
       clearImage();
       setMessage('');
       onClearReply?.();
-      onMessageSent?.();
-    } catch (err) {
+      // Realtime subscription handles adding new messages - no refetch needed
+    } catch (err: any) {
+      console.error('[WA_IMAGE] error', err);
       toast.error('Erro ao enviar imagem');
+    } finally {
+      setSending(false);
     }
-  }, [selectedImage, message, sending, clearImage, onClearReply, onMessageSent, sendImage]);
+  }, [selectedImage, conversationId, message, sending, clearImage, onClearReply]);
 
   const handleSend = useCallback(() => {
     if (selectedImage) {
@@ -151,12 +198,14 @@ export function MessageInput({
 
   const handleStopAndSend = useCallback(async () => {
     console.log('[WA_AUDIO] stop_and_send');
+    setSending(true);
 
     try {
       const audioBlob = await stopRecording();
       
       if (!audioBlob || audioBlob.size === 0) {
         toast.error('Erro ao gravar áudio');
+        setSending(false);
         return;
       }
 
@@ -174,12 +223,40 @@ export function MessageInput({
 
       const audioBase64 = await base64Promise;
 
-      await sendAudio(audioBase64, audioBlob.type);
-      onMessageSent?.();
-    } catch (err) {
+      console.log('[WA_AUDIO] sending', { 
+        conversationId, 
+        size: audioBlob.size,
+        type: audioBlob.type 
+      });
+
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-audio', {
+        body: {
+          conversationId,
+          audioBase64,
+          mimeType: audioBlob.type,
+        },
+      });
+
+      if (error) {
+        console.error('[WA_AUDIO] error', error);
+        toast.error('Erro ao enviar áudio');
+        return;
+      }
+
+      if (!data?.ok) {
+        toast.error(data?.message || 'Erro ao enviar áudio');
+        return;
+      }
+
+      console.log('[WA_AUDIO] sent', { messageId: data.messageId });
+      // Realtime subscription handles adding new messages - no refetch needed
+    } catch (err: any) {
+      console.error('[WA_AUDIO] error', err);
       toast.error('Erro ao enviar áudio');
+    } finally {
+      setSending(false);
     }
-  }, [stopRecording, sendAudio, onMessageSent]);
+  }, [conversationId, stopRecording]);
 
   const handleCancelRecording = useCallback(() => {
     console.log('[WA_AUDIO] cancel');
