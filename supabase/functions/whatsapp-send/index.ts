@@ -142,8 +142,9 @@ Deno.serve(async (req: Request) => {
 
     const messageId = insertedMessage.id;
 
-    // Send via Evolution API
-    const evolutionUrl = `${EVOLUTION_BASE_URL}/message/sendText/${whatsappNumber.instance_name}`;
+    // Send via Evolution API - remove trailing slash from base URL if present
+    const baseUrl = EVOLUTION_BASE_URL.replace(/\/+$/, '');
+    const evolutionUrl = `${baseUrl}/message/sendText/${whatsappNumber.instance_name}`;
     
     console.log('[Edge:whatsapp-send] calling_evolution', { 
       instance: whatsappNumber.instance_name,
