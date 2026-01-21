@@ -10,15 +10,18 @@ import { detectMediaType, downloadAndStoreMedia } from "../services/mediaService
 
 export async function handleMessage(ctx: WebhookContext): Promise<Response> {
   const { 
-    supabase, workspaceId, eventType, instanceName, data, 
+    supabase, eventType, instanceName, data, 
     deliveryId, providerEventId, evolutionBaseUrl, evolutionApiKey 
   } = ctx;
 
-  const wa = await ensureWhatsappNumber(supabase, workspaceId, instanceName);
+  const wa = await ensureWhatsappNumber(supabase, instanceName);
   if (!wa) {
-    await markDelivery(supabase, deliveryId, "failed", "Missing instanceName for message event");
-    return json({ ok: false, message: "Missing instanceName" }, 422);
+    await markDelivery(supabase, deliveryId, "failed", "Instance not found");
+    return json({ ok: false, message: "Instance not found" }, 422);
   }
+
+  // Usar workspace_id da instância (não da API key)
+  const workspaceId = wa.workspace_id;
 
   const key = data?.key as Record<string, unknown> | undefined;
   const message = data?.message as Record<string, unknown> | undefined;

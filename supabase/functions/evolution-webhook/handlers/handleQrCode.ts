@@ -5,9 +5,9 @@ import { ensureWhatsappNumber } from "../services/whatsappService.ts";
 import { markDelivery } from "../services/deliveryService.ts";
 
 export async function handleQrCode(ctx: WebhookContext): Promise<Response> {
-  const { supabase, workspaceId, instanceName, data, deliveryId } = ctx;
+  const { supabase, instanceName, data, deliveryId } = ctx;
 
-  const wa = await ensureWhatsappNumber(supabase, workspaceId, instanceName);
+  const wa = await ensureWhatsappNumber(supabase, instanceName);
   if (!wa) {
     await markDelivery(supabase, deliveryId, "ignored", "Missing instanceName or instance not found");
     return json({ ok: true, ignored: true });
