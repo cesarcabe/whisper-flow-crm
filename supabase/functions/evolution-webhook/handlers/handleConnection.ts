@@ -14,9 +14,6 @@ export async function handleConnection(ctx: WebhookContext): Promise<Response> {
     return json({ ok: true, ignored: true });
   }
 
-  // Usar o workspace_id real da conexão (pode ter sido transferida)
-  const realWorkspaceId = wa.workspace_id;
-
   const rawStatus = safeString(data?.state ?? data?.status ?? data?.connection ?? null) ?? "unknown";
   const normalizedStatus = normalizeConnectionStatus(rawStatus);
   const phone = normalizePhone(safeString(data?.phone_number ?? data?.number ?? (data?.me as Record<string, unknown>)?.id ?? null));

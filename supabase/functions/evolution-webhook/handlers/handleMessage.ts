@@ -16,12 +16,9 @@ export async function handleMessage(ctx: WebhookContext): Promise<Response> {
 
   const wa = await ensureWhatsappNumber(supabase, workspaceId, instanceName);
   if (!wa) {
-    await markDelivery(supabase, deliveryId, "failed", "Missing instanceName or instance not found");
+    await markDelivery(supabase, deliveryId, "failed", "Missing instanceName for message event");
     return json({ ok: false, message: "Missing instanceName" }, 422);
   }
-
-  // Usar o workspace_id real da conexão (pode ter sido transferida)
-  const realWorkspaceId = wa.workspace_id;
 
   const key = data?.key as Record<string, unknown> | undefined;
   const message = data?.message as Record<string, unknown> | undefined;
@@ -58,11 +55,11 @@ export async function handleMessage(ctx: WebhookContext): Promise<Response> {
     avatarUrl = await fetchProfilePicture(evolutionBaseUrl, evolutionApiKey, instanceName, phone);
   }
 
-  const contactId = await upsertContact(supabase, realWorkspaceId, phone, pushName, avatarUrl);
-  const conversationId = await upsertConversation(supabase, realWorkspaceId, contactId, wa.id, remoteJid);
+  const contactId = await upsertContact(supabase, workspaceId, phone, pushName, avatarUrl);
+  const conversationId = await upsertConversation(supabase, workspaceId, contactId, wa.id, remoteJid);
 
   await supabase.from("conversation_events").insert({
-    workspace_id: realWorkspaceId,
+    workspace_id: workspaceId,
     conversation_id: conversationId,
     provider: "evolution",
     event_type: eventType,
@@ -81,7 +78,7 @@ export async function handleMessage(ctx: WebhookContext): Promise<Response> {
       await supabase
         .from("messages")
         .update({ status: newStatus })
-        .eq("workspace_id", realWorkspaceId)
+        .eq("workspace_id", workspaceId)
         .eq("whatsapp_number_id", wa.id)
         .eq("external_id", providerEventId);
     }
@@ -110,7 +107,7 @@ export async function handleMessage(ctx: WebhookContext): Promise<Response> {
         instanceName,
         key,
         messageType,
-        realWorkspaceId
+        workspaceId
       );
       if (storedUrl) {
         mediaUrl = storedUrl;
@@ -131,7 +128,7 @@ export async function handleMessage(ctx: WebhookContext): Promise<Response> {
   });
 
   const { error: msgErr } = await supabase.from("messages").insert({
-    workspace_id: realWorkspaceId,
+    workspace_id: workspaceId,
     conversation_id: conversationId,
     whatsapp_number_id: wa.id,
     external_id: providerEventId,
