@@ -78,3 +78,7 @@ export function useWebSocketContext(): WebSocketContextType {
   }
   return context
 }
+
+export function useOptionalWebSocketContext(): WebSocketContextType | null {
+  return useContext(WebSocketContext)
+}

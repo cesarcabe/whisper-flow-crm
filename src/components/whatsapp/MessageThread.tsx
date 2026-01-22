@@ -269,7 +269,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
       {/* Messages - scrollable area */}
       <div className="flex-1 min-h-0 overflow-hidden relative">
         <ScrollArea ref={scrollRef} className="h-full" onScrollCapture={handleScroll}>
-          <div className="p-4 whatsapp-chat-bg min-h-full">
+          <div className="p-4 whatsapp-chat-bg min-h-full flex flex-col">
             {hasMore && (
               <div className="flex justify-center mb-4">
                 <Button
@@ -291,11 +291,11 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
             )}
 
             {messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full min-h-[200px]">
+              <div className="flex items-center justify-center flex-1 min-h-[200px]">
                 <p className="text-muted-foreground">Nenhuma mensagem ainda</p>
               </div>
             ) : (
-              <>
+              <div className="mt-auto">
                 {/* Encryption notice */}
                 <div className="flex justify-center mb-4">
                   <div className="bg-amber-100/80 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 
@@ -312,7 +312,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
                   onForward={setForwardMessage}
                   onScrollToMessage={scrollToMessage}
                 />
-              </>
+              </div>
             )}
             
             {/* Scroll anchor */}

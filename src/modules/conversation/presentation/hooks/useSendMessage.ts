@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useWebSocketContext } from '../../infrastructure/websocket/WebSocketContext';
+import { useOptionalWebSocketContext } from '../../infrastructure/websocket/WebSocketContext';
 
 interface SendMessageInput {
   conversationId: string;
@@ -13,7 +13,9 @@ type SendMessageResult = { success: true } | { success: false; error: Error };
 
 export function useSendMessage() {
   const [isSending, setIsSending] = useState(false);
-  const { client, isEnabled: isWebSocketEnabled } = useWebSocketContext();
+  const websocketContext = useOptionalWebSocketContext();
+  const client = websocketContext?.client ?? null;
+  const isWebSocketEnabled = websocketContext?.isEnabled ?? false;
 
   const sendMessage = useCallback(async (input: SendMessageInput): Promise<SendMessageResult> => {
     setIsSending(true);

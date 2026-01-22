@@ -34,7 +34,7 @@ export function MessageInput({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { sendMessage, isSending: isSendingText } = useSendMessage();
-  const isSending = isSendingMedia || isSendingText;
+  const isSending = isSendingMedia;
   
   const {
     isRecording,
@@ -97,9 +97,11 @@ export function MessageInput({
 
   const handleSendText = useCallback(async () => {
     const text = message.trim();
-    if (!text || isSending) return;
+    if (!text || isSendingText) return;
 
     console.log('[WA_SEND]', { conversationId, replyToId: replyingTo?.id });
+    const previousMessage = message;
+    setMessage('');
     try {
       const result = await sendMessage({
         conversationId,
@@ -110,20 +112,21 @@ export function MessageInput({
       if (!result.success) {
         console.error('[WA_SEND] error', result.error);
         toast.error(result.error.message || 'Erro ao enviar mensagem');
+        setMessage(previousMessage);
         return;
       }
 
-      setMessage('');
       onClearReply?.();
       // Realtime subscription handles adding new messages - no refetch needed
     } catch (err: any) {
       console.error('[WA_SEND] error', err);
       toast.error('Erro ao enviar mensagem');
+      setMessage(previousMessage);
     }
-  }, [message, conversationId, isSending, replyingTo?.id, onClearReply, sendMessage]);
+  }, [message, conversationId, isSendingText, replyingTo?.id, onClearReply, sendMessage]);
 
   const handleSendImage = useCallback(async () => {
-    if (!selectedImage || isSending) return;
+    if (!selectedImage || isSendingMedia) return;
 
     console.log('[WA_IMAGE] sending', { conversationId, size: selectedImage.size });
     setIsSendingMedia(true);
@@ -297,10 +300,10 @@ export function MessageInput({
         <Button
           size="icon"
           onClick={handleStopAndSend}
-          disabled={sending}
+          disabled={isSending}
           className="h-10 w-10 shrink-0"
         >
-          {sending ? (
+          {isSending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Send className="h-4 w-4" />
@@ -372,7 +375,7 @@ export function MessageInput({
           variant="ghost"
           size="icon"
           className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
-          disabled={disabled || sending}
+          disabled={disabled || isSending}
         >
           <Smile className="h-5 w-5" />
         </Button>
@@ -381,7 +384,7 @@ export function MessageInput({
           variant="ghost"
           size="icon"
           className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
-          disabled={disabled || sending}
+          disabled={disabled || isSending}
           onClick={() => imageInputRef.current?.click()}
         >
           <Image className="h-5 w-5" />
@@ -392,18 +395,18 @@ export function MessageInput({
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={selectedImage ? "Adicione uma legenda..." : "Digite uma mensagem..."}
-          disabled={disabled || sending}
+          disabled={disabled || isSending}
           className="min-h-[44px] max-h-[120px] resize-none flex-1"
           rows={1}
         />
-        {canSend || sending ? (
+        {canSend || isSending ? (
           <Button
             size="icon"
             onClick={handleSend}
-            disabled={disabled || sending || !canSend}
+            disabled={disabled || isSending || !canSend}
             className="h-10 w-10 shrink-0"
           >
-            {sending ? (
+            {isSending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Send className="h-4 w-4" />
