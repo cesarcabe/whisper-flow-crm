@@ -1,4 +1,4 @@
-import { Home, Kanban, MessageSquare, BarChart3, Settings } from "lucide-react";
+import { Home, Kanban, MessageSquare, BarChart3, Settings, Plus, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
@@ -16,7 +16,13 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
+import { CreateWorkspaceDialog } from "@/components/workspace/CreateWorkspaceDialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const menuItems = [
   { title: "Início", url: "/", icon: Home },
@@ -31,6 +37,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const { profile, signOut } = useAuth();
+  const { isMaster } = useUserRole();
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -56,6 +63,30 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <span className="font-semibold text-sidebar-foreground">CRM</span>
+          )}
+          {isMaster && (
+            <div className="ml-auto">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <CreateWorkspaceDialog
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Novo Workspace</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           )}
         </div>
       </SidebarHeader>
