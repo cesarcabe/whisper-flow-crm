@@ -171,6 +171,30 @@ export class WebSocketClient {
   }
 
   /**
+   * Send message via WebSocket
+   */
+  sendMessage(input: {
+    conversationId: string
+    content: string
+    messageId?: string
+    replyToMessageId?: string
+  }): void {
+    if (!this.socket?.connected) {
+      console.warn('[WebSocket] Not connected, cannot send message')
+      return
+    }
+
+    this.socket.emit('sendMessage', {
+      type: 'sendMessage',
+      conversationId: input.conversationId,
+      content: input.content,
+      messageId: input.messageId,
+      replyToMessageId: input.replyToMessageId,
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  /**
    * Add event listener
    */
   on<K extends keyof WebSocketEventMap>(event: K, callback: WebSocketEventMap[K]): void {

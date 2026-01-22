@@ -181,6 +181,24 @@ export function useMessages(conversationId: string | null) {
         setMessages((prev) => {
           // Avoid duplicates
           if (prev.some((m) => m.id === domainMessage.id)) return prev;
+          // Reconcile optimistic outgoing message if possible
+          if (domainMessage.isOutgoing) {
+            const matchIndex = prev.findIndex((m) => {
+              if (!m.isOutgoing) return false;
+              if (m.body !== domainMessage.body) return false;
+              if (m.conversationId !== domainMessage.conversationId) return false;
+              if (!m.isSending()) return false;
+              const timeDiff = Math.abs(m.createdAt.getTime() - domainMessage.createdAt.getTime());
+              return timeDiff <= 2 * 60 * 1000;
+            });
+
+            if (matchIndex >= 0) {
+              const next = [...prev];
+              next[matchIndex] = domainMessage;
+              return next;
+            }
+          }
+
           // Prepend new message at the beginning
           return [domainMessage, ...prev];
         });
