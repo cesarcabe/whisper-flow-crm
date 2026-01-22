@@ -274,7 +274,7 @@ export function CRMLayout() {
         <ResizablePanel 
           defaultSize={70}
           className={cn(
-            'flex flex-col min-h-0 overflow-hidden',
+            'h-full flex flex-col min-h-0 overflow-hidden',
             !selectedConversationId ? 'hidden md:flex' : 'flex'
           )}
         >
@@ -286,12 +286,14 @@ export function CRMLayout() {
                   ← Voltar
                 </Button>
               </div>
-              <MessageThread 
-                conversationId={selectedConversationId} 
-                contact={selectedConversation?.contact as any} 
-                connectionStatus={connectionStatus}
-                currentStageId={selectedConversation?.stage_id}
-              />
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <MessageThread 
+                  conversationId={selectedConversationId} 
+                  contact={selectedConversation?.contact as any} 
+                  connectionStatus={connectionStatus}
+                  currentStageId={selectedConversation?.stage_id}
+                />
+              </div>
             </>
           ) : (
             <div className="flex-1 min-h-0 flex items-center justify-center bg-muted/30">
