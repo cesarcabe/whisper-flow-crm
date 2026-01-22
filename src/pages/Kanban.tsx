@@ -5,7 +5,7 @@ const Kanban = () => {
   return (
     <>
       <Helmet>
-        <title>Kanban - CRM WhatsApp</title>
+        <title>Kanban - New Flow CRM</title>
         <meta name="description" content="Gerencie seus pipelines e estágios de vendas no formato Kanban." />
       </Helmet>
       <KanbanView />

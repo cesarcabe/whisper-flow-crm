@@ -5,7 +5,7 @@ const Reports = () => {
   return (
     <>
       <Helmet>
-        <title>Relatórios - CRM WhatsApp</title>
+        <title>Relatórios - New Flow CRM</title>
         <meta name="description" content="Visualize relatórios e métricas do seu CRM. Acompanhe o volume de mensagens e conversões." />
       </Helmet>
       <ReportsPage />

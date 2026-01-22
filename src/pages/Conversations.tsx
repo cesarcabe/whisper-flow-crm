@@ -5,7 +5,7 @@ const Conversations = () => {
   return (
     <>
       <Helmet>
-        <title>Conversas - CRM WhatsApp</title>
+        <title>Conversas - New Flow CRM</title>
         <meta name="description" content="Gerencie suas conversas do WhatsApp. Visualize e responda mensagens em tempo real." />
       </Helmet>
       <CRMLayout />
