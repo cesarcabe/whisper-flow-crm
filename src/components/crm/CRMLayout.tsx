@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useConversations, ConversationWithContact } from '@/hooks/useConversations';
+import { useConversations, type LegacyConversationWithContact } from '@/modules/conversation/presentation/hooks/useConversations';
 import { useWhatsappNumbers } from '@/hooks/useWhatsappNumbers';
 import { useContactClasses } from '@/hooks/useContactClasses';
 import { usePipelines } from '@/hooks/usePipelines';
@@ -94,7 +94,7 @@ export function CRMLayout() {
     );
   }, [filteredConversations, searchQuery]);
   
-  const selectedConversation = conversations.find(c => c.id === selectedConversationId);
+  const selectedConversation = (conversations as LegacyConversationWithContact[]).find(c => c.id === selectedConversationId);
 
   if (numbersLoading) {
     return (

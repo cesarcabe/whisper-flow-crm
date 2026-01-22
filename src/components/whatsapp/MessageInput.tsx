@@ -8,6 +8,7 @@ import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { cn } from '@/lib/utils';
 import { Message } from '@/core/domain/entities/Message';
 import { useSendMessage } from '@/modules/conversation/presentation/hooks/useSendMessage';
+import { useWebSocket } from '@/modules/conversation/presentation/hooks/useWebSocket';
 
 interface MessageInputProps {
   conversationId: string;
@@ -35,6 +36,8 @@ export function MessageInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { sendMessage, isSending: isSendingText } = useSendMessage();
   const isSending = isSendingMedia;
+  const { emitTyping } = useWebSocket(conversationId);
+  const typingTimeoutRef = useRef<number | null>(null);
   
   const {
     isRecording,
@@ -97,7 +100,7 @@ export function MessageInput({
 
   const handleSendText = useCallback(async () => {
     const text = message.trim();
-    if (!text || isSendingText) return;
+    if (!text) return;
 
     console.log('[WA_SEND]', { conversationId, replyToId: replyingTo?.id });
     const previousMessage = message;
@@ -123,7 +126,7 @@ export function MessageInput({
       toast.error('Erro ao enviar mensagem');
       setMessage(previousMessage);
     }
-  }, [message, conversationId, isSendingText, replyingTo?.id, onClearReply, sendMessage]);
+  }, [message, conversationId, replyingTo?.id, onClearReply, sendMessage]);
 
   const handleSendImage = useCallback(async () => {
     if (!selectedImage || isSendingMedia) return;
@@ -267,6 +270,33 @@ export function MessageInput({
 
   const hasText = message.trim().length > 0;
   const canSend = hasText || selectedImage;
+
+  useEffect(() => {
+    if (!message.trim()) {
+      emitTyping(false);
+      if (typingTimeoutRef.current) {
+        window.clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    emitTyping(true);
+    if (typingTimeoutRef.current) {
+      window.clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = window.setTimeout(() => {
+      emitTyping(false);
+      typingTimeoutRef.current = null;
+    }, 1500);
+
+    return () => {
+      if (typingTimeoutRef.current) {
+        window.clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+    };
+  }, [message, emitTyping]);
 
   // Show error if recording failed
   useEffect(() => {

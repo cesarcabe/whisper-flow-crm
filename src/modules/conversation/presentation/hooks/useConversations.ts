@@ -87,7 +87,7 @@ function mapDomainToLegacy(domain: DomainConversation): LegacyConversationWithCo
 export function useConversations(whatsappNumberId: string | null) {
   const { workspaceId } = useWorkspace();
   const conversationService = useConversationService();
-  const { client: wsClient, isEnabled: isWebSocketEnabled } = useWebSocketContext();
+  const { client: wsClient, isEnabled: isWebSocketEnabled, isConnected: isWebSocketConnected } = useWebSocketContext();
   const [conversations, setConversations] = useState<LegacyConversationWithContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,9 +152,11 @@ export function useConversations(whatsappNumberId: string | null) {
     }
   }, [workspaceId, whatsappNumberId, conversationService]);
 
+  const isWebSocketActive = isWebSocketEnabled && isWebSocketConnected && !!wsClient;
+
   // WebSocket listener for conversation updates (primary)
   useEffect(() => {
-    if (!isWebSocketEnabled || !wsClient || !workspaceId) {
+    if (!isWebSocketActive || !workspaceId) {
       return;
     }
 
@@ -172,54 +174,27 @@ export function useConversations(whatsappNumberId: string | null) {
       // Map WebSocket conversation to legacy format
       // Note: WebSocket conversation doesn't have all fields, so we'll update existing or create minimal entry
       setConversations((prev) => {
-        const index = prev.findIndex((c) => c.id === wsConversation.id)
-        
-        if (index >= 0) {
-          // Update existing conversation
-          const existing = prev[index]
-          const updated: LegacyConversationWithContact = {
-            ...existing,
-            last_message_at: wsConversation.lastMessage?.createdAt || existing.last_message_at,
-            updated_at: wsConversation.updatedAt,
-            lastMessagePreview: wsConversation.lastMessage?.content?.substring(0, 50) || existing.lastMessagePreview || '',
-          }
-          
-          // Re-sort by last_message_at descending
-          const newList = [...prev]
-          newList[index] = updated
-          return newList.sort((a, b) => {
-            const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0
-            const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0
-            return bTime - aTime
-          })
-        } else {
-          // New conversation - create minimal entry (will be enriched on next fetch)
-          const newConv: LegacyConversationWithContact = {
-            id: wsConversation.id,
-            contact_id: wsConversation.contactId || wsConversation.id,
-            whatsapp_number_id: wsConversation.whatsappNumberId || null,
-            workspace_id: workspaceId,
-            pipeline_id: null,
-            stage_id: null,
-            last_message_at: wsConversation.lastMessage?.createdAt || null,
-            unread_count: 0,
-            is_typing: false,
-            is_group: false,
-            remote_jid: wsConversation.id,
-            created_at: wsConversation.updatedAt,
-            updated_at: wsConversation.updatedAt,
-            contact: null,
-            lastMessagePreview: wsConversation.lastMessage?.content?.substring(0, 50) || '',
-            stage: null,
-          }
-          
-          // Add to list and sort
-          return [newConv, ...prev].sort((a, b) => {
-            const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0
-            const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0
-            return bTime - aTime
-          })
-        }
+        const lastMessagePreview = wsConversation.lastMessage?.content?.substring(0, 50) || '';
+        const partial: LegacyConversationWithContact = {
+          id: wsConversation.id,
+          contact_id: wsConversation.contactId || wsConversation.id,
+          whatsapp_number_id: wsConversation.whatsappNumberId || null,
+          workspace_id: workspaceId,
+          pipeline_id: null,
+          stage_id: null,
+          last_message_at: wsConversation.lastMessage?.createdAt || null,
+          unread_count: 0,
+          is_typing: false,
+          is_group: false,
+          remote_jid: wsConversation.id,
+          created_at: wsConversation.updatedAt,
+          updated_at: wsConversation.updatedAt,
+          contact: null,
+          lastMessagePreview: lastMessagePreview,
+          stage: null,
+        };
+
+        return upsertConversation(prev, partial, { preferTop: true });
       })
     }
 
@@ -228,12 +203,12 @@ export function useConversations(whatsappNumberId: string | null) {
     return () => {
       wsClient.off('conversation', handleConversation)
     }
-  }, [wsClient, isWebSocketEnabled, workspaceId, whatsappNumberId])
+  }, [wsClient, isWebSocketActive, workspaceId, whatsappNumberId])
 
   // Supabase Realtime subscription (fallback when WebSocket is not available)
   useEffect(() => {
     // Only use Supabase Realtime if WebSocket is not enabled
-    if (isWebSocketEnabled || !workspaceId || !whatsappNumberId) return;
+    if (isWebSocketActive || !workspaceId || !whatsappNumberId) return;
 
     // Cleanup previous subscription
     if (channelRef.current) {
@@ -255,23 +230,13 @@ export function useConversations(whatsappNumberId: string | null) {
           const updatedRow = payload.new as ConversationRow;
           
           setConversations((prev) => {
-            const updated_list = prev.map((c) =>
-              c.id === updatedRow.id
-                ? { 
-                    ...c, 
-                    ...updatedRow,
-                    contact: c.contact, 
-                    lastMessagePreview: c.lastMessagePreview,
-                    stage: c.stage,
-                  }
-                : c
-            );
-            // Re-sort by last_message_at descending
-            return updated_list.sort((a, b) => {
-              const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-              const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-              return bTime - aTime;
-            });
+            const partial: LegacyConversationWithContact = {
+              ...(updatedRow as LegacyConversationWithContact),
+              contact: prev.find((c) => c.id === updatedRow.id)?.contact ?? null,
+              lastMessagePreview: prev.find((c) => c.id === updatedRow.id)?.lastMessagePreview ?? '',
+              stage: prev.find((c) => c.id === updatedRow.id)?.stage ?? null,
+            };
+            return upsertConversation(prev, partial, { preferTop: true });
           });
         }
       )
@@ -325,15 +290,14 @@ export function useConversations(whatsappNumberId: string | null) {
         (payload) => {
           const msg = payload.new as { conversation_id: string; body: string; created_at: string };
           setConversations((prev) => {
-            const idx = prev.findIndex((c) => c.id === msg.conversation_id);
-            if (idx === -1) return prev;
-            const updated: LegacyConversationWithContact = {
-              ...prev[idx],
+            const existing = prev.find((c) => c.id === msg.conversation_id);
+            if (!existing) return prev;
+            const partial: LegacyConversationWithContact = {
+              ...existing,
               lastMessagePreview: msg.body?.substring(0, 50) || '',
               last_message_at: msg.created_at,
             };
-            const newList = prev.filter((c) => c.id !== msg.conversation_id);
-            return [updated, ...newList];
+            return upsertConversation(prev, partial, { preferTop: true });
           });
         }
       )
@@ -362,6 +326,78 @@ export function useConversations(whatsappNumberId: string | null) {
 // ==================== Helper Functions ====================
 
 const BATCH_SIZE = 100;
+
+type UpsertOptions = {
+  preferTop?: boolean;
+};
+
+function getTime(value: string | null | undefined): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function isConversationEqual(
+  a: LegacyConversationWithContact,
+  b: LegacyConversationWithContact
+): boolean {
+  return (
+    a.id === b.id &&
+    a.last_message_at === b.last_message_at &&
+    a.unread_count === b.unread_count &&
+    a.is_typing === b.is_typing &&
+    a.is_group === b.is_group &&
+    a.whatsapp_number_id === b.whatsapp_number_id &&
+    a.stage_id === b.stage_id &&
+    a.pipeline_id === b.pipeline_id &&
+    a.lastMessagePreview === b.lastMessagePreview &&
+    a.updated_at === b.updated_at &&
+    a.contact?.id === b.contact?.id &&
+    a.contact?.name === b.contact?.name &&
+    a.contact?.avatar_url === b.contact?.avatar_url &&
+    a.contact?.contact_class_id === b.contact?.contact_class_id &&
+    a.contact?.contact_class?.id === b.contact?.contact_class?.id &&
+    a.stage?.id === b.stage?.id
+  );
+}
+
+function upsertConversation(
+  prev: LegacyConversationWithContact[],
+  partial: LegacyConversationWithContact,
+  options: UpsertOptions = {}
+): LegacyConversationWithContact[] {
+  const index = prev.findIndex((c) => c.id === partial.id);
+  if (index === -1) {
+    return [partial, ...prev];
+  }
+
+  const existing = prev[index];
+  const merged: LegacyConversationWithContact = {
+    ...existing,
+    ...partial,
+    contact: partial.contact ?? existing.contact,
+    stage: partial.stage ?? existing.stage,
+    lastMessagePreview: partial.lastMessagePreview ?? existing.lastMessagePreview,
+  };
+
+  if (isConversationEqual(existing, merged)) {
+    return prev;
+  }
+
+  const shouldPreferTop = options.preferTop === true;
+  const shouldMoveToTop =
+    shouldPreferTop &&
+    getTime(merged.last_message_at) >= getTime(prev[0]?.last_message_at);
+
+  if (!shouldMoveToTop) {
+    const next = [...prev];
+    next[index] = merged;
+    return next;
+  }
+
+  const next = prev.filter((c) => c.id !== merged.id);
+  return [merged, ...next];
+}
 
 type ContactData = {
   id: string;

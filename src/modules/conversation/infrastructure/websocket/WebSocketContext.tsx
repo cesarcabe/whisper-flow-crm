@@ -4,7 +4,7 @@
  * Provides WebSocket client instance to React components
  */
 
-import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { WebSocketClient } from './WebSocketClient'
 import { CHATENGINE_BASE_URL } from '../chatengine/config'
 import { useChatEngineJwt } from '../../presentation/hooks/useChatEngineJwt'
@@ -27,6 +27,7 @@ export function WebSocketProvider({ children, baseUrl = CHATENGINE_BASE_URL }: W
   const { workspaceId } = useWorkspace()
   const { token, isConfigured } = useChatEngineJwt(workspaceId)
   const clientRef = useRef<WebSocketClient | null>(null)
+  const [isConnected, setIsConnected] = useState(false)
 
   const isEnabled = Boolean(baseUrl && isConfigured && token && workspaceId)
 
@@ -37,12 +38,20 @@ export function WebSocketProvider({ children, baseUrl = CHATENGINE_BASE_URL }: W
         clientRef.current.disconnect()
         clientRef.current = null
       }
+      setIsConnected(false)
       return
     }
 
     if (!clientRef.current) {
       clientRef.current = new WebSocketClient(baseUrl)
     }
+
+    const handleConnect = () => setIsConnected(true)
+    const handleDisconnect = () => setIsConnected(false)
+
+    clientRef.current.on('connect', handleConnect)
+    clientRef.current.on('disconnect', handleDisconnect)
+    setIsConnected(clientRef.current.isConnected())
 
     // Connect when token is available
     if (token && workspaceId) {
@@ -53,19 +62,24 @@ export function WebSocketProvider({ children, baseUrl = CHATENGINE_BASE_URL }: W
 
     return () => {
       if (clientRef.current) {
+        clientRef.current.off('connect', handleConnect)
+        clientRef.current.off('disconnect', handleDisconnect)
+      }
+      if (clientRef.current) {
         clientRef.current.disconnect()
         clientRef.current = null
       }
+      setIsConnected(false)
     }
   }, [baseUrl, token, workspaceId, isEnabled])
 
   const contextValue = useMemo(
     () => ({
       client: clientRef.current,
-      isConnected: clientRef.current?.isConnected() ?? false,
+      isConnected,
       isEnabled,
     }),
-    [isEnabled, clientRef.current?.isConnected()]
+    [isEnabled, isConnected]
   )
 
   return <WebSocketContext.Provider value={contextValue}>{children}</WebSocketContext.Provider>

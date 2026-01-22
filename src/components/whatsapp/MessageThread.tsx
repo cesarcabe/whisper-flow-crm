@@ -15,7 +15,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { useMessages, Message } from '@/hooks/useMessages';
+import { useMessages } from '@/modules/conversation/presentation/hooks/useMessages';
+import { useWebSocket } from '@/modules/conversation/presentation/hooks/useWebSocket';
+import { Message } from '@/core/domain/entities/Message';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useConversationStages } from '@/hooks/useConversationStages';
 import { MessageInput } from './MessageInput';
@@ -40,6 +42,7 @@ interface MessageThreadProps {
 
 export function MessageThread({ conversationId, contact, isGroup, connectionStatus = 'unknown', currentStageId }: MessageThreadProps) {
   const { messages, loading, loadingMore, error, hasMore, loadMore, refetch } = useMessages(conversationId);
+  useWebSocket(conversationId);
   const { activePipeline } = usePipelines();
   const { updateConversationStage } = useConversationStages();
   const scrollRef = useRef<HTMLDivElement>(null);

@@ -18,7 +18,6 @@ export function useSendMessage() {
   const isWebSocketEnabled = websocketContext?.isEnabled ?? false;
 
   const sendMessage = useCallback(async (input: SendMessageInput): Promise<SendMessageResult> => {
-    setIsSending(true);
     try {
       const clientMessageId = input.clientMessageId ?? createClientMessageId();
 
@@ -33,6 +32,7 @@ export function useSendMessage() {
         return { success: true };
       }
 
+      setIsSending(true);
       const { data, error } = await supabase.functions.invoke('whatsapp-send', {
         body: {
           conversationId: input.conversationId,

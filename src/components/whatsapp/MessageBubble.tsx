@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { Reply, Copy, Forward, Trash2, SmilePlus, Check, CheckCheck } from 'lucide-react';
 import {
   ContextMenu,
@@ -52,7 +52,7 @@ interface MessageBubbleProps {
   conversationId: string;
 }
 
-export function MessageBubble({ 
+function MessageBubbleBase({ 
   message, 
   onReply, 
   onForward, 
@@ -258,3 +258,23 @@ export function MessageBubble({
     </ContextMenu>
   );
 }
+
+function areMessageBubblePropsEqual(prev: MessageBubbleProps, next: MessageBubbleProps): boolean {
+  const prevMsg = prev.message;
+  const nextMsg = next.message;
+  return (
+    prev.conversationId === next.conversationId &&
+    prevMsg.id === nextMsg.id &&
+    prevMsg.status === nextMsg.status &&
+    prevMsg.body === nextMsg.body &&
+    prevMsg.mediaUrl === nextMsg.mediaUrl &&
+    prevMsg.isOutgoing === nextMsg.isOutgoing &&
+    prevMsg.type.getValue() === nextMsg.type.getValue() &&
+    prevMsg.createdAt.getTime() === nextMsg.createdAt.getTime() &&
+    prev.onReply === next.onReply &&
+    prev.onForward === next.onForward &&
+    prev.onScrollToMessage === next.onScrollToMessage
+  );
+}
+
+export const MessageBubble = memo(MessageBubbleBase, areMessageBubblePropsEqual);
