@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useConversations, type LegacyConversationWithContact } from '@/modules/conversation/presentation/hooks/useConversations';
+import { useConversations, ConversationWithContact } from '@/hooks/useConversations';
 import { useWhatsappNumbers } from '@/hooks/useWhatsappNumbers';
 import { useContactClasses } from '@/hooks/useContactClasses';
 import { usePipelines } from '@/hooks/usePipelines';
@@ -94,7 +94,7 @@ export function CRMLayout() {
     );
   }, [filteredConversations, searchQuery]);
   
-  const selectedConversation = (conversations as LegacyConversationWithContact[]).find(c => c.id === selectedConversationId);
+  const selectedConversation = conversations.find(c => c.id === selectedConversationId);
 
   if (numbersLoading) {
     return (
@@ -274,7 +274,7 @@ export function CRMLayout() {
         <ResizablePanel 
           defaultSize={70}
           className={cn(
-            'h-full flex flex-col min-h-0 overflow-hidden',
+            'flex flex-col min-h-0 overflow-hidden',
             !selectedConversationId ? 'hidden md:flex' : 'flex'
           )}
         >
@@ -286,14 +286,12 @@ export function CRMLayout() {
                   ← Voltar
                 </Button>
               </div>
-              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                <MessageThread 
-                  conversationId={selectedConversationId} 
-                  contact={selectedConversation?.contact as any} 
-                  connectionStatus={connectionStatus}
-                  currentStageId={selectedConversation?.stage_id}
-                />
-              </div>
+              <MessageThread 
+                conversationId={selectedConversationId} 
+                contact={selectedConversation?.contact as any} 
+                connectionStatus={connectionStatus}
+                currentStageId={selectedConversation?.stage_id}
+              />
             </>
           ) : (
             <div className="flex-1 min-h-0 flex items-center justify-center bg-muted/30">

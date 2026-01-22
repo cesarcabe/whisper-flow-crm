@@ -1,20 +1,19 @@
-import { memo } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { type LegacyConversationWithContact } from '@/modules/conversation/presentation/hooks/useConversations';
+import { ConversationWithContact } from '@/hooks/useConversations';
 import { cn } from '@/lib/utils';
 import { formatMessageTime } from '@/lib/date-utils';
 import { getInitials } from '@/lib/normalize';
 import { Users, WifiOff } from 'lucide-react';
 
 interface ConversationItemProps {
-  conversation: LegacyConversationWithContact;
+  conversation: ConversationWithContact;
   isActive: boolean;
   onClick: () => void;
 }
 
-function ConversationItemBase({ conversation, isActive, onClick }: ConversationItemProps) {
+export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
   const contact = conversation.contact;
   const isGroup = (conversation as any).is_group === true;
   const isOrphan = !conversation.whatsapp_number_id;
@@ -123,22 +122,3 @@ function ConversationItemBase({ conversation, isActive, onClick }: ConversationI
     </div>
   );
 }
-
-function areConversationItemPropsEqual(prev: ConversationItemProps, next: ConversationItemProps): boolean {
-  const prevConv = prev.conversation;
-  const nextConv = next.conversation;
-  return (
-    prev.isActive === next.isActive &&
-    prevConv.id === nextConv.id &&
-    prevConv.last_message_at === nextConv.last_message_at &&
-    prevConv.unread_count === nextConv.unread_count &&
-    prevConv.lastMessagePreview === nextConv.lastMessagePreview &&
-    prevConv.contact?.name === nextConv.contact?.name &&
-    prevConv.contact?.avatar_url === nextConv.contact?.avatar_url &&
-    prevConv.contact?.contact_class_id === nextConv.contact?.contact_class_id &&
-    prevConv.contact?.contact_class?.id === nextConv.contact?.contact_class?.id &&
-    prevConv.stage?.id === nextConv.stage?.id
-  );
-}
-
-export const ConversationItem = memo(ConversationItemBase, areConversationItemPropsEqual);

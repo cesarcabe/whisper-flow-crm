@@ -91,7 +91,7 @@ function mapWebSocketToCoreMessage(wsMessage: WebSocketMessage, workspaceId: str
 export function useMessages(conversationId: string | null) {
   const { workspaceId } = useWorkspace();
   const { service: conversationService } = useConversation();
-  const { client: wsClient, isEnabled: isWebSocketEnabled, isConnected: isWebSocketConnected } = useWebSocketContext();
+  const { client: wsClient, isEnabled: isWebSocketEnabled } = useWebSocketContext();
   const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -164,10 +164,8 @@ export function useMessages(conversationId: string | null) {
   }, [fetchMessages, loadingMore, hasMore]);
 
   // WebSocket listeners for real-time updates (primary)
-  const isWebSocketActive = isWebSocketEnabled && isWebSocketConnected && !!wsClient;
-
   useEffect(() => {
-    if (!isWebSocketActive || !conversationId || !workspaceId) {
+    if (!isWebSocketEnabled || !wsClient || !conversationId || !workspaceId) {
       return;
     }
 
@@ -255,12 +253,12 @@ export function useMessages(conversationId: string | null) {
       wsClient.off('message', handleMessage);
       wsClient.off('messageStatus', handleStatus);
     };
-  }, [wsClient, isWebSocketActive, conversationId, workspaceId]);
+  }, [wsClient, isWebSocketEnabled, conversationId, workspaceId]);
 
   // Supabase Realtime subscription (fallback when WebSocket is not available)
   useEffect(() => {
     // Only use Supabase Realtime if WebSocket is not enabled
-    if (isWebSocketActive || !workspaceId || !conversationId) {
+    if (isWebSocketEnabled || !workspaceId || !conversationId) {
       return;
     }
 
@@ -325,7 +323,7 @@ export function useMessages(conversationId: string | null) {
         channelRef.current = null;
       }
     };
-  }, [workspaceId, conversationId, isWebSocketActive]);
+  }, [workspaceId, conversationId, isWebSocketEnabled]);
 
   // Initial fetch
   useEffect(() => {
