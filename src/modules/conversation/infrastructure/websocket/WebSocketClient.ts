@@ -30,7 +30,7 @@ export class WebSocketClient {
   /**
    * Connect to WebSocket server
    */
-  async connect(token: string): Promise<void> {
+  async connect(token: string, workspaceId: string): Promise<void> {
     if (this.socket?.connected) {
       console.log('[WebSocket] Already connected')
       return
@@ -48,6 +48,7 @@ export class WebSocketClient {
       path: socketPath,
       auth: {
         token,
+        workspaceId,
       },
       transports: ['websocket', 'polling'],
       reconnection: true,

@@ -46,7 +46,7 @@ export function WebSocketProvider({ children, baseUrl = CHATENGINE_BASE_URL }: W
 
     // Connect when token is available
     if (token && workspaceId) {
-      clientRef.current.connect(token).catch((error) => {
+      clientRef.current.connect(token, workspaceId).catch((error) => {
         console.error('[WebSocketProvider] Connection failed:', error)
       })
     }
