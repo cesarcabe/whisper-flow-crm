@@ -6,13 +6,16 @@ import { ensureWhatsappNumber } from "../services/whatsappService.ts";
 import { markDelivery } from "../services/deliveryService.ts";
 
 export async function handleConnection(ctx: WebhookContext): Promise<Response> {
-  const { supabase, workspaceId, instanceName, data, deliveryId } = ctx;
+  const { supabase, instanceName, data, deliveryId } = ctx;
 
-  const wa = await ensureWhatsappNumber(supabase, workspaceId, instanceName);
+  const wa = await ensureWhatsappNumber(supabase, instanceName);
   if (!wa) {
     await markDelivery(supabase, deliveryId, "ignored", "Missing instanceName or instance not found");
     return json({ ok: true, ignored: true });
   }
+
+  // Usar workspace_id da instância (não da API key)
+  const workspaceId = wa.workspace_id;
 
   const rawStatus = safeString(data?.state ?? data?.status ?? data?.connection ?? null) ?? "unknown";
   const normalizedStatus = normalizeConnectionStatus(rawStatus);

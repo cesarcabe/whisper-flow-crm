@@ -6,8 +6,11 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
-import { ConversationProvider } from "@/modules/conversation";
-import Index from "./pages/Index";
+import { AppLayout } from "@/components/layout/AppLayout";
+import Dashboard from "./pages/Dashboard";
+import Kanban from "./pages/Kanban";
+import Conversations from "./pages/Conversations";
+import Reports from "./pages/Reports";
 import Auth from "./pages/Auth";
 import SetupWorkspace from "./pages/SetupWorkspace";
 import WorkspaceAdmin from "./pages/WorkspaceAdmin";
@@ -40,7 +43,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/setup-workspace" replace />;
   }
 
-  return <>{children}</>;
+  return <AppLayout>{children}</AppLayout>;
 }
 
 // Setup Route wrapper (requires auth, but NOT workspace)
@@ -94,7 +97,31 @@ function AppRoutes() {
         path="/"
         element={
           <ProtectedRoute>
-            <Index />
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/kanban"
+        element={
+          <ProtectedRoute>
+            <Kanban />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/conversations"
+        element={
+          <ProtectedRoute>
+            <Conversations />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <Reports />
           </ProtectedRoute>
         }
       />
@@ -138,9 +165,7 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <WorkspaceProvider>
-              <ConversationProvider>
-                <AppRoutes />
-              </ConversationProvider>
+              <AppRoutes />
             </WorkspaceProvider>
           </AuthProvider>
         </BrowserRouter>
