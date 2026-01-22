@@ -17,6 +17,7 @@ import WorkspaceAdmin from "./pages/WorkspaceAdmin";
 import AcceptInvitation from "./pages/AcceptInvitation";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
+import { WebSocketTestPanel } from "@/components/test/WebSocketTestPanel";
 
 // QueryClient instance - stable reference
 const queryClient = new QueryClient();
@@ -130,6 +131,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <WorkspaceAdmin />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/test/websocket"
+        element={
+          <ProtectedRoute>
+            <WebSocketTestPanel />
           </ProtectedRoute>
         }
       />
