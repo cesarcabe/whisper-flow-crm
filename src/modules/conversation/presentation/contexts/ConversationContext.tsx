@@ -1,8 +1,8 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { ConversationService } from '../../application/services/ConversationService';
-import { SupabaseConversationRepository } from '../../infrastructure/supabase/SupabaseConversationRepository';
-import { SupabaseMessageRepository } from '../../infrastructure/supabase/SupabaseMessageRepository';
+import { SupabaseConversationRepository } from '@/infra/supabase/repositories/SupabaseConversationRepository';
+import { SupabaseMessageRepository } from '@/infra/supabase/repositories/SupabaseMessageRepository';
 import { CHATENGINE_BASE_URL } from '../../infrastructure/chatengine/config';
 import { useChatEngineJwt } from '../hooks/useChatEngineJwt';
 import { WebSocketProvider } from '../../infrastructure/websocket/WebSocketContext';

@@ -4,10 +4,9 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useConversation } from '../contexts/ConversationContext';
 import { useWebSocketContext } from '../../infrastructure/websocket/WebSocketContext';
 import { WebSocketMessage, WebSocketMessageStatus } from '../../infrastructure/websocket/types';
-import { Message as ModuleMessage } from '../../domain/entities/Message';
 import { Message as CoreMessage } from '@/core/domain/entities/Message';
 import { MessageMapper } from '@/infra/supabase/mappers/MessageMapper';
-import { MessageType } from '@/core/domain/value-objects/MessageType';
+import { MessageTypeValue } from '@/core/domain/value-objects/MessageType';
 import { Tables } from '@/integrations/supabase/types';
 
 type MessageRow = Tables<'messages'>;
@@ -17,7 +16,7 @@ const PAGE_SIZE = 50;
 /**
  * Maps module Message entity to core Message entity for compatibility
  */
-function mapModuleToCoreMessage(m: ModuleMessage): CoreMessage {
+function mapModuleToCoreMessage(m: CoreMessage): CoreMessage {
   return MessageMapper.toDomain({
     id: m.id,
     conversation_id: m.conversationId,
@@ -57,10 +56,7 @@ function mapWebSocketToCoreMessage(wsMessage: WebSocketMessage, workspaceId: str
   else if (wsMessage.status === 'failed') status = 'failed';
 
   // Map type - WebSocket uses 'file', CoreMessage uses 'document'
-  let messageType = wsMessage.type;
-  if (messageType === 'file') {
-    messageType = 'document';
-  }
+  const messageType: MessageTypeValue = wsMessage.type === 'file' ? 'document' : wsMessage.type;
 
   // Get media URL from attachments if available
   const mediaUrl = wsMessage.attachments?.[0]?.url || null;
