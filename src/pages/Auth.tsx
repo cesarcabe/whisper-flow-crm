@@ -110,20 +110,29 @@ export default function Auth() {
   return (
     <>
       <Helmet>
-        <title>Login - CRM WhatsApp Kanban</title>
-        <meta name="description" content="Acesse sua conta do CRM com pipelines Kanban e integração WhatsApp." />
+        <title>Login - New Flow CRM</title>
+        <meta name="description" content="Acesse sua conta do New Flow CRM. Gestão inteligente de conversas e vendas." />
       </Helmet>
       
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background p-4">
         <Card className="w-full max-w-md shadow-xl border-border/50">
           <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center">
-              <MessageSquare className="h-8 w-8 text-primary" />
+            <div className="mx-auto flex flex-col items-center gap-2">
+              <img 
+                src="/logo-newflow.png" 
+                alt="New Flow CRM" 
+                className="h-12 w-12 object-contain"
+                onError={(e) => {
+                  // Fallback to icon if image fails
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <MessageSquare className="h-8 w-8 text-primary hidden" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold">CRM Kanban</CardTitle>
+              <CardTitle className="text-2xl font-bold tracking-wide">NEW FLOW</CardTitle>
               <CardDescription className="mt-2">
-                Gerencie seus leads e conversas WhatsApp
+                Gestão inteligente de conversas
               </CardDescription>
             </div>
           </CardHeader>

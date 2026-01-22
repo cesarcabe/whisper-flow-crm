@@ -13,7 +13,7 @@ export default function WorkspaceAdmin() {
   return (
     <>
       <Helmet>
-        <title>Admin do Workspace - {workspace?.name || 'CRM'}</title>
+        <title>Configurações - {workspace?.name || 'New Flow CRM'}</title>
         <meta name="description" content="Gerencie os membros e configurações do seu workspace." />
       </Helmet>
 
