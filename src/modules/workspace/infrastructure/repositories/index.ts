@@ -1,0 +1,1 @@
+export { SupabaseWorkspaceRepository } from './SupabaseWorkspaceRepository';

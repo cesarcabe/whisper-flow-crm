@@ -1,0 +1,189 @@
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HelmetProvider } from 'react-helmet-async';
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
+import { ConversationProvider } from "@/modules/conversation/presentation/contexts/ConversationContext";
+import { AppLayout } from "@/components/layout/AppLayout";
+import Dashboard from "./pages/Dashboard";
+import Kanban from "./pages/Kanban";
+import Conversations from "./pages/Conversations";
+import Reports from "./pages/Reports";
+import Auth from "./pages/Auth";
+import SetupWorkspace from "./pages/SetupWorkspace";
+import WorkspaceAdmin from "./pages/WorkspaceAdmin";
+import AcceptInvitation from "./pages/AcceptInvitation";
+import NotFound from "./pages/NotFound";
+import { Loader2 } from "lucide-react";
+import { WebSocketTestPanel } from "@/components/test/WebSocketTestPanel";
+
+// QueryClient instance - stable reference
+const queryClient = new QueryClient();
+
+// Protected Route wrapper (requires auth + workspace)
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
+  const { workspaceId, loading: workspaceLoading } = useWorkspace();
+
+  if (authLoading || workspaceLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // If user has no workspace, redirect to setup
+  if (!workspaceId) {
+    return <Navigate to="/setup-workspace" replace />;
+  }
+
+  return <AppLayout>{children}</AppLayout>;
+}
+
+// Setup Route wrapper (requires auth, but NOT workspace)
+function SetupRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
+  const { workspaceId, loading: workspaceLoading } = useWorkspace();
+
+  if (authLoading || workspaceLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // If user already has workspace, go to home
+  if (workspaceId) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// Public Route wrapper (redirects to home if already logged in)
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/kanban"
+        element={
+          <ProtectedRoute>
+            <Kanban />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/conversations"
+        element={
+          <ProtectedRoute>
+            <Conversations />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <Reports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/workspace/admin"
+        element={
+          <ProtectedRoute>
+            <WorkspaceAdmin />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/test/websocket"
+        element={
+          <ProtectedRoute>
+            <WebSocketTestPanel />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/setup-workspace"
+        element={
+          <SetupRoute>
+            <SetupWorkspace />
+          </SetupRoute>
+        }
+      />
+      <Route
+        path="/auth"
+        element={
+          <PublicRoute>
+            <Auth />
+          </PublicRoute>
+        }
+      />
+      <Route path="/invite/:token" element={<AcceptInvitation />} />
+      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+}
+
+const App = () => (
+  <HelmetProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <WorkspaceProvider>
+              <ConversationProvider>
+                <AppRoutes />
+              </ConversationProvider>
+            </WorkspaceProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </HelmetProvider>
+);
+
+export default App;
