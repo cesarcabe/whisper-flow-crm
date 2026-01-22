@@ -110,8 +110,9 @@ export function MessageInput({
       });
 
       if (!result.success) {
-        console.error('[WA_SEND] error', result.error);
-        toast.error(result.error.message || 'Erro ao enviar mensagem');
+        const errorResult = result as { success: false; error: Error };
+        console.error('[WA_SEND] error', errorResult.error);
+        toast.error(errorResult.error?.message || 'Erro ao enviar mensagem');
         setMessage(previousMessage);
         return;
       }

@@ -127,7 +127,7 @@ export function CRMLayout() {
           minSize={20} 
           maxSize={50}
           className={cn(
-            'flex flex-col min-h-0 overflow-hidden',
+            'h-full flex flex-col min-h-0 overflow-hidden',
             selectedConversationId ? 'hidden md:flex' : 'flex'
           )}
         >
@@ -274,7 +274,7 @@ export function CRMLayout() {
         <ResizablePanel 
           defaultSize={70}
           className={cn(
-            'flex flex-col min-h-0 overflow-hidden',
+            'h-full flex flex-col min-h-0 overflow-hidden',
             !selectedConversationId ? 'hidden md:flex' : 'flex'
           )}
         >
