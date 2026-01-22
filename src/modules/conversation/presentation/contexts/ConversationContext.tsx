@@ -5,6 +5,7 @@ import { SupabaseConversationRepository } from '../../infrastructure/supabase/Su
 import { SupabaseMessageRepository } from '../../infrastructure/supabase/SupabaseMessageRepository';
 import { CHATENGINE_BASE_URL } from '../../infrastructure/chatengine/config';
 import { useChatEngineJwt } from '../hooks/useChatEngineJwt';
+import { WebSocketProvider } from '../../infrastructure/websocket/WebSocketContext';
 
 /**
  * ConversationContext Type
@@ -37,9 +38,26 @@ interface ConversationProviderProps {
  * Features:
  * - Creates ConversationService with appropriate repositories
  * - Automatically fetches JWT tokens for ChatEngine
+ * - Provides WebSocket connection for real-time updates
  * - Recreates service when workspaceId or token changes
  */
 export function ConversationProvider({ 
+  children, 
+  chatEngineBaseUrl = CHATENGINE_BASE_URL 
+}: ConversationProviderProps) {
+  return (
+    <WebSocketProvider baseUrl={chatEngineBaseUrl}>
+      <ConversationProviderInner chatEngineBaseUrl={chatEngineBaseUrl}>
+        {children}
+      </ConversationProviderInner>
+    </WebSocketProvider>
+  );
+}
+
+/**
+ * Inner provider that creates ConversationService
+ */
+function ConversationProviderInner({ 
   children, 
   chatEngineBaseUrl = CHATENGINE_BASE_URL 
 }: ConversationProviderProps) {

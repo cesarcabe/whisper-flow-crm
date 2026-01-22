@@ -2,9 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useConversation } from '../contexts/ConversationContext';
+import { useWebSocketContext } from '../../infrastructure/websocket/WebSocketContext';
+import { WebSocketMessage, WebSocketMessageStatus } from '../../infrastructure/websocket/types';
 import { Message as ModuleMessage } from '../../domain/entities/Message';
 import { Message as CoreMessage } from '@/core/domain/entities/Message';
 import { MessageMapper } from '@/infra/supabase/mappers/MessageMapper';
+import { MessageType } from '@/core/domain/value-objects/MessageType';
 import { Tables } from '@/integrations/supabase/types';
 
 type MessageRow = Tables<'messages'>;
@@ -35,6 +38,53 @@ function mapModuleToCoreMessage(m: ModuleMessage): CoreMessage {
 }
 
 /**
+ * Maps WebSocket message to core Message entity
+ */
+function mapWebSocketToCoreMessage(wsMessage: WebSocketMessage, workspaceId: string): CoreMessage {
+  // Determine if message is outgoing
+  // In ChatEngine, if senderId is not a phone number (JID), it's likely outgoing
+  // Common patterns: 'me', 'system', user IDs (UUIDs)
+  // Phone numbers typically look like: '5511999999999@s.whatsapp.net' or just '5511999999999'
+  const isPhoneNumber = /^\+?[1-9]\d{10,14}(@s\.whatsapp\.net)?$/.test(wsMessage.senderId);
+  const isOutgoing = !isPhoneNumber || wsMessage.senderId === 'me' || wsMessage.senderId === 'system';
+  
+  // Map status from WebSocket to CoreMessage status
+  let status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed' = 'sent';
+  if (wsMessage.status === 'pending') status = 'sending';
+  else if (wsMessage.status === 'sent') status = 'sent';
+  else if (wsMessage.status === 'delivered') status = 'delivered';
+  else if (wsMessage.status === 'read') status = 'read';
+  else if (wsMessage.status === 'failed') status = 'failed';
+
+  // Map type - WebSocket uses 'file', CoreMessage uses 'document'
+  let messageType = wsMessage.type;
+  if (messageType === 'file') {
+    messageType = 'document';
+  }
+
+  // Get media URL from attachments if available
+  const mediaUrl = wsMessage.attachments?.[0]?.url || null;
+
+  return MessageMapper.toDomain({
+    id: wsMessage.id,
+    conversation_id: wsMessage.conversationId,
+    workspace_id: workspaceId,
+    body: wsMessage.content,
+    type: messageType,
+    is_outgoing: isOutgoing,
+    status: status,
+    external_id: wsMessage.metadata?.providerMessageId || null,
+    media_url: mediaUrl,
+    reply_to_id: wsMessage.replyToMessageId || null,
+    quoted_message: null, // WebSocket doesn't send quoted message details
+    sent_by_user_id: isOutgoing ? (wsMessage.senderId !== 'me' && wsMessage.senderId !== 'system' ? wsMessage.senderId : null) : null,
+    whatsapp_number_id: null, // Will be set from conversation context if needed
+    error_message: null,
+    created_at: wsMessage.createdAt,
+  });
+}
+
+/**
  * useMessages hook - Supabase-based with Realtime updates
  * 
  * Features:
@@ -45,6 +95,7 @@ function mapModuleToCoreMessage(m: ModuleMessage): CoreMessage {
 export function useMessages(conversationId: string | null) {
   const { workspaceId } = useWorkspace();
   const { service: conversationService } = useConversation();
+  const { client: wsClient, isEnabled: isWebSocketEnabled } = useWebSocketContext();
   const [messages, setMessages] = useState<CoreMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -116,9 +167,86 @@ export function useMessages(conversationId: string | null) {
     }
   }, [fetchMessages, loadingMore, hasMore]);
 
-  // Setup realtime subscription for live updates
+  // WebSocket listeners for real-time updates (primary)
   useEffect(() => {
-    if (!workspaceId || !conversationId) return;
+    if (!isWebSocketEnabled || !wsClient || !conversationId || !workspaceId) {
+      return;
+    }
+
+    const handleMessage = (wsMessage: WebSocketMessage) => {
+      // Only process messages for current conversation
+      if (wsMessage.conversationId !== conversationId) {
+        return;
+      }
+
+      try {
+        const domainMessage = mapWebSocketToCoreMessage(wsMessage, workspaceId);
+        
+        setMessages((prev) => {
+          // Avoid duplicates
+          if (prev.some((m) => m.id === domainMessage.id)) return prev;
+          // Prepend new message at the beginning
+          return [domainMessage, ...prev];
+        });
+      } catch (e) {
+        console.warn('[useMessages] Failed to map WebSocket message:', e);
+      }
+    };
+
+    const handleStatus = (data: WebSocketMessageStatus) => {
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id === data.messageId) {
+            // Map WebSocket status to CoreMessage status
+            let newStatus: 'sending' | 'sent' | 'delivered' | 'read' | 'failed' = 'sent';
+            if (data.status === 'pending') newStatus = 'sending';
+            else if (data.status === 'sent') newStatus = 'sent';
+            else if (data.status === 'delivered') newStatus = 'delivered';
+            else if (data.status === 'read') newStatus = 'read';
+            else if (data.status === 'failed') newStatus = 'failed';
+            
+            // Update status by creating new message with updated status
+            // We need to convert CoreMessage back to row format, update status, and convert back
+            const row = {
+              id: msg.id,
+              conversation_id: msg.conversationId,
+              workspace_id: msg.workspaceId,
+              whatsapp_number_id: msg.whatsappNumberId,
+              sent_by_user_id: msg.sentByUserId,
+              body: msg.body,
+              type: msg.type.getValue(),
+              status: newStatus,
+              is_outgoing: msg.isOutgoing,
+              media_url: msg.mediaUrl,
+              external_id: msg.externalId,
+              error_message: msg.errorMessage,
+              reply_to_id: msg.replyToId,
+              quoted_message: msg.quotedMessage as unknown as null,
+              created_at: msg.createdAt.toISOString(),
+            };
+            
+            return MessageMapper.toDomain(row);
+          }
+          return msg;
+        })
+      );
+    };
+
+    wsClient.on('message', handleMessage);
+    wsClient.on('messageStatus', handleStatus);
+
+    return () => {
+      wsClient.off('message', handleMessage);
+      wsClient.off('messageStatus', handleStatus);
+    };
+  }, [wsClient, isWebSocketEnabled, conversationId, workspaceId]);
+
+  // Supabase Realtime subscription (fallback when WebSocket is not available)
+  useEffect(() => {
+    // Only use Supabase Realtime if WebSocket is not enabled
+    if (isWebSocketEnabled || !workspaceId || !conversationId) {
+      return;
+    }
 
     // Cleanup previous subscription
     if (channelRef.current) {
@@ -181,7 +309,7 @@ export function useMessages(conversationId: string | null) {
         channelRef.current = null;
       }
     };
-  }, [workspaceId, conversationId]);
+  }, [workspaceId, conversationId, isWebSocketEnabled]);
 
   // Initial fetch
   useEffect(() => {

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useConversationService, Conversation as DomainConversation } from '@/modules/conversation';
+import { useWebSocketContext } from '../../infrastructure/websocket/WebSocketContext';
+import { WebSocketConversation } from '../../infrastructure/websocket/types';
 import { Tables } from '@/integrations/supabase/types';
 
 type ConversationRow = Tables<'conversations'>;
@@ -85,6 +87,7 @@ function mapDomainToLegacy(domain: DomainConversation): LegacyConversationWithCo
 export function useConversations(whatsappNumberId: string | null) {
   const { workspaceId } = useWorkspace();
   const conversationService = useConversationService();
+  const { client: wsClient, isEnabled: isWebSocketEnabled } = useWebSocketContext();
   const [conversations, setConversations] = useState<LegacyConversationWithContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,9 +152,88 @@ export function useConversations(whatsappNumberId: string | null) {
     }
   }, [workspaceId, whatsappNumberId, conversationService]);
 
-  // Setup realtime subscription - Supabase realtime for now (hybrid approach)
+  // WebSocket listener for conversation updates (primary)
   useEffect(() => {
-    if (!workspaceId || !whatsappNumberId) return;
+    if (!isWebSocketEnabled || !wsClient || !workspaceId) {
+      return;
+    }
+
+    const handleConversation = (wsConversation: WebSocketConversation) => {
+      // Only process conversations for current workspace
+      if (wsConversation.workspaceId !== workspaceId) {
+        return;
+      }
+
+      // Filter by whatsappNumberId if provided
+      if (whatsappNumberId && wsConversation.whatsappNumberId !== whatsappNumberId) {
+        return
+      }
+
+      // Map WebSocket conversation to legacy format
+      // Note: WebSocket conversation doesn't have all fields, so we'll update existing or create minimal entry
+      setConversations((prev) => {
+        const index = prev.findIndex((c) => c.id === wsConversation.id)
+        
+        if (index >= 0) {
+          // Update existing conversation
+          const existing = prev[index]
+          const updated: LegacyConversationWithContact = {
+            ...existing,
+            last_message_at: wsConversation.lastMessage?.createdAt || existing.last_message_at,
+            updated_at: wsConversation.updatedAt,
+            lastMessagePreview: wsConversation.lastMessage?.content?.substring(0, 50) || existing.lastMessagePreview || '',
+          }
+          
+          // Re-sort by last_message_at descending
+          const newList = [...prev]
+          newList[index] = updated
+          return newList.sort((a, b) => {
+            const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0
+            const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0
+            return bTime - aTime
+          })
+        } else {
+          // New conversation - create minimal entry (will be enriched on next fetch)
+          const newConv: LegacyConversationWithContact = {
+            id: wsConversation.id,
+            contact_id: wsConversation.contactId || wsConversation.id,
+            whatsapp_number_id: wsConversation.whatsappNumberId || null,
+            workspace_id: workspaceId,
+            pipeline_id: null,
+            stage_id: null,
+            last_message_at: wsConversation.lastMessage?.createdAt || null,
+            unread_count: 0,
+            is_typing: false,
+            is_group: false,
+            remote_jid: wsConversation.id,
+            created_at: wsConversation.updatedAt,
+            updated_at: wsConversation.updatedAt,
+            contact: null,
+            lastMessagePreview: wsConversation.lastMessage?.content?.substring(0, 50) || '',
+            stage: null,
+          }
+          
+          // Add to list and sort
+          return [newConv, ...prev].sort((a, b) => {
+            const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0
+            const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0
+            return bTime - aTime
+          })
+        }
+      })
+    }
+
+    wsClient.on('conversation', handleConversation)
+
+    return () => {
+      wsClient.off('conversation', handleConversation)
+    }
+  }, [wsClient, isWebSocketEnabled, workspaceId, whatsappNumberId])
+
+  // Supabase Realtime subscription (fallback when WebSocket is not available)
+  useEffect(() => {
+    // Only use Supabase Realtime if WebSocket is not enabled
+    if (isWebSocketEnabled || !workspaceId || !whatsappNumberId) return;
 
     // Cleanup previous subscription
     if (channelRef.current) {
