@@ -112,7 +112,7 @@ export function MessageInput({
         replyToId: replyingTo?.id,
       });
 
-      if (!result.success) {
+      if (result.success === false) {
         console.error('[WA_SEND] error', result.error);
         toast.error(result.error.message || 'Erro ao enviar mensagem');
         setMessage(previousMessage);
