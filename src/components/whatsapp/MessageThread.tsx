@@ -158,7 +158,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
       {/* Contact Header */}
       <div className="flex items-center gap-3 p-3 border-b bg-card flex-shrink-0">
         <Avatar className="h-10 w-10">
