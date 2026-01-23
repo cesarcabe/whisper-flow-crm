@@ -17,12 +17,13 @@ interface CreateWhatsappDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (whatsappNumberId: string) => void;
+  connection?: ReturnType<typeof useWhatsappConnection>;
 }
 
-export function CreateWhatsappDialog({ open, onOpenChange, onCreated }: CreateWhatsappDialogProps) {
+export function CreateWhatsappDialog({ open, onOpenChange, onCreated, connection }: CreateWhatsappDialogProps) {
   const [internalName, setInternalName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const { creating, createInstance, error, setError } = useWhatsappConnection();
+  const { creating, createInstance, error, setError } = connection ?? useWhatsappConnection();
 
   const handleCreate = async () => {
     if (!internalName.trim()) {

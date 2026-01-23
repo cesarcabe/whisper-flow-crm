@@ -15,9 +15,10 @@ interface WhatsappQrModalProps {
   onOpenChange: (open: boolean) => void;
   whatsappNumberId: string | null;
   onConnected: () => void;
+  connection?: ReturnType<typeof useWhatsappConnection>;
 }
 
-export function WhatsappQrModal({ open, onOpenChange, whatsappNumberId, onConnected }: WhatsappQrModalProps) {
+export function WhatsappQrModal({ open, onOpenChange, whatsappNumberId, onConnected, connection }: WhatsappQrModalProps) {
   const {
     loadingQr,
     qrCode,
@@ -30,7 +31,7 @@ export function WhatsappQrModal({ open, onOpenChange, whatsappNumberId, onConnec
     retryConnection,
     resetState,
     setConnectionStatus,
-  } = useWhatsappConnection();
+  } = connection ?? useWhatsappConnection();
 
   const [retryCount, setRetryCount] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);

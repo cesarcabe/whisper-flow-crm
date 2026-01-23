@@ -3,6 +3,7 @@ import { Smartphone, Plus, Loader2, AlertTriangle, RefreshCw } from 'lucide-reac
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useWhatsappNumbers } from '@/hooks/useWhatsappNumbers';
+import { useWhatsappConnection } from '@/hooks/useWhatsappConnection';
 import { usePipelines } from '@/hooks/usePipelines';
 import { WhatsappConnectionCard } from './WhatsappConnectionCard';
 import { CreateWhatsappDialog } from './CreateWhatsappDialog';
@@ -10,6 +11,7 @@ import { WhatsappQrModal } from './WhatsappQrModal';
 
 export function WhatsappSettingsTab() {
   const { numbers, loading, error, refetch, updatePipeline, updateInternalName, deleteNumber } = useWhatsappNumbers();
+  const connection = useWhatsappConnection();
   const { pipelines } = usePipelines();
   const [createOpen, setCreateOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -112,6 +114,7 @@ export function WhatsappSettingsTab() {
           refetch();
           handleShowQr(id);
         }}
+        connection={connection}
       />
 
       <WhatsappQrModal
@@ -119,6 +122,7 @@ export function WhatsappSettingsTab() {
         onOpenChange={setQrModalOpen}
         whatsappNumberId={selectedNumber}
         onConnected={handleQrConnected}
+        connection={connection}
       />
     </div>
   );
