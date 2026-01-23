@@ -5,7 +5,7 @@
  * Cada mensagem tem um clientId único para reconciliação com a resposta do servidor.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { Message } from '@/core/domain/entities/Message';
 import { MessageMapper } from '@/infra/supabase/mappers/MessageMapper';
 
@@ -34,55 +34,51 @@ export interface OptimisticMessage {
   retryCount: number;
 }
 
-interface UseOptimisticMessagesReturn {
-  /** Lista de mensagens pendentes para uma conversa */
-  getPendingMessages: (conversationId: string) => OptimisticMessage[];
-  /** Adiciona uma mensagem otimista */
-  addOptimisticMessage: (message: Omit<OptimisticMessage, 'status' | 'createdAt' | 'retryCount'>) => OptimisticMessage;
-  /** Marca mensagem como enviada com sucesso */
-  confirmMessage: (clientId: string, serverId?: string) => void;
-  /** Marca mensagem como falha */
-  failMessage: (clientId: string, error: string) => void;
-  /** Remove uma mensagem (quando já está na lista real) */
-  removeOptimisticMessage: (clientId: string) => void;
-  /** Reconcilia com mensagem do servidor (para evitar duplicação) */
-  reconcileWithServer: (conversationId: string, serverMessageId: string, clientId?: string) => boolean;
-  /** Retorna todas as mensagens pendentes como entities Message para exibição */
-  getOptimisticAsMessages: (conversationId: string, workspaceId: string) => Message[];
-  /** Limpa mensagens confirmadas de uma conversa */
-  clearConfirmed: (conversationId: string) => void;
-  /** Permite reenviar uma mensagem que falhou */
-  retryMessage: (clientId: string) => OptimisticMessage | null;
-  /** Verifica se um clientId ou serverId já foi processado */
-  isProcessed: (id: string) => boolean;
-}
+// ============================================
+// Store Global (Singleton)
+// ============================================
 
-// Store global para mensagens otimistas (por conversa)
-const optimisticMessagesStore = new Map<string, Map<string, OptimisticMessage>>();
-// Cache de IDs já processados para evitar duplicação
-const processedIds = new Set<string>();
+type Listener = () => void;
 
-export function useOptimisticMessages(): UseOptimisticMessagesReturn {
-  // Força re-render quando o store muda
-  const [, forceUpdate] = useState({});
-  const updateTrigger = useCallback(() => forceUpdate({}), []);
+class OptimisticMessagesStore {
+  private messages = new Map<string, Map<string, OptimisticMessage>>();
+  private processedIds = new Set<string>();
+  private listeners = new Set<Listener>();
 
-  const getConversationStore = useCallback((conversationId: string): Map<string, OptimisticMessage> => {
-    if (!optimisticMessagesStore.has(conversationId)) {
-      optimisticMessagesStore.set(conversationId, new Map());
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private notify() {
+    this.listeners.forEach(listener => listener());
+  }
+
+  getSnapshot(): number {
+    // Retorna um "version" que muda quando o store muda
+    let count = 0;
+    for (const [, store] of this.messages) {
+      count += store.size;
     }
-    return optimisticMessagesStore.get(conversationId)!;
-  }, []);
+    return count;
+  }
 
-  const getPendingMessages = useCallback((conversationId: string): OptimisticMessage[] => {
-    const store = getConversationStore(conversationId);
+  private getConversationStore(conversationId: string): Map<string, OptimisticMessage> {
+    if (!this.messages.has(conversationId)) {
+      this.messages.set(conversationId, new Map());
+    }
+    return this.messages.get(conversationId)!;
+  }
+
+  getPendingMessages(conversationId: string): OptimisticMessage[] {
+    const store = this.getConversationStore(conversationId);
     return Array.from(store.values()).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  }, [getConversationStore]);
+  }
 
-  const addOptimisticMessage = useCallback((
+  addOptimisticMessage(
     message: Omit<OptimisticMessage, 'status' | 'createdAt' | 'retryCount'>
-  ): OptimisticMessage => {
-    const store = getConversationStore(message.conversationId);
+  ): OptimisticMessage {
+    const store = this.getConversationStore(message.conversationId);
     
     const optimisticMessage: OptimisticMessage = {
       ...message,
@@ -92,59 +88,58 @@ export function useOptimisticMessages(): UseOptimisticMessagesReturn {
     };
     
     store.set(message.clientId, optimisticMessage);
-    processedIds.add(message.clientId);
-    updateTrigger();
+    this.processedIds.add(message.clientId);
+    this.notify();
     
     return optimisticMessage;
-  }, [getConversationStore, updateTrigger]);
+  }
 
-  const confirmMessage = useCallback((clientId: string, serverId?: string) => {
-    // Encontrar a mensagem em qualquer conversa
-    for (const [, store] of optimisticMessagesStore) {
+  confirmMessage(clientId: string, serverId?: string): void {
+    for (const [, store] of this.messages) {
       if (store.has(clientId)) {
         const message = store.get(clientId)!;
         message.status = 'sent';
         if (serverId) {
           message.serverId = serverId;
-          processedIds.add(serverId);
+          this.processedIds.add(serverId);
         }
-        updateTrigger();
+        this.notify();
         return;
       }
     }
-  }, [updateTrigger]);
+  }
 
-  const failMessage = useCallback((clientId: string, error: string) => {
-    for (const [, store] of optimisticMessagesStore) {
+  failMessage(clientId: string, error: string): void {
+    for (const [, store] of this.messages) {
       if (store.has(clientId)) {
         const message = store.get(clientId)!;
         message.status = 'failed';
         message.error = error;
-        updateTrigger();
+        this.notify();
         return;
       }
     }
-  }, [updateTrigger]);
+  }
 
-  const removeOptimisticMessage = useCallback((clientId: string) => {
-    for (const [, store] of optimisticMessagesStore) {
+  removeOptimisticMessage(clientId: string): void {
+    for (const [, store] of this.messages) {
       if (store.has(clientId)) {
         store.delete(clientId);
-        updateTrigger();
+        this.notify();
         return;
       }
     }
-  }, [updateTrigger]);
+  }
 
-  const reconcileWithServer = useCallback((
+  reconcileWithServer(
     conversationId: string, 
     serverMessageId: string, 
     clientId?: string
-  ): boolean => {
-    const store = getConversationStore(conversationId);
+  ): boolean {
+    const store = this.getConversationStore(conversationId);
     
     // Se já processamos esse ID do servidor, ignorar
-    if (processedIds.has(serverMessageId)) {
+    if (this.processedIds.has(serverMessageId)) {
       return true;
     }
     
@@ -153,10 +148,10 @@ export function useOptimisticMessages(): UseOptimisticMessagesReturn {
       const message = store.get(clientId)!;
       message.serverId = serverMessageId;
       message.status = 'sent';
-      processedIds.add(serverMessageId);
+      this.processedIds.add(serverMessageId);
       // Remover da lista otimista pois agora está na lista real
       store.delete(clientId);
-      updateTrigger();
+      this.notify();
       return true;
     }
     
@@ -164,17 +159,17 @@ export function useOptimisticMessages(): UseOptimisticMessagesReturn {
     for (const [key, message] of store) {
       if (message.serverId === serverMessageId) {
         store.delete(key);
-        updateTrigger();
+        this.notify();
         return true;
       }
     }
     
-    processedIds.add(serverMessageId);
+    this.processedIds.add(serverMessageId);
     return false;
-  }, [getConversationStore, updateTrigger]);
+  }
 
-  const getOptimisticAsMessages = useCallback((conversationId: string, workspaceId: string): Message[] => {
-    const store = getConversationStore(conversationId);
+  getOptimisticAsMessages(conversationId: string, workspaceId: string): Message[] {
+    const store = this.getConversationStore(conversationId);
     const messages: Message[] = [];
     
     for (const opt of store.values()) {
@@ -182,12 +177,12 @@ export function useOptimisticMessages(): UseOptimisticMessagesReturn {
       if (opt.status === 'sending' || opt.status === 'failed') {
         try {
           const message = MessageMapper.toDomain({
-            id: opt.clientId, // Usar clientId como ID temporário
+            id: opt.clientId,
             conversation_id: opt.conversationId,
             workspace_id: workspaceId,
             body: opt.content,
             type: opt.type,
-            is_outgoing: true, // Mensagens otimistas são sempre enviadas pelo usuário
+            is_outgoing: true,
             status: opt.status,
             external_id: null,
             media_url: null,
@@ -200,16 +195,16 @@ export function useOptimisticMessages(): UseOptimisticMessagesReturn {
           });
           messages.push(message);
         } catch (e) {
-          console.error('[useOptimisticMessages] Failed to create Message entity:', e);
+          console.error('[OptimisticStore] Failed to create Message entity:', e);
         }
       }
     }
     
     return messages;
-  }, [getConversationStore]);
+  }
 
-  const clearConfirmed = useCallback((conversationId: string) => {
-    const store = getConversationStore(conversationId);
+  clearConfirmed(conversationId: string): void {
+    const store = this.getConversationStore(conversationId);
     const toDelete: string[] = [];
     
     for (const [key, message] of store) {
@@ -218,44 +213,92 @@ export function useOptimisticMessages(): UseOptimisticMessagesReturn {
       }
     }
     
-    toDelete.forEach(key => store.delete(key));
     if (toDelete.length > 0) {
-      updateTrigger();
+      toDelete.forEach(key => store.delete(key));
+      this.notify();
     }
-  }, [getConversationStore, updateTrigger]);
+  }
 
-  const retryMessage = useCallback((clientId: string): OptimisticMessage | null => {
-    for (const [, store] of optimisticMessagesStore) {
+  retryMessage(clientId: string): OptimisticMessage | null {
+    for (const [, store] of this.messages) {
       if (store.has(clientId)) {
         const message = store.get(clientId)!;
         if (message.status === 'failed') {
           message.status = 'sending';
           message.error = undefined;
           message.retryCount += 1;
-          updateTrigger();
+          this.notify();
           return message;
         }
         return null;
       }
     }
     return null;
-  }, [updateTrigger]);
+  }
 
-  const isProcessed = useCallback((id: string): boolean => {
-    return processedIds.has(id);
-  }, []);
+  isProcessed(id: string): boolean {
+    return this.processedIds.has(id);
+  }
+}
 
+// Singleton instance
+const store = new OptimisticMessagesStore();
+
+// ============================================
+// Hook
+// ============================================
+
+interface UseOptimisticMessagesReturn {
+  getPendingMessages: (conversationId: string) => OptimisticMessage[];
+  addOptimisticMessage: (message: Omit<OptimisticMessage, 'status' | 'createdAt' | 'retryCount'>) => OptimisticMessage;
+  confirmMessage: (clientId: string, serverId?: string) => void;
+  failMessage: (clientId: string, error: string) => void;
+  removeOptimisticMessage: (clientId: string) => void;
+  reconcileWithServer: (conversationId: string, serverMessageId: string, clientId?: string) => boolean;
+  getOptimisticAsMessages: (conversationId: string, workspaceId: string) => Message[];
+  clearConfirmed: (conversationId: string) => void;
+  retryMessage: (clientId: string) => OptimisticMessage | null;
+  isProcessed: (id: string) => boolean;
+}
+
+export function useOptimisticMessages(): UseOptimisticMessagesReturn {
+  // Subscribe to store changes - triggers re-render when store changes
+  useSyncExternalStore(
+    useCallback((onStoreChange) => store.subscribe(onStoreChange), []),
+    useCallback(() => store.getSnapshot(), [])
+  );
+
+  // Return stable function references
   return {
-    getPendingMessages,
-    addOptimisticMessage,
-    confirmMessage,
-    failMessage,
-    removeOptimisticMessage,
-    reconcileWithServer,
-    getOptimisticAsMessages,
-    clearConfirmed,
-    retryMessage,
-    isProcessed,
+    getPendingMessages: useCallback((conversationId: string) => 
+      store.getPendingMessages(conversationId), []),
+    
+    addOptimisticMessage: useCallback((message: Omit<OptimisticMessage, 'status' | 'createdAt' | 'retryCount'>) => 
+      store.addOptimisticMessage(message), []),
+    
+    confirmMessage: useCallback((clientId: string, serverId?: string) => 
+      store.confirmMessage(clientId, serverId), []),
+    
+    failMessage: useCallback((clientId: string, error: string) => 
+      store.failMessage(clientId, error), []),
+    
+    removeOptimisticMessage: useCallback((clientId: string) => 
+      store.removeOptimisticMessage(clientId), []),
+    
+    reconcileWithServer: useCallback((conversationId: string, serverMessageId: string, clientId?: string) => 
+      store.reconcileWithServer(conversationId, serverMessageId, clientId), []),
+    
+    getOptimisticAsMessages: useCallback((conversationId: string, workspaceId: string) => 
+      store.getOptimisticAsMessages(conversationId, workspaceId), []),
+    
+    clearConfirmed: useCallback((conversationId: string) => 
+      store.clearConfirmed(conversationId), []),
+    
+    retryMessage: useCallback((clientId: string) => 
+      store.retryMessage(clientId), []),
+    
+    isProcessed: useCallback((id: string) => 
+      store.isProcessed(id), []),
   };
 }
 
