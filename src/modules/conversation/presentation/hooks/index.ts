@@ -8,6 +8,12 @@ export { useChatEngineJwt } from './useChatEngineJwt';
 export { useSendMessage } from './useSendMessage';
 export { useWebSocket } from './useWebSocket';
 export { 
+  useOptimisticMessages, 
+  createClientMessageId,
+  type OptimisticMessage,
+  type OptimisticMessageStatus 
+} from './useOptimisticMessages';
+export { 
   useMediaUrl, 
   useMediaUrlDirect, 
   clearMediaUrlCache, 

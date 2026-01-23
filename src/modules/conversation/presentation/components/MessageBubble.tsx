@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Reply, Copy, Forward, Trash2, SmilePlus, Check, CheckCheck } from 'lucide-react';
+import { Reply, Copy, Forward, Trash2, SmilePlus, Check, CheckCheck, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -7,10 +7,12 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
+import { Button } from '@/components/ui/button';
 import { AudioPlayer } from './AudioPlayer';
 import { ImageViewer } from './ImageViewer';
 import { ReactionPicker } from './ReactionPicker';
 import { useMessageReactions } from '@/hooks/useMessageReactions';
+import { useSendMessage } from '../hooks/useSendMessage';
 import { cn } from '@/lib/utils';
 import { formatTime } from '@/lib/date-utils';
 import { toast } from 'sonner';
@@ -65,9 +67,33 @@ export function MessageBubble({
   const isImage = message.type.getValue() === 'image';
   const { groupedReactions, toggleReaction } = useMessageReactions(message.id);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const { retrySend } = useSendMessage();
 
   // Get quoted message from domain entity
   const quotedMessage = message.quotedMessage;
+  
+  // Estados especiais para mensagens otimistas
+  const isSending = message.status === 'sending';
+  const isFailed = message.status === 'failed';
+  const isOptimistic = message.id.startsWith('opt_');
+  
+  // Handler para reenviar mensagem que falhou
+  const handleRetry = useCallback(async () => {
+    if (!isFailed || isRetrying) return;
+    
+    setIsRetrying(true);
+    try {
+      const result = await retrySend(message.id);
+      if (result && !result.success) {
+        toast.error('Falha ao reenviar mensagem');
+      }
+    } catch (err) {
+      toast.error('Erro ao reenviar');
+    } finally {
+      setIsRetrying(false);
+    }
+  }, [message.id, isFailed, isRetrying, retrySend]);
 
   const handleCopy = useCallback(() => {
     if (message.body) {
@@ -126,7 +152,7 @@ export function MessageBubble({
 
     switch (message.status) {
       case 'sending':
-        return <span className="text-[10px] opacity-60">⏳</span>;
+        return <Loader2 className="h-3 w-3 opacity-60 animate-spin" />;
       case 'sent':
         return <Check className="h-3 w-3 opacity-60" />;
       case 'delivered':
@@ -134,7 +160,7 @@ export function MessageBubble({
       case 'read':
         return <CheckCheck className="h-3 w-3 text-sky-400" />;
       case 'failed':
-        return <span className="text-[10px] text-destructive">✕</span>;
+        return <AlertCircle className="h-3 w-3 text-destructive" />;
       default:
         return null;
     }
@@ -168,7 +194,9 @@ export function MessageBubble({
                 'px-3 py-2 rounded-xl relative',
                 isOutgoing
                   ? 'bg-[hsl(var(--message-sent))] text-[hsl(var(--message-sent-text))] rounded-tr-sm'
-                  : 'bg-[hsl(var(--message-received))] text-[hsl(var(--message-received-text))] rounded-tl-sm shadow-sm'
+                  : 'bg-[hsl(var(--message-received))] text-[hsl(var(--message-received-text))] rounded-tl-sm shadow-sm',
+                isSending && 'opacity-70',
+                isFailed && 'border border-destructive/50'
               )}
             >
               {/* Quoted message */}
@@ -200,6 +228,31 @@ export function MessageBubble({
                 <span className="text-[11px] opacity-60">{time}</span>
                 {renderStatus()}
               </div>
+              
+              {/* Botão de reenvio para mensagens que falharam */}
+              {isFailed && (
+                <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-destructive/20">
+                  <span className="text-[10px] text-destructive">
+                    {message.errorMessage || 'Falha no envio'}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRetry}
+                    disabled={isRetrying}
+                    className="h-6 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    {isRetrying ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <>
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Reenviar
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Reactions */}

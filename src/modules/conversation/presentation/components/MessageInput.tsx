@@ -33,7 +33,9 @@ export function MessageInput({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { sendMessage, isSending: isSendingText } = useSendMessage();
+  const { sendMessage } = useSendMessage();
+  // isSendingMedia só bloqueia durante envio de mídia (imagem/áudio)
+  // Mensagens de texto NÃO bloqueiam - usamos optimistic updates
   const isSending = isSendingMedia;
   
   const {
@@ -97,34 +99,37 @@ export function MessageInput({
 
   const handleSendText = useCallback(async () => {
     const text = message.trim();
-    if (!text || isSendingText) return;
+    if (!text) return;
 
     console.log('[WA_SEND]', { conversationId, replyToId: replyingTo?.id });
-    const previousMessage = message;
+    
+    // 1. Limpar input IMEDIATAMENTE para permitir próxima digitação
     setMessage('');
-    try {
-      const result = await sendMessage({
-        conversationId,
-        message: text,
-        replyToId: replyingTo?.id,
-      });
+    
+    // 2. Limpar reply IMEDIATAMENTE
+    onClearReply?.();
+    
+    // 3. Manter foco no textarea para continuar digitando
+    textareaRef.current?.focus();
+    
+    // 4. Enviar em background (não bloqueia - usa optimistic updates)
+    // O sendMessage já adiciona a mensagem otimista antes de enviar
+    const result = await sendMessage({
+      conversationId,
+      message: text,
+      replyToId: replyingTo?.id,
+    });
 
-      if (!result.success) {
-        const errorResult = result as { success: false; error: Error };
-        console.error('[WA_SEND] error', errorResult.error);
-        toast.error(errorResult.error?.message || 'Erro ao enviar mensagem');
-        setMessage(previousMessage);
-        return;
-      }
-
-      onClearReply?.();
-      // Realtime subscription handles adding new messages - no refetch needed
-    } catch (err: any) {
-      console.error('[WA_SEND] error', err);
-      toast.error('Erro ao enviar mensagem');
-      setMessage(previousMessage);
+    // 5. Se falhou na criação da mensagem otimista (ex: mensagem vazia), mostrar erro
+    if (!result.success) {
+      const errorResult = result as { success: false; error: Error; clientMessageId: string };
+      console.error('[WA_SEND] error', errorResult.error);
+      // Erro já será exibido na UI via status 'failed' da mensagem
     }
-  }, [message, conversationId, isSendingText, replyingTo?.id, onClearReply, sendMessage]);
+    
+    // Callback opcional
+    onMessageSent?.();
+  }, [message, conversationId, replyingTo?.id, onClearReply, sendMessage, onMessageSent]);
 
   const handleSendImage = useCallback(async () => {
     if (!selectedImage || isSendingMedia) return;
@@ -376,7 +381,7 @@ export function MessageInput({
           variant="ghost"
           size="icon"
           className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
-          disabled={disabled || isSending}
+          disabled={disabled || isSendingMedia}
         >
           <Smile className="h-5 w-5" />
         </Button>
@@ -385,7 +390,7 @@ export function MessageInput({
           variant="ghost"
           size="icon"
           className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
-          disabled={disabled || isSending}
+          disabled={disabled || isSendingMedia}
           onClick={() => imageInputRef.current?.click()}
         >
           <Image className="h-5 w-5" />
@@ -396,18 +401,18 @@ export function MessageInput({
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={selectedImage ? "Adicione uma legenda..." : "Digite uma mensagem..."}
-          disabled={disabled || isSending}
+          disabled={disabled || isSendingMedia}
           className="min-h-[44px] max-h-[120px] resize-none flex-1"
           rows={1}
         />
-        {canSend || isSending ? (
+        {canSend || isSendingMedia ? (
           <Button
             size="icon"
             onClick={handleSend}
-            disabled={disabled || isSending || !canSend}
+            disabled={disabled || isSendingMedia || !canSend}
             className="h-10 w-10 shrink-0"
           >
-            {isSending ? (
+            {isSendingMedia ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Send className="h-4 w-4" />

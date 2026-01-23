@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useConversation } from '../contexts/ConversationContext';
@@ -8,6 +8,7 @@ import { Message as CoreMessage } from '@/core/domain/entities/Message';
 import { MessageMapper } from '@/infra/supabase/mappers/MessageMapper';
 import { MessageTypeValue } from '@/core/domain/value-objects/MessageType';
 import { Tables } from '@/integrations/supabase/types';
+import { useOptimisticMessages } from './useOptimisticMessages';
 
 type MessageRow = Tables<'messages'>;
 
@@ -87,12 +88,13 @@ function mapWebSocketToCoreMessage(wsMessage: WebSocketMessage, workspaceId: str
  * - Uses Supabase for data fetching (offset-based pagination)
  * - Supabase realtime for live updates
  * - Backwards compatible interface for existing components
+ * - Optimistic updates for instant UI feedback
  */
 export function useMessages(conversationId: string | null) {
   const { workspaceId } = useWorkspace();
   const { service: conversationService } = useConversation();
   const { client: wsClient, isEnabled: isWebSocketEnabled } = useWebSocketContext();
-  const [messages, setMessages] = useState<CoreMessage[]>([]);
+  const [serverMessages, setServerMessages] = useState<CoreMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,13 +103,16 @@ export function useMessages(conversationId: string | null) {
   
   // Offset-based pagination
   const offsetRef = useRef<number>(0);
+  
+  // Optimistic messages hook
+  const optimistic = useOptimisticMessages();
 
   /**
    * Fetch messages using offset-based pagination
    */
   const fetchMessages = useCallback(async (loadMore = false) => {
     if (!workspaceId || !conversationId) {
-      setMessages([]);
+      setServerMessages([]);
       setLoading(false);
       return;
     }
@@ -144,18 +149,21 @@ export function useMessages(conversationId: string | null) {
       setHasMore(domainMessages.length === PAGE_SIZE);
 
       if (loadMore) {
-        setMessages(prev => [...prev, ...domainMessages]);
+        setServerMessages(prev => [...prev, ...domainMessages]);
       } else {
-        setMessages(domainMessages);
+        setServerMessages(domainMessages);
       }
-    } catch (err: any) {
+      
+      // Limpar mensagens otimistas confirmadas após carregar do servidor
+      optimistic.clearConfirmed(conversationId);
+    } catch (err: unknown) {
       console.error('[useMessages] fetch_error', err);
-      setError(err.message || 'Erro ao carregar mensagens');
+      setError(err instanceof Error ? err.message : 'Erro ao carregar mensagens');
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [workspaceId, conversationId, conversationService]);
+  }, [workspaceId, conversationId, conversationService, optimistic]);
 
   const loadMore = useCallback(() => {
     if (!loadingMore && hasMore) {
@@ -178,25 +186,21 @@ export function useMessages(conversationId: string | null) {
       try {
         const domainMessage = mapWebSocketToCoreMessage(wsMessage, workspaceId);
         
-        setMessages((prev) => {
+        // Tentar reconciliar com mensagem otimista
+        // O messageId do WebSocket pode ser o clientId que enviamos
+        const wasReconciled = optimistic.reconcileWithServer(
+          conversationId,
+          domainMessage.id,
+          wsMessage.id // pode ser o clientId
+        );
+        
+        setServerMessages((prev) => {
           // Avoid duplicates
           if (prev.some((m) => m.id === domainMessage.id)) return prev;
-          // Reconcile optimistic outgoing message if possible
-          if (domainMessage.isOutgoing) {
-            const matchIndex = prev.findIndex((m) => {
-              if (!m.isOutgoing) return false;
-              if (m.body !== domainMessage.body) return false;
-              if (m.conversationId !== domainMessage.conversationId) return false;
-              if (!m.isSending()) return false;
-              const timeDiff = Math.abs(m.createdAt.getTime() - domainMessage.createdAt.getTime());
-              return timeDiff <= 2 * 60 * 1000;
-            });
-
-            if (matchIndex >= 0) {
-              const next = [...prev];
-              next[matchIndex] = domainMessage;
-              return next;
-            }
+          
+          // Verificar se já foi processado via optimistic
+          if (optimistic.isProcessed(domainMessage.id)) {
+            // Já reconciliado, apenas adicionar à lista real
           }
 
           // Prepend new message at the beginning
@@ -208,7 +212,15 @@ export function useMessages(conversationId: string | null) {
     };
 
     const handleStatus = (data: WebSocketMessageStatus) => {
-      setMessages((prev) =>
+      // Primeiro, tentar atualizar na lista de mensagens otimistas
+      if (data.status === 'sent' || data.status === 'delivered' || data.status === 'read') {
+        optimistic.confirmMessage(data.messageId);
+      } else if (data.status === 'failed') {
+        optimistic.failMessage(data.messageId, 'Falha no envio');
+      }
+      
+      // Também atualizar na lista de mensagens do servidor
+      setServerMessages((prev) =>
         prev.map((msg) => {
           if (msg.id === data.messageId) {
             // Map WebSocket status to CoreMessage status
@@ -220,7 +232,6 @@ export function useMessages(conversationId: string | null) {
             else if (data.status === 'failed') newStatus = 'failed';
             
             // Update status by creating new message with updated status
-            // We need to convert CoreMessage back to row format, update status, and convert back
             const row = {
               id: msg.id,
               conversation_id: msg.conversationId,
@@ -253,7 +264,7 @@ export function useMessages(conversationId: string | null) {
       wsClient.off('message', handleMessage);
       wsClient.off('messageStatus', handleStatus);
     };
-  }, [wsClient, isWebSocketEnabled, conversationId, workspaceId]);
+  }, [wsClient, isWebSocketEnabled, conversationId, workspaceId, optimistic]);
 
   // Supabase Realtime subscription (fallback when WebSocket is not available)
   useEffect(() => {
@@ -283,7 +294,10 @@ export function useMessages(conversationId: string | null) {
           try {
             const newMessage = MessageMapper.toDomain(newRow);
             
-            setMessages((prev) => {
+            // Tentar reconciliar com mensagem otimista
+            optimistic.reconcileWithServer(conversationId, newMessage.id);
+            
+            setServerMessages((prev) => {
               // Avoid duplicates
               if (prev.some((m) => m.id === newMessage.id)) return prev;
               // Prepend new message at the beginning
@@ -307,7 +321,7 @@ export function useMessages(conversationId: string | null) {
           
           try {
             const updatedMessage = MessageMapper.toDomain(updatedRow);
-            setMessages((prev) => 
+            setServerMessages((prev) => 
               prev.map((m) => (m.id === updatedMessage.id ? updatedMessage : m))
             );
           } catch (e) {
@@ -323,12 +337,31 @@ export function useMessages(conversationId: string | null) {
         channelRef.current = null;
       }
     };
-  }, [workspaceId, conversationId, isWebSocketEnabled]);
+  }, [workspaceId, conversationId, isWebSocketEnabled, optimistic]);
 
   // Initial fetch
   useEffect(() => {
     fetchMessages(false);
   }, [fetchMessages]);
+
+  // Combinar mensagens do servidor com mensagens otimistas
+  // Mensagens otimistas aparecem no final (mais recentes)
+  const messages = useMemo(() => {
+    if (!conversationId || !workspaceId) return serverMessages;
+    
+    const optimisticMessages = optimistic.getOptimisticAsMessages(conversationId, workspaceId);
+    
+    if (optimisticMessages.length === 0) {
+      return serverMessages;
+    }
+    
+    // Filtrar mensagens otimistas que já estão na lista do servidor
+    const serverIds = new Set(serverMessages.map(m => m.id));
+    const uniqueOptimistic = optimisticMessages.filter(m => !serverIds.has(m.id));
+    
+    // Mensagens otimistas vão no início (são as mais recentes)
+    return [...uniqueOptimistic, ...serverMessages];
+  }, [serverMessages, conversationId, workspaceId, optimistic]);
 
   return {
     messages,
