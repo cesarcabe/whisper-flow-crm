@@ -120,7 +120,7 @@ export function CRMLayout() {
 
   return (
     <div className="h-full w-full min-h-0 bg-background overflow-hidden">
-      <ResizablePanelGroup direction="horizontal" className="h-full">
+      <ResizablePanelGroup direction="horizontal" className="h-full min-h-0">
         {/* Conversations List Panel */}
         <ResizablePanel 
           defaultSize={30} 
