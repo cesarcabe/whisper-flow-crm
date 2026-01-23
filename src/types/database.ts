@@ -26,7 +26,7 @@ export interface Workspace {
   name: string;
   city: string | null;
   state: string | null;
-  created_by: string | null;
+  owner_id: string | null;
   created_at: string;
   updated_at: string;
 }

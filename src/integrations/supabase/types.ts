@@ -1296,7 +1296,7 @@ export type Database = {
         Row: {
           city: string | null
           created_at: string
-          created_by: string | null
+          owner_id: string | null
           id: string
           name: string
           state: string | null
@@ -1305,7 +1305,7 @@ export type Database = {
         Insert: {
           city?: string | null
           created_at?: string
-          created_by?: string | null
+          owner_id?: string | null
           id?: string
           name: string
           state?: string | null
@@ -1314,7 +1314,7 @@ export type Database = {
         Update: {
           city?: string | null
           created_at?: string
-          created_by?: string | null
+          owner_id?: string | null
           id?: string
           name?: string
           state?: string | null
@@ -1322,8 +1322,8 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "workspaces_created_by_fkey"
-            columns: ["created_by"]
+            foreignKeyName: "workspaces_owner_id_fkey"
+            columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

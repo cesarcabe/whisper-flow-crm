@@ -21,7 +21,7 @@ export class WorkspaceMapper {
       name: row.name,
       city: row.city,
       state: row.state,
-      createdBy: row.created_by,
+      createdBy: row.owner_id,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
