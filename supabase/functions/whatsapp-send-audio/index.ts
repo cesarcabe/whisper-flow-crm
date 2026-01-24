@@ -205,8 +205,11 @@ Deno.serve(async (req: Request) => {
     const messageId = insertedMessage.id;
 
     // Send via Evolution API - using sendWhatsAppAudio endpoint
-    const baseUrl = EVOLUTION_BASE_URL.replace(/\/+$/, ''); // Remove trailing slashes
+    // Normalize URL: remove trailing slashes AND leading slashes from path segment
+    const baseUrl = EVOLUTION_BASE_URL.replace(/\/+$/, '');
     const evolutionUrl = `${baseUrl}/message/sendWhatsAppAudio/${whatsappNumber.instance_name}`;
+    
+    console.log('[Edge:whatsapp-send-audio] evolution_url', { evolutionUrl });
     
     console.log('[Edge:whatsapp-send-audio] calling_evolution', { 
       instance: whatsappNumber.instance_name,
