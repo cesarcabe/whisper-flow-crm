@@ -1,11 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Send, Loader2, Smile, Image, Mic, Trash2, X, Reply } from 'lucide-react';
+import { Send, Loader2, Smile, Paperclip, Mic, Trash2, X, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { cn } from '@/lib/utils';
 import { Message } from '@/core/domain/entities/Message';
 import { useSendMessage } from '@/modules/conversation/presentation/hooks/useSendMessage';
 
@@ -18,7 +17,9 @@ interface MessageInputProps {
 }
 
 const MAX_IMAGE_SIZE_MB = 10;
+const MAX_VIDEO_SIZE_MB = 50;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
 
 export function MessageInput({ 
   conversationId, 
@@ -29,13 +30,12 @@ export function MessageInput({
 }: MessageInputProps) {
   const [message, setMessage] = useState('');
   const [isSendingMedia, setIsSendingMedia] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [selectedMedia, setSelectedMedia] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { sendMessage } = useSendMessage();
-  // isSendingMedia só bloqueia durante envio de mídia (imagem/áudio)
-  // Mensagens de texto NÃO bloqueiam - usamos optimistic updates
   const isSending = isSendingMedia;
   
   const {
@@ -61,39 +61,45 @@ export function MessageInput({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Handle image selection
-  const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle media selection (image or video)
+  const handleMediaSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
+    const isVideo = ALLOWED_VIDEO_TYPES.includes(file.type);
+
     // Validate type
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      toast.error('Tipo de arquivo não suportado. Use JPG, PNG, GIF ou WebP.');
+    if (!isImage && !isVideo) {
+      toast.error('Tipo de arquivo não suportado. Use JPG, PNG, GIF, WebP, MP4 ou WebM.');
       return;
     }
 
     // Validate size
     const sizeMB = file.size / (1024 * 1024);
-    if (sizeMB > MAX_IMAGE_SIZE_MB) {
-      toast.error(`Imagem muito grande. Máximo: ${MAX_IMAGE_SIZE_MB}MB`);
+    const maxSize = isVideo ? MAX_VIDEO_SIZE_MB : MAX_IMAGE_SIZE_MB;
+    if (sizeMB > maxSize) {
+      toast.error(`Arquivo muito grande. Máximo: ${maxSize}MB`);
       return;
     }
 
-    setSelectedImage(file);
+    setSelectedMedia(file);
+    setMediaType(isVideo ? 'video' : 'image');
 
     // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
-      setImagePreview(reader.result as string);
+      setMediaPreview(reader.result as string);
     };
     reader.readAsDataURL(file);
   }, []);
 
-  const clearImage = useCallback(() => {
-    setSelectedImage(null);
-    setImagePreview(null);
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
+  const clearMedia = useCallback(() => {
+    setSelectedMedia(null);
+    setMediaPreview(null);
+    setMediaType(null);
+    if (mediaInputRef.current) {
+      mediaInputRef.current.value = '';
     }
   }, []);
 
@@ -103,38 +109,31 @@ export function MessageInput({
 
     console.log('[WA_SEND]', { conversationId, replyToId: replyingTo?.id });
     
-    // 1. Limpar input IMEDIATAMENTE para permitir próxima digitação
     setMessage('');
-    
-    // 2. Limpar reply IMEDIATAMENTE
     onClearReply?.();
-    
-    // 3. Manter foco no textarea para continuar digitando
     textareaRef.current?.focus();
     
-    // 4. Enviar em background (não bloqueia - usa optimistic updates)
-    // O sendMessage já adiciona a mensagem otimista antes de enviar
     const result = await sendMessage({
       conversationId,
       message: text,
       replyToId: replyingTo?.id,
     });
 
-    // 5. Se falhou na criação da mensagem otimista (ex: mensagem vazia), mostrar erro
     if (!result.success) {
       const errorResult = result as { success: false; error: Error; clientMessageId: string };
       console.error('[WA_SEND] error', errorResult.error);
-      // Erro já será exibido na UI via status 'failed' da mensagem
     }
     
-    // Callback opcional
     onMessageSent?.();
   }, [message, conversationId, replyingTo?.id, onClearReply, sendMessage, onMessageSent]);
 
-  const handleSendImage = useCallback(async () => {
-    if (!selectedImage || isSendingMedia) return;
+  const handleSendMedia = useCallback(async () => {
+    if (!selectedMedia || isSendingMedia) return;
 
-    console.log('[WA_IMAGE] sending', { conversationId, size: selectedImage.size });
+    const isVideo = mediaType === 'video';
+    const logPrefix = isVideo ? '[WA_VIDEO]' : '[WA_IMAGE]';
+    
+    console.log(`${logPrefix} sending`, { conversationId, size: selectedMedia.size, type: selectedMedia.type });
     setIsSendingMedia(true);
 
     try {
@@ -148,49 +147,53 @@ export function MessageInput({
         };
         reader.onerror = reject;
       });
-      reader.readAsDataURL(selectedImage);
+      reader.readAsDataURL(selectedMedia);
 
-      const imageBase64 = await base64Promise;
+      const mediaBase64 = await base64Promise;
 
-      const { data, error } = await supabase.functions.invoke('whatsapp-send-image', {
+      // Call appropriate edge function
+      const functionName = isVideo ? 'whatsapp-send-video' : 'whatsapp-send-image';
+      const bodyKey = isVideo ? 'videoBase64' : 'imageBase64';
+
+      const { data, error } = await supabase.functions.invoke(functionName, {
         body: {
           conversationId,
-          imageBase64,
-          mimeType: selectedImage.type,
+          [bodyKey]: mediaBase64,
+          mimeType: selectedMedia.type,
           caption: message.trim() || undefined,
         },
       });
 
       if (error) {
-        console.error('[WA_IMAGE] error', error);
-        toast.error('Erro ao enviar imagem');
+        console.error(`${logPrefix} error`, error);
+        toast.error(`Erro ao enviar ${isVideo ? 'vídeo' : 'imagem'}`);
         return;
       }
 
       if (!data?.ok) {
-        toast.error(data?.message || 'Erro ao enviar imagem');
+        toast.error(data?.message || `Erro ao enviar ${isVideo ? 'vídeo' : 'imagem'}`);
         return;
       }
 
-      clearImage();
+      console.log(`${logPrefix} sent`, { messageId: data.messageId });
+      clearMedia();
       setMessage('');
       onClearReply?.();
-      // Realtime subscription handles adding new messages - no refetch needed
     } catch (err: any) {
-      console.error('[WA_IMAGE] error', err);
-      toast.error('Erro ao enviar imagem');
+      console.error(`${logPrefix} error`, err);
+      toast.error(`Erro ao enviar ${isVideo ? 'vídeo' : 'imagem'}`);
     } finally {
       setIsSendingMedia(false);
     }
-  }, [selectedImage, conversationId, message, isSending, clearImage, onClearReply]);
+  }, [selectedMedia, mediaType, conversationId, message, isSendingMedia, clearMedia, onClearReply]);
 
   const handleSend = useCallback(() => {
-    if (selectedImage) {
-      handleSendImage();
+    if (selectedMedia) {
+      handleSendMedia();
     } else {
       handleSendText();
     }
-  }, [selectedImage, handleSendImage, handleSendText]);
+  }, [selectedMedia, handleSendMedia, handleSendText]);
 
   const handleStartRecording = useCallback(async () => {
     console.log('[WA_AUDIO] start_recording');
@@ -210,7 +213,6 @@ export function MessageInput({
         return;
       }
 
-      // Convert blob to base64
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onloadend = () => {
@@ -250,7 +252,6 @@ export function MessageInput({
       }
 
       console.log('[WA_AUDIO] sent', { messageId: data.messageId });
-      // Realtime subscription handles adding new messages - no refetch needed
     } catch (err: any) {
       console.error('[WA_AUDIO] error', err);
       toast.error('Erro ao enviar áudio');
@@ -272,9 +273,8 @@ export function MessageInput({
   };
 
   const hasText = message.trim().length > 0;
-  const canSend = hasText || selectedImage;
+  const canSend = hasText || selectedMedia;
 
-  // Show error if recording failed
   useEffect(() => {
     if (recordingError) {
       toast.error(recordingError);
@@ -344,20 +344,28 @@ export function MessageInput({
         </div>
       )}
 
-      {/* Image preview */}
-      {imagePreview && (
+      {/* Media preview */}
+      {mediaPreview && (
         <div className="px-3 pt-3 pb-1">
           <div className="relative inline-block">
-            <img
-              src={imagePreview}
-              alt="Preview"
-              className="h-20 w-auto rounded-lg object-cover"
-            />
+            {mediaType === 'video' ? (
+              <video
+                src={mediaPreview}
+                className="h-20 w-auto rounded-lg object-cover"
+                muted
+              />
+            ) : (
+              <img
+                src={mediaPreview}
+                alt="Preview"
+                className="h-20 w-auto rounded-lg object-cover"
+              />
+            )}
             <Button
               type="button"
               variant="destructive"
               size="icon"
-              onClick={clearImage}
+              onClick={clearMedia}
               className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
             >
               <X className="h-3 w-3" />
@@ -367,12 +375,12 @@ export function MessageInput({
       )}
 
       <div className="chat-input-container">
-        {/* Hidden file input */}
+        {/* Hidden file input - accepts images and videos */}
         <input
-          ref={imageInputRef}
+          ref={mediaInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp"
-          onChange={handleImageSelect}
+          accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime"
+          onChange={handleMediaSelect}
           className="hidden"
         />
 
@@ -391,16 +399,16 @@ export function MessageInput({
           size="icon"
           className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
           disabled={disabled || isSendingMedia}
-          onClick={() => imageInputRef.current?.click()}
+          onClick={() => mediaInputRef.current?.click()}
         >
-          <Image className="h-5 w-5" />
+          <Paperclip className="h-5 w-5" />
         </Button>
         <Textarea
           ref={textareaRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={selectedImage ? "Adicione uma legenda..." : "Digite uma mensagem..."}
+          placeholder={selectedMedia ? "Adicione uma legenda..." : "Digite uma mensagem..."}
           disabled={disabled || isSendingMedia}
           className="min-h-[44px] max-h-[120px] resize-none flex-1"
           rows={1}
