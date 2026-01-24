@@ -1419,6 +1419,64 @@ export type Database = {
           report_date: string
         }[]
       }
+      get_admin_overview_metrics: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          abandoned_conversations: number
+          ads_leads: number
+          organic_leads: number
+          pending_replies: number
+          sales_this_month: number
+          total_new_leads: number
+        }[]
+      }
+      get_ads_vs_organic_timeseries: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          ads_leads: number
+          organic_leads: number
+          report_date: string
+        }[]
+      }
+      get_agent_dashboard_metrics: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          leads_in_pipeline: number
+          pending_replies: number
+          sales_this_month: number
+        }[]
+      }
+      get_agent_performance_ranking: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          agent_name: string
+          agent_user_id: string
+          avg_response_time_minutes: number
+          leads_count: number
+          pending_replies: number
+          sales_count: number
+        }[]
+      }
       get_message_report_count: {
         Args: {
           p_end_date: string
@@ -1469,6 +1527,22 @@ export type Database = {
           contacts: number
           messages: number
           report_date: string
+        }[]
+      }
+      get_pending_replies_list: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          contact_name: string
+          conversation_id: string
+          last_message_at: string
+          last_message_body: string
+          remote_jid: string
+          waiting_minutes: number
         }[]
       }
       get_top_ads: {

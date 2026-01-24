@@ -3,13 +3,16 @@
  * Main page component for the Reports module
  */
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, MessageSquare, Target } from 'lucide-react';
+import { BarChart3, MessageSquare, Target, LayoutDashboard } from 'lucide-react';
 import { useReportsData } from '../hooks/useReportsData';
+import { useWorkspaceRole } from '@/hooks/useWorkspaceRole';
 import { PeriodSelector } from './PeriodSelector';
 import { MessagesTab } from './MessagesTab';
 import { AdsTab } from './AdsTab';
+import { AdminOverviewTab } from './AdminOverviewTab';
 
 export function ReportsPage() {
+  const { isAdmin } = useWorkspaceRole();
   const {
     // Filters
     periodPreset,
@@ -66,17 +69,29 @@ export function ReportsPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="messages" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+      <Tabs defaultValue={isAdmin ? "overview" : "messages"} className="w-full">
+        <TabsList className={`grid w-full max-w-lg ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          {isAdmin && (
+            <TabsTrigger value="overview" className="gap-2">
+              <LayoutDashboard className="h-4 w-4" />
+              Visão Geral
+            </TabsTrigger>
+          )}
           <TabsTrigger value="messages" className="gap-2">
             <MessageSquare className="h-4 w-4" />
-            Mensagens & Atendimento
+            Mensagens
           </TabsTrigger>
           <TabsTrigger value="ads" className="gap-2">
             <Target className="h-4 w-4" />
-            Anúncios & Aquisição
+            Anúncios
           </TabsTrigger>
         </TabsList>
+
+        {isAdmin && (
+          <TabsContent value="overview" className="mt-6">
+            <AdminOverviewTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="messages" className="mt-6">
           <MessagesTab
