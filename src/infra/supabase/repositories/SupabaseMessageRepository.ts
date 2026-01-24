@@ -42,7 +42,7 @@ export class SupabaseMessageRepository implements MessageRepository {
       .from('messages')
       .select('*')
       .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
 
     if (pagination) {
       query = query.range(pagination.offset, pagination.offset + pagination.limit - 1);
