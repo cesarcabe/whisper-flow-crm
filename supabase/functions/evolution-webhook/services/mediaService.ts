@@ -49,12 +49,15 @@ export async function downloadAndStoreMedia(
   }
 
   try {
-    const url = `${evolutionBaseUrl}/chat/getBase64FromMediaMessage/${instanceName}`;
+    // Remove trailing slashes from base URL
+    const baseUrl = evolutionBaseUrl.replace(/\/+$/, '');
+    const url = `${baseUrl}/chat/getBase64FromMediaMessage/${instanceName}`;
     
     console.log('[Edge:evolution-webhook] downloadAndStoreMedia', { 
       instanceName, 
       messageKey: messageKey?.id,
-      mediaType 
+      mediaType,
+      url
     });
 
     const response = await fetch(url, {
@@ -65,7 +68,7 @@ export async function downloadAndStoreMedia(
       },
       body: JSON.stringify({
         message: { key: messageKey },
-        convertToMp4: false,
+        convertToMp4: mediaType === 'video',
       }),
     });
 
