@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { AudioPlayer } from './AudioPlayer';
 import { ImageViewer } from './ImageViewer';
+import { VideoViewer } from './VideoViewer';
 import { ReactionPicker } from './ReactionPicker';
 import { useMessageReactions } from '@/hooks/useMessageReactions';
 import { useSendMessage } from '../hooks/useSendMessage';
@@ -65,6 +66,7 @@ export function MessageBubble({
   const time = formatTime(message.createdAt);
   const isAudio = message.type.getValue() === 'audio';
   const isImage = message.type.getValue() === 'image';
+  const isVideo = message.type.getValue() === 'video';
   const { groupedReactions, toggleReaction } = useMessageReactions(message.id);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -135,6 +137,25 @@ export function MessageBubble({
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>📷</span>
           <span>Imagem indisponível</span>
+        </div>
+      );
+    }
+
+    // Video message
+    if (isVideo && message.mediaUrl) {
+      return (
+        <VideoViewer
+          src={message.mediaUrl}
+          caption={message.body !== '🎬 Vídeo' ? message.body : undefined}
+          isOutgoing={isOutgoing}
+        />
+      );
+    }
+    if (isVideo) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>🎬</span>
+          <span>Vídeo indisponível</span>
         </div>
       );
     }
