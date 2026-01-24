@@ -26,6 +26,28 @@ function parseQuotedMessage(json: Json | null): QuotedMessage | null {
 /**
  * Mapper para converter entre Message (domain) e messages (database)
  */
+/**
+ * Tipo parcial para criação de mensagens a partir de fontes não-DB
+ * (WebSocket, Realtime, etc.)
+ */
+interface PartialMessageInput {
+  id: string;
+  conversation_id: string;
+  workspace_id: string;
+  body: string;
+  type: string | null;
+  is_outgoing: boolean | null;
+  status: string | null;
+  external_id?: string | null;
+  media_url?: string | null;
+  reply_to_id?: string | null;
+  quoted_message?: Json | null;
+  sent_by_user_id?: string | null;
+  whatsapp_number_id?: string | null;
+  error_message?: string | null;
+  created_at: string;
+}
+
 export class MessageMapper {
   /**
    * Converte uma row do banco para entidade de domínio
@@ -53,6 +75,32 @@ export class MessageMapper {
   }
 
   /**
+   * Cria uma entidade de domínio a partir de dados parciais
+   * Usado para fontes não-DB (WebSocket, Realtime, mensagens otimistas)
+   */
+  static fromPartial(input: PartialMessageInput): Message {
+    const props: MessageProps = {
+      id: input.id,
+      conversationId: input.conversation_id,
+      workspaceId: input.workspace_id,
+      whatsappNumberId: input.whatsapp_number_id ?? null,
+      sentByUserId: input.sent_by_user_id ?? null,
+      body: input.body,
+      type: MessageType.create(input.type ?? 'text'),
+      status: (input.status as MessageStatus) ?? 'sending',
+      isOutgoing: input.is_outgoing ?? true,
+      mediaUrl: input.media_url ?? null,
+      externalId: input.external_id ?? null,
+      errorMessage: input.error_message ?? null,
+      replyToId: input.reply_to_id ?? null,
+      quotedMessage: parseQuotedMessage(input.quoted_message ?? null),
+      createdAt: new Date(input.created_at),
+    };
+
+    return Message.create(props);
+  }
+
+  /**
    * Converte uma entidade de domínio para formato de inserção no banco
    */
   static toInsert(message: Message): Omit<MessageRow, 'id' | 'created_at' | 'quoted_message' | 'reply_to_id'> {
@@ -68,6 +116,15 @@ export class MessageMapper {
       media_url: message.mediaUrl,
       external_id: message.externalId,
       error_message: message.errorMessage,
+      client_id: null,
+      duration_ms: null,
+      media_path: null,
+      media_type: null,
+      mime_type: null,
+      provider_reply_id: null,
+      size_bytes: null,
+      thumbnail_path: null,
+      thumbnail_url: null,
     };
   }
 

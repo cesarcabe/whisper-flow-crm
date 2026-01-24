@@ -200,7 +200,8 @@ Deno.serve(async (req: Request) => {
     const messageId = insertedMessage.id;
 
     // Send via Evolution API - using sendMedia endpoint
-    const evolutionUrl = `${EVOLUTION_BASE_URL}/message/sendMedia/${whatsappNumber.instance_name}`;
+    const baseUrl = EVOLUTION_BASE_URL.replace(/\/+$/, ''); // Remove trailing slashes
+    const evolutionUrl = `${baseUrl}/message/sendMedia/${whatsappNumber.instance_name}`;
     
     console.log('[Edge:whatsapp-send-image] calling_evolution', { 
       instance: whatsappNumber.instance_name,
