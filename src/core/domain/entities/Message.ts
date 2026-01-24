@@ -10,10 +10,15 @@ export interface QuotedMessage {
   body: string;
   type: string;
   isOutgoing: boolean;
+  mediaUrl?: string | null;
+  thumbnailUrl?: string | null;
+  mediaPath?: string | null;
+  thumbnailPath?: string | null;
 }
 
 export interface MessageProps {
   id: string;
+  clientId: string | null;
   conversationId: string;
   workspaceId: string;
   whatsappNumberId: string | null;
@@ -22,12 +27,21 @@ export interface MessageProps {
   type: MessageType;
   status: MessageStatus;
   isOutgoing: boolean;
+  mediaType: string | null;
   mediaUrl: string | null;
+  mediaPath: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  durationMs: number | null;
+  thumbnailUrl: string | null;
+  thumbnailPath: string | null;
   externalId: string | null;
   errorMessage: string | null;
   replyToId: string | null;
+  providerReplyId: string | null;
   quotedMessage: QuotedMessage | null;
   createdAt: Date;
+  uploadProgress?: number | null;
 }
 
 export class Message {
@@ -43,6 +57,7 @@ export class Message {
 
   // Getters
   get id(): string { return this.props.id; }
+  get clientId(): string | null { return this.props.clientId; }
   get conversationId(): string { return this.props.conversationId; }
   get workspaceId(): string { return this.props.workspaceId; }
   get whatsappNumberId(): string | null { return this.props.whatsappNumberId; }
@@ -51,12 +66,21 @@ export class Message {
   get type(): MessageType { return this.props.type; }
   get status(): MessageStatus { return this.props.status; }
   get isOutgoing(): boolean { return this.props.isOutgoing; }
+  get mediaType(): string | null { return this.props.mediaType; }
   get mediaUrl(): string | null { return this.props.mediaUrl; }
+  get mediaPath(): string | null { return this.props.mediaPath; }
+  get mimeType(): string | null { return this.props.mimeType; }
+  get sizeBytes(): number | null { return this.props.sizeBytes; }
+  get durationMs(): number | null { return this.props.durationMs; }
+  get thumbnailUrl(): string | null { return this.props.thumbnailUrl; }
+  get thumbnailPath(): string | null { return this.props.thumbnailPath; }
   get externalId(): string | null { return this.props.externalId; }
   get errorMessage(): string | null { return this.props.errorMessage; }
   get replyToId(): string | null { return this.props.replyToId; }
+  get providerReplyId(): string | null { return this.props.providerReplyId; }
   get quotedMessage(): QuotedMessage | null { return this.props.quotedMessage; }
   get createdAt(): Date { return this.props.createdAt; }
+  get uploadProgress(): number | null { return this.props.uploadProgress ?? null; }
   
   // Computed properties
   get isIncoming(): boolean { return !this.props.isOutgoing; }

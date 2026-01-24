@@ -22,16 +22,49 @@ export interface OptimisticMessage {
   content: string;
   /** Tipo da mensagem */
   type: 'text' | 'image' | 'audio' | 'video' | 'document';
+  /** Tipo de mídia (quando aplicável) */
+  mediaType?: 'image' | 'audio' | 'video' | 'document' | null;
+  /** URL da mídia (preview ou definitivo) */
+  mediaUrl?: string | null;
+  /** Storage path da mídia */
+  mediaPath?: string | null;
+  /** URL de thumbnail (vídeo) */
+  thumbnailUrl?: string | null;
+  /** Storage path do thumbnail */
+  thumbnailPath?: string | null;
+  /** MIME type da mídia */
+  mimeType?: string | null;
+  /** Tamanho da mídia em bytes */
+  sizeBytes?: number | null;
+  /** Duração em ms (áudio/vídeo) */
+  durationMs?: number | null;
   /** Status atual */
   status: OptimisticMessageStatus;
   /** Timestamp de criação (local) */
   createdAt: Date;
   /** ID da mensagem sendo respondida */
   replyToId?: string | null;
+  /** ID da mensagem respondida no provider (quando não resolvida localmente) */
+  providerReplyId?: string | null;
+  /** Mensagem citada para exibição imediata */
+  quotedMessage?: {
+    id: string;
+    body: string;
+    type: string;
+    isOutgoing: boolean;
+    mediaUrl?: string | null;
+    thumbnailUrl?: string | null;
+  } | null;
   /** Erro (se falhou) */
   error?: string;
   /** Número de tentativas de envio */
   retryCount: number;
+  /** Progresso do upload (0-100) */
+  uploadProgress?: number | null;
+  /** Arquivo original (para retry de upload) */
+  file?: File | null;
+  /** Storage path (para reenvio sem novo upload) */
+  storagePath?: string | null;
 }
 
 // ============================================
@@ -103,6 +136,48 @@ class OptimisticMessagesStore {
           message.serverId = serverId;
           this.processedIds.add(serverId);
         }
+        this.notify();
+        return;
+      }
+    }
+  }
+
+  updateProgress(clientId: string, progress: number): void {
+    for (const [, store] of this.messages) {
+      if (store.has(clientId)) {
+        const message = store.get(clientId)!;
+        message.uploadProgress = Math.max(0, Math.min(100, progress));
+        this.notify();
+        return;
+      }
+    }
+  }
+
+  updateMediaMeta(
+    clientId: string,
+    input: {
+      mediaUrl?: string | null;
+      thumbnailUrl?: string | null;
+      mimeType?: string | null;
+      sizeBytes?: number | null;
+      durationMs?: number | null;
+      storagePath?: string | null;
+      thumbnailPath?: string | null;
+    }
+  ): void {
+    for (const [, store] of this.messages) {
+      if (store.has(clientId)) {
+        const message = store.get(clientId)!;
+        if (input.mediaUrl !== undefined) message.mediaUrl = input.mediaUrl;
+        if (input.thumbnailUrl !== undefined) message.thumbnailUrl = input.thumbnailUrl;
+        if (input.mimeType !== undefined) message.mimeType = input.mimeType;
+        if (input.sizeBytes !== undefined) message.sizeBytes = input.sizeBytes;
+        if (input.durationMs !== undefined) message.durationMs = input.durationMs;
+        if (input.storagePath !== undefined) {
+          message.storagePath = input.storagePath;
+          message.mediaPath = input.storagePath;
+        }
+        if (input.thumbnailPath !== undefined) message.thumbnailPath = input.thumbnailPath;
         this.notify();
         return;
       }
@@ -184,14 +259,24 @@ class OptimisticMessagesStore {
             type: opt.type,
             is_outgoing: true,
             status: opt.status,
+            client_id: opt.clientId,
+            media_type: opt.mediaType ?? (opt.type !== 'text' ? opt.type : null),
             external_id: null,
-            media_url: null,
+            media_url: opt.mediaUrl ?? null,
+            media_path: opt.mediaPath ?? opt.storagePath ?? null,
+            mime_type: opt.mimeType ?? null,
+            size_bytes: opt.sizeBytes ?? null,
+            duration_ms: opt.durationMs ?? null,
+            thumbnail_url: opt.thumbnailUrl ?? null,
+            thumbnail_path: opt.thumbnailPath ?? null,
             reply_to_id: opt.replyToId ?? null,
-            quoted_message: null,
+            provider_reply_id: opt.providerReplyId ?? null,
+            quoted_message: opt.quotedMessage ?? null,
             sent_by_user_id: null,
             whatsapp_number_id: null,
             error_message: opt.error ?? null,
             created_at: opt.createdAt.toISOString(),
+            upload_progress: opt.uploadProgress ?? null,
           });
           messages.push(message);
         } catch (e) {
@@ -254,6 +339,16 @@ interface UseOptimisticMessagesReturn {
   confirmMessage: (clientId: string, serverId?: string) => void;
   failMessage: (clientId: string, error: string) => void;
   removeOptimisticMessage: (clientId: string) => void;
+  updateProgress: (clientId: string, progress: number) => void;
+  updateMediaMeta: (clientId: string, input: {
+    mediaUrl?: string | null;
+    thumbnailUrl?: string | null;
+    mimeType?: string | null;
+    sizeBytes?: number | null;
+    durationMs?: number | null;
+    storagePath?: string | null;
+    thumbnailPath?: string | null;
+  }) => void;
   reconcileWithServer: (conversationId: string, serverMessageId: string, clientId?: string) => boolean;
   getOptimisticAsMessages: (conversationId: string, workspaceId: string) => Message[];
   clearConfirmed: (conversationId: string) => void;
@@ -284,6 +379,12 @@ export function useOptimisticMessages(): UseOptimisticMessagesReturn {
     
     removeOptimisticMessage: useCallback((clientId: string) => 
       store.removeOptimisticMessage(clientId), []),
+
+    updateProgress: useCallback((clientId: string, progress: number) =>
+      store.updateProgress(clientId, progress), []),
+
+    updateMediaMeta: useCallback((clientId: string, input) =>
+      store.updateMediaMeta(clientId, input), []),
     
     reconcileWithServer: useCallback((conversationId: string, serverMessageId: string, clientId?: string) => 
       store.reconcileWithServer(conversationId, serverMessageId, clientId), []),

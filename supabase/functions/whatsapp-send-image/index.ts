@@ -24,7 +24,7 @@ async function uploadToStorage(
   base64Data: string,
   mimeType: string,
   workspaceId: string
-): Promise<string | null> {
+): Promise<{ publicUrl: string; path: string } | null> {
   try {
     // Decode base64 to Uint8Array
     const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
@@ -53,7 +53,7 @@ async function uploadToStorage(
       .getPublicUrl(fileName);
     
     console.log('[Edge:whatsapp-send-image] storage_upload_success', { url: publicUrlData.publicUrl });
-    return publicUrlData.publicUrl;
+    return { publicUrl: publicUrlData.publicUrl, path: fileName };
   } catch (error: any) {
     console.log('[Edge:whatsapp-send-image] storage_upload_exception', { error: error.message });
     return null;
@@ -98,7 +98,7 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, message: "Invalid JSON body" }, 400);
   }
 
-  const { conversationId, imageBase64, mimeType, caption } = body;
+  const { conversationId, imageBase64, mimeType, caption, clientMessageId, replyToId, quotedMessage: clientQuoted } = body;
 
   if (!conversationId || !imageBase64) {
     return json({ ok: false, message: "Missing conversationId or imageBase64" }, 400);
@@ -165,7 +165,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Upload image to storage first
-    const storedMediaUrl = await uploadToStorage(
+    const stored = await uploadToStorage(
       supabase, 
       imageBase64, 
       mimeType || 'image/jpeg',
@@ -175,6 +175,43 @@ Deno.serve(async (req: Request) => {
     // Determine destination
     const remoteJid = conversation.remote_jid || `${contact?.phone}@s.whatsapp.net`;
 
+    // Load quoted message (if replying)
+    let quotedMessage: { id: string; body: string; type: string; is_outgoing: boolean; media_url?: string | null; thumbnail_url?: string | null } | null = null;
+    let providerReplyId: string | null = null;
+    if (replyToId) {
+      const { data: quotedRow } = await supabase
+        .from('messages')
+        .select('id, body, type, is_outgoing, media_url, thumbnail_url, media_path, thumbnail_path, external_id')
+        .eq('id', replyToId)
+        .eq('conversation_id', conversationId)
+        .maybeSingle();
+
+      if (quotedRow) {
+        quotedMessage = {
+          id: quotedRow.id,
+          body: quotedRow.body ?? '',
+          type: quotedRow.type ?? 'text',
+          is_outgoing: quotedRow.is_outgoing ?? false,
+          media_url: quotedRow.media_url ?? null,
+          thumbnail_url: quotedRow.thumbnail_url ?? null,
+          media_path: quotedRow.media_path ?? null,
+          thumbnail_path: quotedRow.thumbnail_path ?? null,
+        };
+        providerReplyId = quotedRow.external_id ?? null;
+      }
+    }
+
+    if (!quotedMessage && clientQuoted && typeof clientQuoted === 'object') {
+      quotedMessage = {
+        id: String(clientQuoted.id ?? ''),
+        body: String(clientQuoted.body ?? ''),
+        type: String(clientQuoted.type ?? 'text'),
+        is_outgoing: Boolean(clientQuoted.isOutgoing ?? false),
+        media_url: clientQuoted.mediaUrl ? String(clientQuoted.mediaUrl) : null,
+        thumbnail_url: clientQuoted.thumbnailUrl ? String(clientQuoted.thumbnailUrl) : null,
+      };
+    }
+
     // Insert message with 'sending' status and storage URL
     const { data: insertedMessage, error: insertError } = await supabase
       .from('messages')
@@ -182,12 +219,19 @@ Deno.serve(async (req: Request) => {
         workspace_id: conversation.workspace_id,
         conversation_id: conversationId,
         whatsapp_number_id: conversation.whatsapp_number_id,
+        client_id: clientMessageId ?? null,
         body: caption || '📷 Imagem',
         type: 'image',
+        media_type: 'image',
+        mime_type: mimeType ?? 'image/jpeg',
         is_outgoing: true,
         status: 'sending',
         sent_by_user_id: user.id,
-        media_url: storedMediaUrl, // Set immediately for preview
+        media_url: stored?.publicUrl ?? null, // Compatibilidade
+        media_path: stored?.path ?? null,
+        reply_to_id: replyToId ?? null,
+        provider_reply_id: providerReplyId,
+        quoted_message: quotedMessage,
       })
       .select('id')
       .single();
@@ -207,19 +251,26 @@ Deno.serve(async (req: Request) => {
       remoteJid 
     });
 
+    const payload: Record<string, unknown> = {
+      number: remoteJid,
+      mediatype: 'image',
+      media: imageBase64,
+      caption: caption || '',
+      fileName: `image-${Date.now()}.jpg`,
+    };
+
+    if (providerReplyId) {
+      payload.quotedMessageId = providerReplyId;
+      payload.quoted = { key: { id: providerReplyId, remoteJid } };
+    }
+
     const evolutionResponse = await fetch(evolutionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': EVOLUTION_API_KEY,
       },
-      body: JSON.stringify({
-        number: remoteJid,
-        mediatype: 'image',
-        media: imageBase64,
-        caption: caption || '',
-        fileName: `image-${Date.now()}.jpg`,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const evolutionData = await evolutionResponse.json();

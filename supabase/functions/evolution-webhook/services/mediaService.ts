@@ -6,6 +6,13 @@ export interface MediaTypeResult {
   needsDownload: boolean;
 }
 
+export interface StoredMediaResult {
+  url: string;
+  mimeType: string;
+  sizeBytes: number;
+  path: string;
+}
+
 export function detectMediaType(data: Record<string, unknown>): MediaTypeResult {
   const message = data?.message as Record<string, unknown> | undefined;
   
@@ -42,7 +49,7 @@ export async function downloadAndStoreMedia(
   messageKey: Record<string, unknown>,
   mediaType: string,
   workspaceId: string,
-): Promise<string | null> {
+): Promise<StoredMediaResult | null> {
   if (!evolutionBaseUrl || !evolutionApiKey) {
     console.log('[Edge:evolution-webhook] downloadAndStoreMedia skipped - missing config');
     return null;
@@ -120,7 +127,12 @@ export async function downloadAndStoreMedia(
       url: publicUrlData.publicUrl 
     });
 
-    return publicUrlData.publicUrl;
+    return {
+      url: publicUrlData.publicUrl,
+      mimeType,
+      sizeBytes: binaryData.length,
+      path: fileName,
+    };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.log('[Edge:evolution-webhook] downloadAndStoreMedia error', { error: errorMessage });

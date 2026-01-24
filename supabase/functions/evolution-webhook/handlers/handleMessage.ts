@@ -100,10 +100,76 @@ export async function handleMessage(ctx: WebhookContext): Promise<Response> {
   let messageType = mediaResult.type;
   let bodyTextFinal = mediaResult.type === "text" ? text : mediaResult.text;
   let mediaUrl: string | null = null;
+  let mediaPath: string | null = null;
+  let mimeType: string | null = null;
+  let sizeBytes: number | null = null;
+  let durationMs: number | null = null;
+  let thumbnailUrl: string | null = null;
+
+  const contextInfo =
+    (message?.extendedTextMessage as Record<string, unknown> | undefined)?.contextInfo ||
+    (message?.imageMessage as Record<string, unknown> | undefined)?.contextInfo ||
+    (message?.videoMessage as Record<string, unknown> | undefined)?.contextInfo ||
+    (message?.audioMessage as Record<string, unknown> | undefined)?.contextInfo ||
+    (message?.documentMessage as Record<string, unknown> | undefined)?.contextInfo ||
+    (message?.stickerMessage as Record<string, unknown> | undefined)?.contextInfo ||
+    null;
+
+  const providerReplyId = safeString(
+    (contextInfo as Record<string, unknown> | undefined)?.stanzaId ??
+    (contextInfo as Record<string, unknown> | undefined)?.quotedMessageId ??
+    (contextInfo as Record<string, unknown> | undefined)?.quotedStanzaId ??
+    null
+  );
+
+  let replyToId: string | null = null;
+  let quotedMessage: Record<string, unknown> | null = null;
+
+  if (providerReplyId) {
+    const { data: quotedRow } = await supabase
+      .from("messages")
+      .select("id, body, type, is_outgoing, media_url, thumbnail_url, media_path, thumbnail_path")
+      .eq("conversation_id", conversationId)
+      .eq("external_id", providerReplyId)
+      .maybeSingle();
+
+    if (quotedRow) {
+      replyToId = quotedRow.id;
+      quotedMessage = {
+        id: quotedRow.id,
+        body: quotedRow.body ?? "",
+        type: quotedRow.type ?? "text",
+        is_outgoing: quotedRow.is_outgoing ?? false,
+        media_url: quotedRow.media_url ?? null,
+        thumbnail_url: quotedRow.thumbnail_url ?? null,
+        media_path: quotedRow.media_path ?? null,
+        thumbnail_path: quotedRow.thumbnail_path ?? null,
+      };
+    }
+  }
+
+  if (!quotedMessage && contextInfo && (contextInfo as Record<string, unknown>).quotedMessage) {
+    const quoted = (contextInfo as Record<string, unknown>).quotedMessage as Record<string, unknown>;
+    const quotedDetect = detectMediaType({ message: quoted });
+    const quotedText =
+      safeString(
+        (quoted.conversation as string | undefined) ??
+        (quoted.text as string | undefined) ??
+        (quoted.extendedTextMessage as Record<string, unknown> | undefined)?.text ??
+        null
+      ) ?? quotedDetect.text;
+
+    quotedMessage = {
+      id: providerReplyId ?? crypto.randomUUID(),
+      body: quotedText || quotedDetect.text,
+      type: quotedDetect.type,
+      is_outgoing: false,
+    };
+  }
 
   if (mediaResult.needsDownload && instanceName && key) {
     try {
-      const storedUrl = await downloadAndStoreMedia(
+      const stored = await downloadAndStoreMedia(
         supabase,
         evolutionBaseUrl,
         evolutionApiKey,
@@ -112,9 +178,12 @@ export async function handleMessage(ctx: WebhookContext): Promise<Response> {
         messageType,
         workspaceId
       );
-      if (storedUrl) {
-        mediaUrl = storedUrl;
-        console.log('[Edge:evolution-webhook] media_stored', { messageType, url: storedUrl });
+      if (stored) {
+        mediaUrl = stored.url;
+        mediaPath = stored.path;
+        mimeType = stored.mimeType;
+        sizeBytes = stored.sizeBytes;
+        console.log('[Edge:evolution-webhook] media_stored', { messageType, url: stored.url });
       } else {
         console.log('[Edge:evolution-webhook] media_storage_failed', { messageType });
       }
@@ -130,6 +199,45 @@ export async function handleMessage(ctx: WebhookContext): Promise<Response> {
     bodyLength: bodyTextFinal.length 
   });
 
+  const audioSeconds = (message?.audioMessage as Record<string, unknown> | undefined)?.seconds;
+  const videoSeconds = (message?.videoMessage as Record<string, unknown> | undefined)?.seconds;
+  const durationSeconds = Number(audioSeconds ?? videoSeconds ?? null);
+  if (!Number.isNaN(durationSeconds) && durationSeconds > 0) {
+    durationMs = Math.floor(durationSeconds * 1000);
+  }
+
+  const imageMime = (message?.imageMessage as Record<string, unknown> | undefined)?.mimetype;
+  const videoMime = (message?.videoMessage as Record<string, unknown> | undefined)?.mimetype;
+  const audioMime = (message?.audioMessage as Record<string, unknown> | undefined)?.mimetype;
+  const docMime = (message?.documentMessage as Record<string, unknown> | undefined)?.mimetype;
+  if (!mimeType) {
+    mimeType = safeString(imageMime ?? videoMime ?? audioMime ?? docMime ?? null);
+  }
+
+  const videoThumb = (message?.videoMessage as Record<string, unknown> | undefined)?.jpegThumbnail;
+  let thumbnailPath: string | null = null;
+  if (videoThumb && typeof videoThumb === 'string') {
+    try {
+      const binaryData = Uint8Array.from(atob(videoThumb), c => c.charCodeAt(0));
+      const fileName = `${workspaceId}/thumbnails/${Date.now()}-${crypto.randomUUID()}.jpg`;
+      const { error: thumbError } = await supabase.storage
+        .from('media')
+        .upload(fileName, binaryData, {
+          contentType: 'image/jpeg',
+          upsert: false,
+        });
+      if (!thumbError) {
+        const { data: publicUrlData } = supabase.storage
+          .from('media')
+          .getPublicUrl(fileName);
+        thumbnailUrl = publicUrlData.publicUrl;
+        thumbnailPath = fileName;
+      }
+    } catch (e: unknown) {
+      console.log('[Edge:evolution-webhook] thumbnail_error', { error: String(e) });
+    }
+  }
+
   const { error: msgErr } = await supabase.from("messages").insert({
     workspace_id: workspaceId,
     conversation_id: conversationId,
@@ -138,7 +246,17 @@ export async function handleMessage(ctx: WebhookContext): Promise<Response> {
     is_outgoing: isFromMe,
     body: bodyTextFinal,
     type: messageType,
+    media_type: messageType !== 'text' ? messageType : null,
     media_url: mediaUrl,
+    media_path: mediaPath,
+    mime_type: mimeType,
+    size_bytes: sizeBytes,
+    duration_ms: durationMs,
+    thumbnail_url: thumbnailUrl,
+    thumbnail_path: thumbnailPath,
+    reply_to_id: replyToId,
+    provider_reply_id: providerReplyId,
+    quoted_message: quotedMessage,
     status: isFromMe ? "sent" : "delivered",
   });
 
