@@ -104,8 +104,8 @@ export function useMessages(conversationId: string | null) {
   // Offset-based pagination
   const offsetRef = useRef<number>(0);
   
-  // Flag to prevent refetch on focus/visibility change
-  const hasInitialFetchRef = useRef<boolean>(false);
+  // Track which conversationId was last fetched to detect changes
+  const lastFetchedConversationIdRef = useRef<string | null>(null);
   
   // Optimistic messages hook - extrair funções estáveis
   const {
@@ -369,16 +369,22 @@ export function useMessages(conversationId: string | null) {
     };
   }, [workspaceId, conversationId, reconcileWithServer]);
 
-  // Initial fetch - only once per conversation
+  // Initial fetch - refetch when conversationId changes
   useEffect(() => {
     if (!conversationId || !workspaceId) {
-      hasInitialFetchRef.current = false;
+      lastFetchedConversationIdRef.current = null;
+      offsetRef.current = 0;
+      setHasMore(true);
+      setServerMessages([]);
+      setLoading(false);
       return;
     }
     
-    // Only fetch if we haven't fetched for this conversation yet
-    if (!hasInitialFetchRef.current) {
-      hasInitialFetchRef.current = true;
+    // Fetch if conversationId changed (or first load)
+    if (lastFetchedConversationIdRef.current !== conversationId) {
+      lastFetchedConversationIdRef.current = conversationId;
+      offsetRef.current = 0;
+      setHasMore(true);
       fetchMessages(false);
     }
   }, [conversationId, workspaceId, fetchMessages]);
