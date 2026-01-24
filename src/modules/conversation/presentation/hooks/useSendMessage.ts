@@ -244,24 +244,32 @@ export function useSendMessage(): UseSendMessageReturn {
         thumbnailPath,
       });
 
-      // 3) Enviar via Edge Function (não bloqueia UI)
-      const { data, error } = await supabase.functions.invoke('whatsapp-send-media', {
-        body: {
-          conversationId: input.conversationId,
-          clientMessageId,
-          mediaType: input.mediaType,
-          caption: caption || undefined,
-          storagePath: uploadResult.path,
-          thumbnailPath,
-          mimeType: input.file.type || undefined,
-          sizeBytes: input.file.size,
-          durationMs: input.durationMs ?? undefined,
-          thumbnailUrl: null,
-          replyToId: input.replyToId ?? undefined,
-          quotedMessage: input.quotedMessage ?? undefined,
-          isVoiceNote: input.isVoiceNote ?? false,
-        },
-      });
+      // 3) Enviar via Edge Function (não bloqueia UI) - usar funções antigas testadas
+      const functionName = input.mediaType === 'image' 
+        ? 'whatsapp-send-image'
+        : input.mediaType === 'video'
+        ? 'whatsapp-send-video'
+        : 'whatsapp-send-audio';
+      
+      const body: any = {
+        conversationId: input.conversationId,
+        clientMessageId,
+        storagePath: uploadResult.path,
+        mimeType: input.file.type || undefined,
+        replyToId: input.replyToId ?? undefined,
+        quotedMessage: input.quotedMessage ?? undefined,
+      };
+
+      if (input.mediaType === 'image') {
+        body.caption = caption || undefined;
+      } else if (input.mediaType === 'video') {
+        body.caption = caption || undefined;
+        body.thumbnailPath = thumbnailPath ?? undefined;
+      } else if (input.mediaType === 'audio') {
+        body.isVoiceNote = input.isVoiceNote ?? false;
+      }
+
+      const { data, error } = await supabase.functions.invoke(functionName, { body });
 
       if (error || !data?.ok) {
         const message = data?.message || error?.message || 'Erro ao enviar mídia';
@@ -316,23 +324,32 @@ export function useSendMessage(): UseSendMessageReturn {
     const file = message.file;
     if (!file && message.storagePath && message.mediaUrl) {
       // Reenvio sem novo upload (já temos storagePath e URL)
-      const { data, error } = await supabase.functions.invoke('whatsapp-send-media', {
-        body: {
-          conversationId: message.conversationId,
-          clientMessageId,
-          mediaType: message.mediaType ?? message.type,
-          caption: message.content,
-          mediaUrl: message.mediaUrl,
-          storagePath: message.storagePath,
-          mimeType: message.mimeType ?? undefined,
-          sizeBytes: message.sizeBytes ?? undefined,
-          durationMs: message.durationMs ?? undefined,
-          thumbnailUrl: message.thumbnailUrl ?? undefined,
-          replyToId: message.replyToId ?? undefined,
-          quotedMessage: message.quotedMessage ?? undefined,
-          isVoiceNote: false,
-        },
-      });
+      const mediaType = message.mediaType ?? message.type;
+      const functionName = mediaType === 'image' 
+        ? 'whatsapp-send-image'
+        : mediaType === 'video'
+        ? 'whatsapp-send-video'
+        : 'whatsapp-send-audio';
+      
+      const body: any = {
+        conversationId: message.conversationId,
+        clientMessageId,
+        storagePath: message.storagePath,
+        mimeType: message.mimeType ?? undefined,
+        replyToId: message.replyToId ?? undefined,
+        quotedMessage: message.quotedMessage ?? undefined,
+      };
+
+      if (mediaType === 'image') {
+        body.caption = message.content;
+      } else if (mediaType === 'video') {
+        body.caption = message.content;
+        body.thumbnailPath = message.thumbnailPath ?? undefined;
+      } else if (mediaType === 'audio') {
+        body.isVoiceNote = false;
+      }
+
+      const { data, error } = await supabase.functions.invoke(functionName, { body });
 
       if (error || !data?.ok) {
         optimistic.failMessage(clientMessageId, data?.message || error?.message || 'Erro ao reenviar mídia');

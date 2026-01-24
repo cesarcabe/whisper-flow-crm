@@ -104,10 +104,10 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, message: "Invalid JSON body" }, 400);
   }
 
-  const { conversationId, audioBase64, mimeType, clientMessageId, replyToId, quotedMessage: clientQuoted } = body;
+  const { conversationId, audioBase64, storagePath, mimeType, clientMessageId, replyToId, quotedMessage: clientQuoted, isVoiceNote } = body;
 
-  if (!conversationId || !audioBase64) {
-    return json({ ok: false, message: "Missing conversationId or audioBase64" }, 400);
+  if (!conversationId || (!audioBase64 && !storagePath)) {
+    return json({ ok: false, message: "Missing conversationId or audioBase64/storagePath" }, 400);
   }
 
   console.log('[Edge:whatsapp-send-audio] sending', { 
@@ -169,13 +169,44 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, message: "WhatsApp not connected" }, 400);
     }
 
-    // Upload audio to storage first
-    const stored = await uploadToStorage(
-      supabase, 
-      audioBase64, 
-      mimeType || 'audio/ogg',
-      conversation.workspace_id
-    );
+    // Upload audio to storage first (if not already uploaded)
+    let stored: { publicUrl: string; path: string } | null = null;
+    let finalBase64: string = audioBase64 || '';
+    
+    if (storagePath) {
+      // File already uploaded, download and convert to base64
+      const { data: downloaded, error: downloadError } = await supabase.storage
+        .from('media')
+        .download(storagePath);
+      
+      if (downloadError || !downloaded) {
+        console.log('[Edge:whatsapp-send-audio] download_error', { error: downloadError?.message });
+        return json({ ok: false, message: "Failed to download media from storage" }, 500);
+      }
+      
+      // Convert blob to base64
+      const buffer = new Uint8Array(await downloaded.arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < buffer.length; i += 1) {
+        binary += String.fromCharCode(buffer[i]);
+      }
+      finalBase64 = btoa(binary);
+      
+      // Get public URL for storage path
+      const { data: publicUrlData } = supabase.storage
+        .from('media')
+        .getPublicUrl(storagePath);
+      stored = { publicUrl: publicUrlData.publicUrl, path: storagePath };
+    } else if (audioBase64) {
+      // Upload base64 to storage
+      stored = await uploadToStorage(
+        supabase, 
+        audioBase64, 
+        mimeType || 'audio/ogg',
+        conversation.workspace_id
+      );
+      finalBase64 = audioBase64;
+    }
 
     // Determine destination
     const remoteJid = conversation.remote_jid || `${contact?.phone}@s.whatsapp.net`;
@@ -258,8 +289,9 @@ Deno.serve(async (req: Request) => {
 
     const payload: Record<string, unknown> = {
       number: remoteJid,
-      audio: audioBase64,
+      audio: finalBase64,
       encoding: true,
+      ptt: Boolean(isVoiceNote),
     };
 
     if (providerReplyId) {
@@ -321,13 +353,13 @@ Deno.serve(async (req: Request) => {
       })
       .eq('id', conversationId);
 
-    console.log('[Edge:whatsapp-send-audio] success', { messageId, externalId, storedMediaUrl });
+    console.log('[Edge:whatsapp-send-audio] success', { messageId, externalId, storedMediaUrl: stored?.publicUrl });
 
     return json({ 
       ok: true, 
       messageId,
       externalId,
-      mediaUrl: storedMediaUrl,
+      mediaUrl: stored?.publicUrl,
     });
 
   } catch (error: any) {
