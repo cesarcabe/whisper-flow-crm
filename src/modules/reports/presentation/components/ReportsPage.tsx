@@ -19,6 +19,7 @@ export function ReportsPage() {
     setPeriodPreset,
     customDateRange,
     setCustomDateRange,
+    dateRange,
 
     // Message Reports
     messageKpis,
@@ -89,7 +90,7 @@ export function ReportsPage() {
 
         {isAdmin && (
           <TabsContent value="overview" className="mt-6">
-            <AdminOverviewTab />
+            <AdminOverviewTab dateRange={dateRange} />
           </TabsContent>
         )}
 
