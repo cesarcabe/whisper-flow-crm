@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { X, Download, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { cn } from '@/lib/utils';
 
 interface ImageViewerProps {
@@ -62,6 +63,9 @@ export function ImageViewer({ src, alt = 'Imagem', caption, isOutgoing }: ImageV
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 bg-black/95 border-none">
+          <VisuallyHidden>
+            <DialogTitle>Visualizar imagem</DialogTitle>
+          </VisuallyHidden>
           <div className="relative flex flex-col h-full">
             {/* Header with controls */}
             <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-3 bg-gradient-to-b from-black/60 to-transparent">
