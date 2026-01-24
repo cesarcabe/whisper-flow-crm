@@ -18,7 +18,7 @@ function json(data: unknown, status = 200) {
   });
 }
 
-// Upload base64 audio to Supabase storage and return public URL
+// Upload base64 video to Supabase storage and return public URL
 async function uploadToStorage(
   supabase: any,
   base64Data: string,
@@ -30,26 +30,20 @@ async function uploadToStorage(
     const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
     
     // Determine file extension from mime type
-    let ext = 'ogg';
-    if (mimeType.includes('mp3') || mimeType.includes('mpeg')) ext = 'mp3';
-    else if (mimeType.includes('wav')) ext = 'wav';
-    else if (mimeType.includes('webm')) ext = 'webm';
-    else if (mimeType.includes('ogg')) ext = 'ogg';
-    else if (mimeType.includes('mp4') || mimeType.includes('m4a')) ext = 'm4a';
+    const ext = mimeType.split('/')[1] || 'mp4';
+    const fileName = `${workspaceId}/videos/${Date.now()}-${crypto.randomUUID()}.${ext}`;
     
-    const fileName = `${workspaceId}/audio/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-    
-    console.log('[Edge:whatsapp-send-audio] uploading_to_storage', { fileName, size: binaryData.length, mimeType });
+    console.log('[Edge:whatsapp-send-video] uploading_to_storage', { fileName, size: binaryData.length });
     
     const { error: uploadError } = await supabase.storage
       .from('media')
       .upload(fileName, binaryData, {
-        contentType: mimeType || 'audio/ogg',
+        contentType: mimeType,
         upsert: false,
       });
     
     if (uploadError) {
-      console.log('[Edge:whatsapp-send-audio] storage_upload_error', { error: uploadError.message });
+      console.log('[Edge:whatsapp-send-video] storage_upload_error', { error: uploadError.message });
       return null;
     }
     
@@ -58,10 +52,10 @@ async function uploadToStorage(
       .from('media')
       .getPublicUrl(fileName);
     
-    console.log('[Edge:whatsapp-send-audio] storage_upload_success', { url: publicUrlData.publicUrl });
+    console.log('[Edge:whatsapp-send-video] storage_upload_success', { url: publicUrlData.publicUrl });
     return publicUrlData.publicUrl;
   } catch (error: any) {
-    console.log('[Edge:whatsapp-send-audio] storage_upload_exception', { error: error.message });
+    console.log('[Edge:whatsapp-send-video] storage_upload_exception', { error: error.message });
     return null;
   }
 }
@@ -76,7 +70,7 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, message: "Method not allowed" }, 405);
   }
 
-  console.log('[Edge:whatsapp-send-audio] start');
+  console.log('[Edge:whatsapp-send-video] start');
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { persistSession: false },
@@ -93,7 +87,7 @@ Deno.serve(async (req: Request) => {
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   
   if (authError || !user) {
-    console.log('[Edge:whatsapp-send-audio] auth_error', { error: authError?.message });
+    console.log('[Edge:whatsapp-send-video] auth_error', { error: authError?.message });
     return json({ ok: false, message: "Unauthorized" }, 401);
   }
 
@@ -104,16 +98,17 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, message: "Invalid JSON body" }, 400);
   }
 
-  const { conversationId, audioBase64, mimeType } = body;
+  const { conversationId, videoBase64, mimeType, caption } = body;
 
-  if (!conversationId || !audioBase64) {
-    return json({ ok: false, message: "Missing conversationId or audioBase64" }, 400);
+  if (!conversationId || !videoBase64) {
+    return json({ ok: false, message: "Missing conversationId or videoBase64" }, 400);
   }
 
-  console.log('[Edge:whatsapp-send-audio] sending', { 
+  console.log('[Edge:whatsapp-send-video] sending', { 
     conversationId, 
-    audioSize: audioBase64.length,
-    mimeType 
+    videoSize: videoBase64.length,
+    mimeType,
+    hasCaption: !!caption
   });
 
   try {
@@ -142,7 +137,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (convError || !conversation) {
-      console.log('[Edge:whatsapp-send-audio] conversation_not_found', { error: convError?.message });
+      console.log('[Edge:whatsapp-send-video] conversation_not_found', { error: convError?.message });
       return json({ ok: false, message: "Conversation not found" }, 404);
     }
 
@@ -169,11 +164,11 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, message: "WhatsApp not connected" }, 400);
     }
 
-    // Upload audio to storage first
+    // Upload video to storage first
     const storedMediaUrl = await uploadToStorage(
       supabase, 
-      audioBase64, 
-      mimeType || 'audio/ogg',
+      videoBase64, 
+      mimeType || 'video/mp4',
       conversation.workspace_id
     );
 
@@ -187,28 +182,28 @@ Deno.serve(async (req: Request) => {
         workspace_id: conversation.workspace_id,
         conversation_id: conversationId,
         whatsapp_number_id: conversation.whatsapp_number_id,
-        body: '🎤 Áudio',
-        type: 'audio',
+        body: caption || '🎬 Vídeo',
+        type: 'video',
         is_outgoing: true,
         status: 'sending',
         sent_by_user_id: user.id,
-        media_url: storedMediaUrl, // Set immediately for playback
+        media_url: storedMediaUrl, // Set immediately for preview
       })
       .select('id')
       .single();
 
     if (insertError) {
-      console.log('[Edge:whatsapp-send-audio] insert_error', { error: insertError.message });
+      console.log('[Edge:whatsapp-send-video] insert_error', { error: insertError.message });
       return json({ ok: false, message: "Failed to create message" }, 500);
     }
 
     const messageId = insertedMessage.id;
 
-    // Send via Evolution API - using sendWhatsAppAudio endpoint
+    // Send via Evolution API - using sendMedia endpoint
     const baseUrl = EVOLUTION_BASE_URL.replace(/\/+$/, ''); // Remove trailing slashes
-    const evolutionUrl = `${baseUrl}/message/sendWhatsAppAudio/${whatsappNumber.instance_name}`;
+    const evolutionUrl = `${baseUrl}/message/sendMedia/${whatsappNumber.instance_name}`;
     
-    console.log('[Edge:whatsapp-send-audio] calling_evolution', { 
+    console.log('[Edge:whatsapp-send-video] calling_evolution', { 
       instance: whatsappNumber.instance_name,
       remoteJid 
     });
@@ -221,15 +216,17 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({
         number: remoteJid,
-        audio: audioBase64,
-        encoding: true, // Indicates the audio is base64 encoded
+        mediatype: 'video',
+        media: videoBase64,
+        caption: caption || '',
+        fileName: `video-${Date.now()}.mp4`,
       }),
     });
 
     const evolutionData = await evolutionResponse.json();
 
     if (!evolutionResponse.ok) {
-      console.log('[Edge:whatsapp-send-audio] evolution_error', { 
+      console.log('[Edge:whatsapp-send-video] evolution_error', { 
         status: evolutionResponse.status,
         data: evolutionData 
       });
@@ -239,7 +236,7 @@ Deno.serve(async (req: Request) => {
         .from('messages')
         .update({
           status: 'failed',
-          error_message: evolutionData?.message || 'Failed to send audio',
+          error_message: evolutionData?.message || 'Failed to send video',
         })
         .eq('id', messageId);
 
@@ -253,7 +250,7 @@ Deno.serve(async (req: Request) => {
     // Extract external message ID from Evolution response
     const externalId = evolutionData?.key?.id || evolutionData?.messageId || evolutionData?.id || null;
 
-    // Update message with success status (keep our storage URL)
+    // Update message with success status (keep our storage URL, not Evolution's temporary one)
     await supabase
       .from('messages')
       .update({
@@ -271,7 +268,7 @@ Deno.serve(async (req: Request) => {
       })
       .eq('id', conversationId);
 
-    console.log('[Edge:whatsapp-send-audio] success', { messageId, externalId, storedMediaUrl });
+    console.log('[Edge:whatsapp-send-video] success', { messageId, externalId, storedMediaUrl });
 
     return json({ 
       ok: true, 
@@ -281,7 +278,7 @@ Deno.serve(async (req: Request) => {
     });
 
   } catch (error: any) {
-    console.log('[Edge:whatsapp-send-audio] error', { error: error.message });
+    console.log('[Edge:whatsapp-send-video] error', { error: error.message });
     return json({ ok: false, message: error.message || "Internal error" }, 500);
   }
 });
