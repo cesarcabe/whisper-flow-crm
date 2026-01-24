@@ -7,7 +7,6 @@
 
 import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useOptionalWebSocketContext } from '../../infrastructure/websocket/WebSocketContext';
 import { useOptimisticMessages, createClientMessageId } from './useOptimisticMessages';
 
 interface SendMessageInput {
@@ -43,13 +42,10 @@ interface UseSendMessageReturn {
 }
 
 export function useSendMessage(): UseSendMessageReturn {
-  const websocketContext = useOptionalWebSocketContext();
-  const client = websocketContext?.client ?? null;
-  const isWebSocketEnabled = websocketContext?.isEnabled ?? false;
   const optimistic = useOptimisticMessages();
 
   /**
-   * Executa o envio real da mensagem (WebSocket ou Edge Function)
+   * Executa o envio real da mensagem via Edge Function (webhook)
    */
   const executeRealSend = useCallback(async (
     conversationId: string,
@@ -58,18 +54,6 @@ export function useSendMessage(): UseSendMessageReturn {
     replyToId?: string | null
   ): Promise<{ success: boolean; error?: Error }> => {
     try {
-      // Tentar WebSocket primeiro
-      if (isWebSocketEnabled && client?.isConnected()) {
-        client.sendMessage({
-          conversationId,
-          content,
-          messageId: clientMessageId,
-          replyToMessageId: replyToId ?? undefined,
-        });
-        return { success: true };
-      }
-
-      // Fallback para Edge Function
       const { data, error } = await supabase.functions.invoke('whatsapp-send', {
         body: {
           conversationId,
@@ -94,7 +78,7 @@ export function useSendMessage(): UseSendMessageReturn {
         error: err instanceof Error ? err : new Error('Erro ao enviar mensagem') 
       };
     }
-  }, [client, isWebSocketEnabled]);
+  }, []);
 
   const sendMessage = useCallback(async (input: SendMessageInput): Promise<SendMessageResult> => {
     const clientMessageId = input.clientMessageId ?? createClientMessageId();

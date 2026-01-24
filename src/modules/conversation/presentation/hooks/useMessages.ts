@@ -194,23 +194,30 @@ export function useMessages(conversationId: string | null) {
         const domainMessage = mapWebSocketToCoreMessage(wsMessage, workspaceId);
         
         // Tentar reconciliar com mensagem otimista
-        // O messageId do WebSocket pode ser o clientId que enviamos
+        // O clientMessageId vem na metadata quando o envio é via webhook
+        const clientMessageId = wsMessage.metadata?.clientMessageId;
         reconcileWithServer(
           conversationId,
           domainMessage.id,
-          wsMessage.id // pode ser o clientId
+          clientMessageId ?? undefined
         );
         
         setServerMessages((prev) => {
-          // Avoid duplicates
-          if (prev.some((m) => m.id === domainMessage.id)) return prev;
-          
+          // Avoid duplicates by id or external_id
+          const existingIndex = prev.findIndex((m) =>
+            m.id === domainMessage.id ||
+            (m.externalId && domainMessage.externalId && m.externalId === domainMessage.externalId) ||
+            (domainMessage.externalId && m.id === domainMessage.externalId)
+          );
+          if (existingIndex >= 0) {
+            return prev;
+          }
+
           // Verificar se já foi processado via optimistic
           if (isProcessed(domainMessage.id)) {
             // Já reconciliado, apenas adicionar à lista real
           }
 
-          // Prepend new message at the beginning
           return [domainMessage, ...prev];
         });
       } catch (e) {
@@ -229,7 +236,8 @@ export function useMessages(conversationId: string | null) {
       // Também atualizar na lista de mensagens do servidor
       setServerMessages((prev) =>
         prev.map((msg) => {
-          if (msg.id === data.messageId) {
+          const matches = msg.id === data.messageId || msg.externalId === data.messageId;
+          if (matches) {
             // Map WebSocket status to CoreMessage status
             let newStatus: 'sending' | 'sent' | 'delivered' | 'read' | 'failed' = 'sent';
             if (data.status === 'pending') newStatus = 'sending';
@@ -273,10 +281,9 @@ export function useMessages(conversationId: string | null) {
     };
   }, [wsClient, isWebSocketEnabled, conversationId, workspaceId, reconcileWithServer, isProcessed, confirmMessage, failMessage]);
 
-  // Supabase Realtime subscription (fallback when WebSocket is not available)
+  // Supabase Realtime subscription (used for persistence updates)
   useEffect(() => {
-    // Only use Supabase Realtime if WebSocket is not enabled
-    if (isWebSocketEnabled || !workspaceId || !conversationId) {
+    if (!workspaceId || !conversationId) {
       return;
     }
 
@@ -301,13 +308,23 @@ export function useMessages(conversationId: string | null) {
           try {
             const newMessage = MessageMapper.toDomain(newRow);
             
-            // Tentar reconciliar com mensagem otimista
-            reconcileWithServer(conversationId, newMessage.id);
+            // Tentar reconciliar com mensagem otimista (clientMessageId em external_id)
+            reconcileWithServer(conversationId, newMessage.id, newMessage.externalId ?? undefined);
             
             setServerMessages((prev) => {
-              // Avoid duplicates
-              if (prev.some((m) => m.id === newMessage.id)) return prev;
-              // Prepend new message at the beginning
+              // Avoid duplicates by id or external_id
+              const existingIndex = prev.findIndex((m) => 
+                m.id === newMessage.id ||
+                (m.externalId && newMessage.externalId && m.externalId === newMessage.externalId) ||
+                (newMessage.externalId && m.id === newMessage.externalId)
+              );
+
+              if (existingIndex >= 0) {
+                const next = [...prev];
+                next[existingIndex] = newMessage;
+                return next;
+              }
+
               return [newMessage, ...prev];
             });
           } catch (e) {
@@ -329,7 +346,12 @@ export function useMessages(conversationId: string | null) {
           try {
             const updatedMessage = MessageMapper.toDomain(updatedRow);
             setServerMessages((prev) => 
-              prev.map((m) => (m.id === updatedMessage.id ? updatedMessage : m))
+              prev.map((m) => {
+                const matches =
+                  m.id === updatedMessage.id ||
+                  (m.externalId && updatedMessage.externalId && m.externalId === updatedMessage.externalId);
+                return matches ? updatedMessage : m;
+              })
             );
           } catch (e) {
             console.warn('[useMessages] Failed to map realtime update:', e);
@@ -344,7 +366,7 @@ export function useMessages(conversationId: string | null) {
         channelRef.current = null;
       }
     };
-  }, [workspaceId, conversationId, isWebSocketEnabled, reconcileWithServer]);
+  }, [workspaceId, conversationId, reconcileWithServer]);
 
   // Initial fetch
   useEffect(() => {

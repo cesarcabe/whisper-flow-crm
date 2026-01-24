@@ -127,6 +127,7 @@ Deno.serve(async (req: Request) => {
         workspace_id: conversation.workspace_id,
         conversation_id: conversationId,
         whatsapp_number_id: conversation.whatsapp_number_id,
+        external_id: clientMessageId ?? null,
         body: message,
         is_outgoing: true,
         status: 'sending',
