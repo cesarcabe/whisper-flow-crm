@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Workspace, 
@@ -43,6 +43,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return null;
   });
   const [loading, setLoading] = useState(true);
+  
+  // Flag to prevent refetch on focus/visibility change
+  const hasInitialFetchRef = useRef<boolean>(false);
 
   const repository = new SupabaseWorkspaceRepository();
 
@@ -106,9 +109,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(ACTIVE_WORKSPACE_KEY, workspaceId);
   }, [workspaces]);
 
+  // Initial fetch - only once per user
   useEffect(() => {
-    fetchWorkspaces();
-  }, [fetchWorkspaces]);
+    if (!user) {
+      hasInitialFetchRef.current = false;
+      setWorkspaces([]);
+      setActiveWorkspaceId(null);
+      setLoading(false);
+      return;
+    }
+    
+    // Only fetch if we haven't fetched for this user yet
+    if (!hasInitialFetchRef.current) {
+      hasInitialFetchRef.current = true;
+      fetchWorkspaces();
+    }
+  }, [user, fetchWorkspaces]);
 
   // Derive active workspace and membership from state
   const activeWorkspaceData = workspaces.find(w => w.workspace.id === activeWorkspaceId);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
@@ -47,6 +47,9 @@ export function useDashboardMetrics() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Flag to prevent refetch on focus/visibility change
+  const hasInitialFetchRef = useRef<boolean>(false);
 
   const fetchMetrics = useCallback(async () => {
     if (!workspaceId) {
@@ -177,9 +180,20 @@ export function useDashboardMetrics() {
     }
   }, [workspaceId]);
 
+  // Initial fetch - only once per workspace
   useEffect(() => {
-    fetchMetrics();
-  }, [fetchMetrics]);
+    if (!workspaceId) {
+      hasInitialFetchRef.current = false;
+      setLoading(false);
+      return;
+    }
+    
+    // Only fetch if we haven't fetched for this workspace yet
+    if (!hasInitialFetchRef.current) {
+      hasInitialFetchRef.current = true;
+      fetchMetrics();
+    }
+  }, [workspaceId, fetchMetrics]);
 
   return {
     metrics,

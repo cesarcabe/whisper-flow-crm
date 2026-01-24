@@ -104,6 +104,9 @@ export function useMessages(conversationId: string | null) {
   // Offset-based pagination
   const offsetRef = useRef<number>(0);
   
+  // Flag to prevent refetch on focus/visibility change
+  const hasInitialFetchRef = useRef<boolean>(false);
+  
   // Optimistic messages hook - extrair funções estáveis
   const {
     clearConfirmed,
@@ -366,10 +369,19 @@ export function useMessages(conversationId: string | null) {
     };
   }, [workspaceId, conversationId, reconcileWithServer]);
 
-  // Initial fetch
+  // Initial fetch - only once per conversation
   useEffect(() => {
-    fetchMessages(false);
-  }, [fetchMessages]);
+    if (!conversationId || !workspaceId) {
+      hasInitialFetchRef.current = false;
+      return;
+    }
+    
+    // Only fetch if we haven't fetched for this conversation yet
+    if (!hasInitialFetchRef.current) {
+      hasInitialFetchRef.current = true;
+      fetchMessages(false);
+    }
+  }, [conversationId, workspaceId, fetchMessages]);
 
   // Combinar mensagens do servidor com mensagens otimistas
   // Mensagens otimistas aparecem no final (mais recentes)

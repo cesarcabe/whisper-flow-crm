@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Tables } from '@/integrations/supabase/types';
@@ -21,6 +21,9 @@ export function useWhatsappNumbers() {
   const [numbers, setNumbers] = useState<WhatsappNumber[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Flag to prevent refetch on focus/visibility change
+  const hasInitialFetchRef = useRef<boolean>(false);
 
   const fetchNumbers = useCallback(async () => {
     if (!workspaceId) {
@@ -130,9 +133,21 @@ export function useWhatsappNumbers() {
     return data;
   }, [workspaceId]);
 
+  // Initial fetch - only once per workspace
   useEffect(() => {
-    fetchNumbers();
-  }, [fetchNumbers]);
+    if (!workspaceId) {
+      hasInitialFetchRef.current = false;
+      setNumbers([]);
+      setLoading(false);
+      return;
+    }
+    
+    // Only fetch if we haven't fetched for this workspace yet
+    if (!hasInitialFetchRef.current) {
+      hasInitialFetchRef.current = true;
+      fetchNumbers();
+    }
+  }, [workspaceId, fetchNumbers]);
 
   return {
     numbers,

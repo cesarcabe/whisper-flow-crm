@@ -92,6 +92,9 @@ export function useConversations(whatsappNumberId: string | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  
+  // Flag to prevent refetch on focus/visibility change
+  const hasInitialFetchRef = useRef<boolean>(false);
 
   const fetchConversations = useCallback(async () => {
     if (!workspaceId || !whatsappNumberId) {
@@ -347,9 +350,19 @@ export function useConversations(whatsappNumberId: string | null) {
     };
   }, [workspaceId, whatsappNumberId]);
 
+  // Initial fetch - only once per whatsappNumberId
   useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+    if (!whatsappNumberId || !workspaceId) {
+      hasInitialFetchRef.current = false;
+      return;
+    }
+    
+    // Only fetch if we haven't fetched for this whatsappNumberId yet
+    if (!hasInitialFetchRef.current) {
+      hasInitialFetchRef.current = true;
+      fetchConversations();
+    }
+  }, [whatsappNumberId, workspaceId, fetchConversations]);
 
   return {
     conversations,

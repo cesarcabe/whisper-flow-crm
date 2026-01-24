@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Workspace, 
@@ -25,6 +25,9 @@ export function useUserWorkspaces() {
   const [workspaces, setWorkspaces] = useState<WorkspaceWithMembership[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  
+  // Flag to prevent refetch on focus/visibility change
+  const hasInitialFetchRef = useRef<boolean>(false);
 
   // Create repository instance - could be injected for testing
   const repository = useMemo(() => new SupabaseWorkspaceRepository(), []);
@@ -64,9 +67,21 @@ export function useUserWorkspaces() {
     }
   }, [user, repository]);
 
+  // Initial fetch - only once per user
   useEffect(() => {
-    fetchWorkspaces();
-  }, [fetchWorkspaces]);
+    if (!user) {
+      hasInitialFetchRef.current = false;
+      setWorkspaces([]);
+      setLoading(false);
+      return;
+    }
+    
+    // Only fetch if we haven't fetched for this user yet
+    if (!hasInitialFetchRef.current) {
+      hasInitialFetchRef.current = true;
+      fetchWorkspaces();
+    }
+  }, [user, fetchWorkspaces]);
 
   return {
     workspaces,
