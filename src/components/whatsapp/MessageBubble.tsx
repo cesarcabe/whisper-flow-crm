@@ -10,7 +10,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { AudioPlayer } from './AudioPlayer';
 import { ImageViewer } from './ImageViewer';
-import { VideoPlayer } from './VideoPlayer';
 import { ReactionPicker } from './ReactionPicker';
 import { useMessageReactions } from '@/hooks/useMessageReactions';
 import { useSendMessage } from '@/modules/conversation/presentation/hooks/useSendMessage';
@@ -66,7 +65,6 @@ export function MessageBubble({
   const time = formatTime(message.createdAt);
   const isAudio = message.type.getValue() === 'audio';
   const isImage = message.type.getValue() === 'image';
-  const isVideo = message.type.getValue() === 'video';
   const { groupedReactions, toggleReaction } = useMessageReactions(message.id);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -78,6 +76,7 @@ export function MessageBubble({
   // Estados especiais para mensagens otimistas
   const isSending = message.status === 'sending';
   const isFailed = message.status === 'failed';
+  const isOptimistic = message.id.startsWith('opt_');
   
   // Handler para reenviar mensagem que falhou
   const handleRetry = useCallback(async () => {
@@ -136,31 +135,6 @@ export function MessageBubble({
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>📷</span>
           <span>Imagem indisponível</span>
-        </div>
-      );
-    }
-
-    // Video message
-    if (isVideo && message.mediaUrl) {
-      return (
-        <div>
-          <VideoPlayer
-            src={message.mediaUrl}
-            thumbnailUrl={message.thumbnailUrl}
-          />
-          {message.body && message.body !== '🎬 Vídeo' && (
-            <p className="text-sm mt-1 whitespace-pre-wrap break-words">
-              {message.body}
-            </p>
-          )}
-        </div>
-      );
-    }
-    if (isVideo) {
-      return (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>🎬</span>
-          <span>Vídeo indisponível</span>
         </div>
       );
     }
@@ -229,21 +203,13 @@ export function MessageBubble({
               {quotedMessage && (
                 <div 
                   className={cn(
-                    "mb-2 p-2 rounded text-xs transition-opacity",
-                    message.replyToId ? "cursor-pointer hover:opacity-80" : "cursor-default",
+                    "mb-2 p-2 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity",
                     isOutgoing 
                       ? "bg-black/10 border-l-2 border-white/50" 
                       : "bg-black/5 border-l-2 border-primary"
                   )}
-                  onClick={() => message.replyToId && onScrollToMessage?.(message.replyToId)}
+                  onClick={() => onScrollToMessage?.(quotedMessage.id)}
                 >
-                  {(quotedMessage.type === 'image' || quotedMessage.type === 'video') && (quotedMessage.thumbnailUrl || quotedMessage.mediaUrl) && (
-                    <img
-                      src={quotedMessage.thumbnailUrl || quotedMessage.mediaUrl || undefined}
-                      alt="Preview"
-                      className="h-10 w-10 rounded object-cover mb-1"
-                    />
-                  )}
                   <p className="font-medium text-[11px] opacity-80 mb-0.5">
                     {quotedMessage.isOutgoing ? 'Você' : 'Contato'}
                   </p>
@@ -254,23 +220,6 @@ export function MessageBubble({
               )}
 
               {renderContent()}
-
-              {message.uploadProgress !== null && message.status === 'sending' && (
-                <div className="mt-2">
-                  <div className="h-1.5 w-full bg-black/10 rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        'h-full rounded-full transition-all duration-150',
-                        isOutgoing ? 'bg-primary-foreground/70' : 'bg-primary'
-                      )}
-                      style={{ width: `${message.uploadProgress}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] opacity-60 mt-1 inline-block">
-                    Upload {message.uploadProgress}%
-                  </span>
-                </div>
-              )}
               
               <div className={cn(
                 'flex items-center gap-1 mt-1', 

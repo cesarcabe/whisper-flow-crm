@@ -21,14 +21,12 @@ import { useConversationStages } from '@/hooks/useConversationStages';
 import { MessageInput } from './MessageInput';
 import { MessageBubble } from './MessageBubble';
 import { ForwardMessageDialog } from './ForwardMessageDialog';
-import { ChatDebugPanel } from './ChatDebugPanel';
 import { Tables } from '@/integrations/supabase/types';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { formatDateLabel } from '@/lib/date-utils';
 import { groupMessagesByDate } from '@/lib/message-utils';
 import { getInitials } from '@/lib/normalize';
-import { emitChatDebug } from '@/lib/chat-debug';
 
 type Contact = Tables<'contacts'>;
 
@@ -50,9 +48,6 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isUpdatingStage, setIsUpdatingStage] = useState(false);
   const prevMessagesLengthRef = useRef(0);
-  const showDebug = typeof window !== 'undefined'
-    && (new URLSearchParams(window.location.search).get('debugChat') === '1'
-      || localStorage.getItem('chat_debug') === '1');
   
   // Reply state
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -90,11 +85,6 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
   };
   
   const initials = isGroup ? 'GP' : getInitials(name);
-
-  const handleReply = useCallback((message: Message) => {
-    setReplyingTo(message);
-    emitChatDebug('reply:set', { messageId: message.id, conversationId });
-  }, [conversationId]);
 
   // Scroll to bottom function
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
@@ -318,7 +308,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
                 <MessagesWithDateSeparators 
                   messages={messages}
                   conversationId={conversationId}
-                  onReply={handleReply}
+                  onReply={setReplyingTo}
                   onForward={setForwardMessage}
                   onScrollToMessage={scrollToMessage}
                 />
@@ -357,7 +347,6 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
             onClearReply={() => setReplyingTo(null)}
           />
         )}
-        {showDebug && <ChatDebugPanel />}
       </div>
 
       {/* Forward Dialog */}

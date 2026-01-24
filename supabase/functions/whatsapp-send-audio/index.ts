@@ -24,7 +24,7 @@ async function uploadToStorage(
   base64Data: string,
   mimeType: string,
   workspaceId: string
-): Promise<{ publicUrl: string; path: string } | null> {
+): Promise<string | null> {
   try {
     // Decode base64 to Uint8Array
     const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
@@ -59,7 +59,7 @@ async function uploadToStorage(
       .getPublicUrl(fileName);
     
     console.log('[Edge:whatsapp-send-audio] storage_upload_success', { url: publicUrlData.publicUrl });
-    return { publicUrl: publicUrlData.publicUrl, path: fileName };
+    return publicUrlData.publicUrl;
   } catch (error: any) {
     console.log('[Edge:whatsapp-send-audio] storage_upload_exception', { error: error.message });
     return null;
@@ -104,10 +104,10 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, message: "Invalid JSON body" }, 400);
   }
 
-  const { conversationId, audioBase64, storagePath, mimeType, clientMessageId, replyToId, quotedMessage: clientQuoted, isVoiceNote } = body;
+  const { conversationId, audioBase64, mimeType } = body;
 
-  if (!conversationId || (!audioBase64 && !storagePath)) {
-    return json({ ok: false, message: "Missing conversationId or audioBase64/storagePath" }, 400);
+  if (!conversationId || !audioBase64) {
+    return json({ ok: false, message: "Missing conversationId or audioBase64" }, 400);
   }
 
   console.log('[Edge:whatsapp-send-audio] sending', { 
@@ -169,84 +169,16 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, message: "WhatsApp not connected" }, 400);
     }
 
-    // Upload audio to storage first (if not already uploaded)
-    let stored: { publicUrl: string; path: string } | null = null;
-    let finalBase64: string = audioBase64 || '';
-    
-    if (storagePath) {
-      // File already uploaded, download and convert to base64
-      const { data: downloaded, error: downloadError } = await supabase.storage
-        .from('media')
-        .download(storagePath);
-      
-      if (downloadError || !downloaded) {
-        console.log('[Edge:whatsapp-send-audio] download_error', { error: downloadError?.message });
-        return json({ ok: false, message: "Failed to download media from storage" }, 500);
-      }
-      
-      // Convert blob to base64
-      const buffer = new Uint8Array(await downloaded.arrayBuffer());
-      let binary = '';
-      for (let i = 0; i < buffer.length; i += 1) {
-        binary += String.fromCharCode(buffer[i]);
-      }
-      finalBase64 = btoa(binary);
-      
-      // Get public URL for storage path
-      const { data: publicUrlData } = supabase.storage
-        .from('media')
-        .getPublicUrl(storagePath);
-      stored = { publicUrl: publicUrlData.publicUrl, path: storagePath };
-    } else if (audioBase64) {
-      // Upload base64 to storage
-      stored = await uploadToStorage(
-        supabase, 
-        audioBase64, 
-        mimeType || 'audio/ogg',
-        conversation.workspace_id
-      );
-      finalBase64 = audioBase64;
-    }
+    // Upload audio to storage first
+    const storedMediaUrl = await uploadToStorage(
+      supabase, 
+      audioBase64, 
+      mimeType || 'audio/ogg',
+      conversation.workspace_id
+    );
 
     // Determine destination
     const remoteJid = conversation.remote_jid || `${contact?.phone}@s.whatsapp.net`;
-
-    // Load quoted message (if replying)
-    let quotedMessage: { id: string; body: string; type: string; is_outgoing: boolean; media_url?: string | null; thumbnail_url?: string | null } | null = null;
-    let providerReplyId: string | null = null;
-    if (replyToId) {
-      const { data: quotedRow } = await supabase
-        .from('messages')
-        .select('id, body, type, is_outgoing, media_url, thumbnail_url, media_path, thumbnail_path, external_id')
-        .eq('id', replyToId)
-        .eq('conversation_id', conversationId)
-        .maybeSingle();
-
-      if (quotedRow) {
-        quotedMessage = {
-          id: quotedRow.id,
-          body: quotedRow.body ?? '',
-          type: quotedRow.type ?? 'text',
-          is_outgoing: quotedRow.is_outgoing ?? false,
-          media_url: quotedRow.media_url ?? null,
-          thumbnail_url: quotedRow.thumbnail_url ?? null,
-          media_path: quotedRow.media_path ?? null,
-          thumbnail_path: quotedRow.thumbnail_path ?? null,
-        };
-        providerReplyId = quotedRow.external_id ?? null;
-      }
-    }
-
-    if (!quotedMessage && clientQuoted && typeof clientQuoted === 'object') {
-      quotedMessage = {
-        id: String(clientQuoted.id ?? ''),
-        body: String(clientQuoted.body ?? ''),
-        type: String(clientQuoted.type ?? 'text'),
-        is_outgoing: Boolean(clientQuoted.isOutgoing ?? false),
-        media_url: clientQuoted.mediaUrl ? String(clientQuoted.mediaUrl) : null,
-        thumbnail_url: clientQuoted.thumbnailUrl ? String(clientQuoted.thumbnailUrl) : null,
-      };
-    }
 
     // Insert message with 'sending' status and storage URL
     const { data: insertedMessage, error: insertError } = await supabase
@@ -255,19 +187,12 @@ Deno.serve(async (req: Request) => {
         workspace_id: conversation.workspace_id,
         conversation_id: conversationId,
         whatsapp_number_id: conversation.whatsapp_number_id,
-        client_id: clientMessageId ?? null,
         body: '🎤 Áudio',
         type: 'audio',
-        media_type: 'audio',
-        mime_type: mimeType ?? 'audio/ogg',
         is_outgoing: true,
         status: 'sending',
         sent_by_user_id: user.id,
-        media_url: stored?.publicUrl ?? null, // Compatibilidade
-        media_path: stored?.path ?? null,
-        reply_to_id: replyToId ?? null,
-        provider_reply_id: providerReplyId,
-        quoted_message: quotedMessage,
+        media_url: storedMediaUrl, // Set immediately for playback
       })
       .select('id')
       .single();
@@ -287,25 +212,17 @@ Deno.serve(async (req: Request) => {
       remoteJid 
     });
 
-    const payload: Record<string, unknown> = {
-      number: remoteJid,
-      audio: finalBase64,
-      encoding: true,
-      ptt: Boolean(isVoiceNote),
-    };
-
-    if (providerReplyId) {
-      payload.quotedMessageId = providerReplyId;
-      payload.quoted = { key: { id: providerReplyId, remoteJid } };
-    }
-
     const evolutionResponse = await fetch(evolutionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': EVOLUTION_API_KEY,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        number: remoteJid,
+        audio: audioBase64,
+        encoding: true, // Indicates the audio is base64 encoded
+      }),
     });
 
     const evolutionData = await evolutionResponse.json();
@@ -353,13 +270,13 @@ Deno.serve(async (req: Request) => {
       })
       .eq('id', conversationId);
 
-    console.log('[Edge:whatsapp-send-audio] success', { messageId, externalId, storedMediaUrl: stored?.publicUrl });
+    console.log('[Edge:whatsapp-send-audio] success', { messageId, externalId, storedMediaUrl });
 
     return json({ 
       ok: true, 
       messageId,
       externalId,
-      mediaUrl: stored?.publicUrl,
+      mediaUrl: storedMediaUrl,
     });
 
   } catch (error: any) {

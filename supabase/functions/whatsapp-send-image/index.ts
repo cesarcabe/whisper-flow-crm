@@ -24,7 +24,7 @@ async function uploadToStorage(
   base64Data: string,
   mimeType: string,
   workspaceId: string
-): Promise<{ publicUrl: string; path: string } | null> {
+): Promise<string | null> {
   try {
     // Decode base64 to Uint8Array
     const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
@@ -53,7 +53,7 @@ async function uploadToStorage(
       .getPublicUrl(fileName);
     
     console.log('[Edge:whatsapp-send-image] storage_upload_success', { url: publicUrlData.publicUrl });
-    return { publicUrl: publicUrlData.publicUrl, path: fileName };
+    return publicUrlData.publicUrl;
   } catch (error: any) {
     console.log('[Edge:whatsapp-send-image] storage_upload_exception', { error: error.message });
     return null;
@@ -98,10 +98,10 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, message: "Invalid JSON body" }, 400);
   }
 
-  const { conversationId, imageBase64, storagePath, mimeType, caption, clientMessageId, replyToId, quotedMessage: clientQuoted } = body;
+  const { conversationId, imageBase64, mimeType, caption } = body;
 
-  if (!conversationId || (!imageBase64 && !storagePath)) {
-    return json({ ok: false, message: "Missing conversationId or imageBase64/storagePath" }, 400);
+  if (!conversationId || !imageBase64) {
+    return json({ ok: false, message: "Missing conversationId or imageBase64" }, 400);
   }
 
   console.log('[Edge:whatsapp-send-image] sending', { 
@@ -164,84 +164,16 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, message: "WhatsApp not connected" }, 400);
     }
 
-    // Upload image to storage first (if not already uploaded)
-    let stored: { publicUrl: string; path: string } | null = null;
-    let finalBase64: string = imageBase64 || '';
-    
-    if (storagePath) {
-      // File already uploaded, download and convert to base64
-      const { data: downloaded, error: downloadError } = await supabase.storage
-        .from('media')
-        .download(storagePath);
-      
-      if (downloadError || !downloaded) {
-        console.log('[Edge:whatsapp-send-image] download_error', { error: downloadError?.message });
-        return json({ ok: false, message: "Failed to download media from storage" }, 500);
-      }
-      
-      // Convert blob to base64
-      const buffer = new Uint8Array(await downloaded.arrayBuffer());
-      let binary = '';
-      for (let i = 0; i < buffer.length; i += 1) {
-        binary += String.fromCharCode(buffer[i]);
-      }
-      finalBase64 = btoa(binary);
-      
-      // Get public URL for storage path
-      const { data: publicUrlData } = supabase.storage
-        .from('media')
-        .getPublicUrl(storagePath);
-      stored = { publicUrl: publicUrlData.publicUrl, path: storagePath };
-    } else if (imageBase64) {
-      // Upload base64 to storage
-      stored = await uploadToStorage(
-        supabase, 
-        imageBase64, 
-        mimeType || 'image/jpeg',
-        conversation.workspace_id
-      );
-      finalBase64 = imageBase64;
-    }
+    // Upload image to storage first
+    const storedMediaUrl = await uploadToStorage(
+      supabase, 
+      imageBase64, 
+      mimeType || 'image/jpeg',
+      conversation.workspace_id
+    );
 
     // Determine destination
     const remoteJid = conversation.remote_jid || `${contact?.phone}@s.whatsapp.net`;
-
-    // Load quoted message (if replying)
-    let quotedMessage: { id: string; body: string; type: string; is_outgoing: boolean; media_url?: string | null; thumbnail_url?: string | null } | null = null;
-    let providerReplyId: string | null = null;
-    if (replyToId) {
-      const { data: quotedRow } = await supabase
-        .from('messages')
-        .select('id, body, type, is_outgoing, media_url, thumbnail_url, media_path, thumbnail_path, external_id')
-        .eq('id', replyToId)
-        .eq('conversation_id', conversationId)
-        .maybeSingle();
-
-      if (quotedRow) {
-        quotedMessage = {
-          id: quotedRow.id,
-          body: quotedRow.body ?? '',
-          type: quotedRow.type ?? 'text',
-          is_outgoing: quotedRow.is_outgoing ?? false,
-          media_url: quotedRow.media_url ?? null,
-          thumbnail_url: quotedRow.thumbnail_url ?? null,
-          media_path: quotedRow.media_path ?? null,
-          thumbnail_path: quotedRow.thumbnail_path ?? null,
-        };
-        providerReplyId = quotedRow.external_id ?? null;
-      }
-    }
-
-    if (!quotedMessage && clientQuoted && typeof clientQuoted === 'object') {
-      quotedMessage = {
-        id: String(clientQuoted.id ?? ''),
-        body: String(clientQuoted.body ?? ''),
-        type: String(clientQuoted.type ?? 'text'),
-        is_outgoing: Boolean(clientQuoted.isOutgoing ?? false),
-        media_url: clientQuoted.mediaUrl ? String(clientQuoted.mediaUrl) : null,
-        thumbnail_url: clientQuoted.thumbnailUrl ? String(clientQuoted.thumbnailUrl) : null,
-      };
-    }
 
     // Insert message with 'sending' status and storage URL
     const { data: insertedMessage, error: insertError } = await supabase
@@ -250,19 +182,12 @@ Deno.serve(async (req: Request) => {
         workspace_id: conversation.workspace_id,
         conversation_id: conversationId,
         whatsapp_number_id: conversation.whatsapp_number_id,
-        client_id: clientMessageId ?? null,
         body: caption || '📷 Imagem',
         type: 'image',
-        media_type: 'image',
-        mime_type: mimeType ?? 'image/jpeg',
         is_outgoing: true,
         status: 'sending',
         sent_by_user_id: user.id,
-        media_url: stored?.publicUrl ?? null, // Compatibilidade
-        media_path: stored?.path ?? null,
-        reply_to_id: replyToId ?? null,
-        provider_reply_id: providerReplyId,
-        quoted_message: quotedMessage,
+        media_url: storedMediaUrl, // Set immediately for preview
       })
       .select('id')
       .single();
@@ -282,26 +207,19 @@ Deno.serve(async (req: Request) => {
       remoteJid 
     });
 
-    const payload: Record<string, unknown> = {
-      number: remoteJid,
-      mediatype: 'image',
-      media: finalBase64,
-      caption: caption || '',
-      fileName: `image-${Date.now()}.jpg`,
-    };
-
-    if (providerReplyId) {
-      payload.quotedMessageId = providerReplyId;
-      payload.quoted = { key: { id: providerReplyId, remoteJid } };
-    }
-
     const evolutionResponse = await fetch(evolutionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': EVOLUTION_API_KEY,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        number: remoteJid,
+        mediatype: 'image',
+        media: imageBase64,
+        caption: caption || '',
+        fileName: `image-${Date.now()}.jpg`,
+      }),
     });
 
     const evolutionData = await evolutionResponse.json();
@@ -349,13 +267,13 @@ Deno.serve(async (req: Request) => {
       })
       .eq('id', conversationId);
 
-    console.log('[Edge:whatsapp-send-image] success', { messageId, externalId, storedMediaUrl: stored?.publicUrl });
+    console.log('[Edge:whatsapp-send-image] success', { messageId, externalId, storedMediaUrl });
 
     return json({ 
       ok: true, 
       messageId,
       externalId,
-      mediaUrl: stored?.publicUrl,
+      mediaUrl: storedMediaUrl,
     });
 
   } catch (error: any) {

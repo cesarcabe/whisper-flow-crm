@@ -9,7 +9,6 @@ import { MessageMapper } from '@/infra/supabase/mappers/MessageMapper';
 import { MessageTypeValue } from '@/core/domain/value-objects/MessageType';
 import { Tables } from '@/integrations/supabase/types';
 import { useOptimisticMessages } from './useOptimisticMessages';
-import { getSignedUrl } from '@/lib/media-utils';
 
 type MessageRow = Tables<'messages'>;
 
@@ -28,17 +27,8 @@ function mapModuleToCoreMessage(m: CoreMessage): CoreMessage {
     is_outgoing: m.isOutgoing,
     status: m.status,
     external_id: m.externalId,
-    client_id: m.clientId,
-    media_type: m.mediaType,
     media_url: m.mediaUrl,
-    media_path: m.mediaPath,
-    mime_type: m.mimeType,
-    size_bytes: m.sizeBytes,
-    duration_ms: m.durationMs,
-    thumbnail_url: m.thumbnailUrl,
-    thumbnail_path: m.thumbnailPath,
     reply_to_id: m.replyToId,
-    provider_reply_id: m.providerReplyId,
     quoted_message: m.quotedMessage as unknown as null,
     sent_by_user_id: m.sentByUserId,
     whatsapp_number_id: m.whatsappNumberId,
@@ -70,16 +60,7 @@ function mapWebSocketToCoreMessage(wsMessage: WebSocketMessage, workspaceId: str
   const messageType: MessageTypeValue = wsMessage.type === 'file' ? 'document' : wsMessage.type;
 
   // Get media URL from attachments if available
-  const attachment = wsMessage.attachments?.[0];
-  const mediaUrl = attachment?.url || null;
-  const thumbnailUrl = attachment?.thumbnailUrl || null;
-  const mimeType = attachment?.metadata?.mimeType ? String(attachment.metadata.mimeType) : null;
-  const sizeBytes = attachment?.metadata?.size ? Number(attachment.metadata.size) : null;
-  const durationMs = attachment?.metadata?.durationMs
-    ? Number(attachment.metadata.durationMs)
-    : attachment?.metadata?.duration
-    ? Number(attachment.metadata.duration)
-    : null;
+  const mediaUrl = wsMessage.attachments?.[0]?.url || null;
 
   return MessageMapper.toDomain({
     id: wsMessage.id,
@@ -90,17 +71,8 @@ function mapWebSocketToCoreMessage(wsMessage: WebSocketMessage, workspaceId: str
     is_outgoing: isOutgoing,
     status: status,
     external_id: wsMessage.metadata?.providerMessageId || null,
-    client_id: wsMessage.metadata?.clientMessageId || null,
-    media_type: messageType !== 'text' ? messageType : null,
     media_url: mediaUrl,
-    media_path: null,
-    mime_type: mimeType,
-    size_bytes: sizeBytes,
-    duration_ms: durationMs,
-    thumbnail_url: thumbnailUrl,
-    thumbnail_path: null,
-    reply_to_id: null,
-    provider_reply_id: wsMessage.replyToMessageId || null,
+    reply_to_id: wsMessage.replyToMessageId || null,
     quoted_message: null, // WebSocket doesn't send quoted message details
     sent_by_user_id: isOutgoing ? (wsMessage.senderId !== 'me' && wsMessage.senderId !== 'system' ? wsMessage.senderId : null) : null,
     whatsapp_number_id: null, // Will be set from conversation context if needed
@@ -141,8 +113,6 @@ export function useMessages(conversationId: string | null) {
     failMessage,
     getOptimisticAsMessages,
   } = useOptimisticMessages();
-
-  const signedUrlCacheRef = useRef(new Map<string, string>());
 
   /**
    * Fetch messages using offset-based pagination
@@ -287,19 +257,10 @@ export function useMessages(conversationId: string | null) {
               type: msg.type.getValue(),
               status: newStatus,
               is_outgoing: msg.isOutgoing,
-              client_id: msg.clientId,
-              media_type: msg.mediaType,
               media_url: msg.mediaUrl,
-              media_path: msg.mediaPath,
-              mime_type: msg.mimeType,
-              size_bytes: msg.sizeBytes,
-              duration_ms: msg.durationMs,
-              thumbnail_url: msg.thumbnailUrl,
-              thumbnail_path: msg.thumbnailPath,
               external_id: msg.externalId,
               error_message: msg.errorMessage,
               reply_to_id: msg.replyToId,
-              provider_reply_id: msg.providerReplyId,
               quoted_message: msg.quotedMessage as unknown as null,
               created_at: msg.createdAt.toISOString(),
             };
@@ -347,8 +308,8 @@ export function useMessages(conversationId: string | null) {
           try {
             const newMessage = MessageMapper.toDomain(newRow);
             
-            // Tentar reconciliar com mensagem otimista (clientId preferencial)
-            reconcileWithServer(conversationId, newMessage.id, newMessage.clientId ?? newMessage.externalId ?? undefined);
+            // Tentar reconciliar com mensagem otimista (clientMessageId em external_id)
+            reconcileWithServer(conversationId, newMessage.id, newMessage.externalId ?? undefined);
             
             setServerMessages((prev) => {
               // Avoid duplicates by id or external_id
@@ -430,112 +391,6 @@ export function useMessages(conversationId: string | null) {
     // Mensagens otimistas vão no início (são as mais recentes)
     return [...uniqueOptimistic, ...serverMessages];
   }, [serverMessages, conversationId, workspaceId, getOptimisticAsMessages]);
-
-  const buildMessageRow = useCallback((msg: CoreMessage) => ({
-    id: msg.id,
-    conversation_id: msg.conversationId,
-    workspace_id: msg.workspaceId,
-    whatsapp_number_id: msg.whatsappNumberId,
-    sent_by_user_id: msg.sentByUserId,
-    body: msg.body,
-    type: msg.type.getValue(),
-    status: msg.status,
-    is_outgoing: msg.isOutgoing,
-    client_id: msg.clientId,
-    media_type: msg.mediaType,
-    media_url: msg.mediaUrl,
-    media_path: msg.mediaPath,
-    mime_type: msg.mimeType,
-    size_bytes: msg.sizeBytes,
-    duration_ms: msg.durationMs,
-    thumbnail_url: msg.thumbnailUrl,
-    thumbnail_path: msg.thumbnailPath,
-    external_id: msg.externalId,
-    error_message: msg.errorMessage,
-    reply_to_id: msg.replyToId,
-    provider_reply_id: msg.providerReplyId,
-    quoted_message: msg.quotedMessage as unknown as null,
-    created_at: msg.createdAt.toISOString(),
-  }), []);
-
-  useEffect(() => {
-    if (messages.length === 0) return;
-
-    const pathsToResolve: string[] = [];
-    const pathsToResolveThumb: string[] = [];
-
-    messages.forEach((msg) => {
-      if (msg.mediaPath && !signedUrlCacheRef.current.has(msg.mediaPath)) {
-        pathsToResolve.push(msg.mediaPath);
-      }
-      if (msg.thumbnailPath && !signedUrlCacheRef.current.has(msg.thumbnailPath)) {
-        pathsToResolveThumb.push(msg.thumbnailPath);
-      }
-      if (msg.quotedMessage?.mediaPath && !signedUrlCacheRef.current.has(msg.quotedMessage.mediaPath)) {
-        pathsToResolve.push(msg.quotedMessage.mediaPath);
-      }
-      if (msg.quotedMessage?.thumbnailPath && !signedUrlCacheRef.current.has(msg.quotedMessage.thumbnailPath)) {
-        pathsToResolveThumb.push(msg.quotedMessage.thumbnailPath);
-      }
-    });
-
-    if (pathsToResolve.length === 0 && pathsToResolveThumb.length === 0) return;
-
-    const resolve = async (paths: string[]) => {
-      const entries = await Promise.all(
-        paths.map(async (path) => {
-          const signed = await getSignedUrl({ bucket: 'media', path });
-          return signed ? [path, signed] as const : null;
-        })
-      );
-      entries.forEach((entry) => {
-        if (entry) {
-          signedUrlCacheRef.current.set(entry[0], entry[1]);
-        }
-      });
-    };
-
-    void Promise.all([
-      resolve(pathsToResolve),
-      resolve(pathsToResolveThumb),
-    ]).then(() => {
-      setServerMessages((prev) =>
-        prev.map((msg) => {
-          const mediaUrl = msg.mediaPath ? signedUrlCacheRef.current.get(msg.mediaPath) ?? msg.mediaUrl : msg.mediaUrl;
-          const thumbnailUrl = msg.thumbnailPath ? signedUrlCacheRef.current.get(msg.thumbnailPath) ?? msg.thumbnailUrl : msg.thumbnailUrl;
-          let quoted = msg.quotedMessage ?? null;
-
-          if (quoted?.mediaPath) {
-            const resolvedQuotedUrl = signedUrlCacheRef.current.get(quoted.mediaPath);
-            if (resolvedQuotedUrl) {
-              quoted = { ...quoted, mediaUrl: resolvedQuotedUrl };
-            }
-          }
-          if (quoted?.thumbnailPath) {
-            const resolvedThumb = signedUrlCacheRef.current.get(quoted.thumbnailPath);
-            if (resolvedThumb) {
-              quoted = { ...quoted, thumbnailUrl: resolvedThumb };
-            }
-          }
-
-          if (
-            mediaUrl === msg.mediaUrl &&
-            thumbnailUrl === msg.thumbnailUrl &&
-            quoted === msg.quotedMessage
-          ) {
-            return msg;
-          }
-
-          return MessageMapper.toDomain({
-            ...buildMessageRow(msg),
-            media_url: mediaUrl,
-            thumbnail_url: thumbnailUrl,
-            quoted_message: quoted as unknown as null,
-          });
-        })
-      );
-    });
-  }, [messages, buildMessageRow]);
 
   return {
     messages,
