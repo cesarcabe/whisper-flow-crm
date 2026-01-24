@@ -1363,6 +1363,127 @@ export type Database = {
     }
     Functions: {
       ensure_workspace_for_user: { Args: never; Returns: string }
+      get_ad_report_count: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_workspace_id: string
+        }
+        Returns: number
+      }
+      get_ad_report_kpis: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_workspace_id: string
+        }
+        Returns: {
+          ad_conversations: number
+          ad_messages: number
+          top_conversion_source: string
+          total_ad_leads: number
+        }[]
+      }
+      get_ad_report_table: {
+        Args: {
+          p_end_date: string
+          p_limit?: number
+          p_offset?: number
+          p_start_date: string
+          p_workspace_id: string
+        }
+        Returns: {
+          ad_media_type: number
+          ad_source_id: string
+          ad_title: string
+          automated_greeting_shown: boolean
+          conversion_source: string
+          entry_point_app: string
+          entry_point_source: string
+          event_id: string
+          event_timestamp: string
+          push_name: string
+          remote_jid: string
+          show_ad_attribution: boolean
+        }[]
+      }
+      get_ad_report_timeseries: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_workspace_id: string
+        }
+        Returns: {
+          leads: number
+          messages: number
+          report_date: string
+        }[]
+      }
+      get_message_report_count: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_workspace_id: string
+        }
+        Returns: number
+      }
+      get_message_report_kpis: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_workspace_id: string
+        }
+        Returns: {
+          active_conversations: number
+          messages_received: number
+          messages_sent: number
+          total_messages: number
+          unique_contacts: number
+        }[]
+      }
+      get_message_report_table: {
+        Args: {
+          p_end_date: string
+          p_limit?: number
+          p_offset?: number
+          p_start_date: string
+          p_workspace_id: string
+        }
+        Returns: {
+          event_id: string
+          event_timestamp: string
+          from_me: boolean
+          message_type: string
+          push_name: string
+          remote_jid: string
+          status: string
+        }[]
+      }
+      get_message_report_timeseries: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_workspace_id: string
+        }
+        Returns: {
+          contacts: number
+          messages: number
+          report_date: string
+        }[]
+      }
+      get_top_ads: {
+        Args: {
+          p_end_date: string
+          p_limit?: number
+          p_start_date: string
+          p_workspace_id: string
+        }
+        Returns: {
+          ad_source_id: string
+          ad_title: string
+          lead_count: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
