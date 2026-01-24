@@ -8,6 +8,7 @@ import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { cn } from '@/lib/utils';
 import { Message } from '@/core/domain/entities/Message';
 import { useSendMessage } from '@/modules/conversation/presentation/hooks/useSendMessage';
+import { ReactionPicker } from './ReactionPicker';
 
 interface MessageInputProps {
   conversationId: string;
@@ -376,15 +377,20 @@ export function MessageInput({
           className="hidden"
         />
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
-          disabled={disabled || isSendingMedia}
+        <ReactionPicker 
+          onSelect={(emoji) => setMessage(prev => prev + emoji)}
+          side="top"
         >
-          <Smile className="h-5 w-5" />
-        </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground"
+            disabled={disabled || isSendingMedia}
+          >
+            <Smile className="h-5 w-5" />
+          </Button>
+        </ReactionPicker>
         <Button
           type="button"
           variant="ghost"
