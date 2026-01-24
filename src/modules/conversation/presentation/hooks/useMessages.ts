@@ -18,7 +18,7 @@ const PAGE_SIZE = 50;
  * Maps module Message entity to core Message entity for compatibility
  */
 function mapModuleToCoreMessage(m: CoreMessage): CoreMessage {
-  return MessageMapper.toDomain({
+  return MessageMapper.fromPartial({
     id: m.id,
     conversation_id: m.conversationId,
     workspace_id: m.workspaceId,
@@ -62,7 +62,7 @@ function mapWebSocketToCoreMessage(wsMessage: WebSocketMessage, workspaceId: str
   // Get media URL from attachments if available
   const mediaUrl = wsMessage.attachments?.[0]?.url || null;
 
-  return MessageMapper.toDomain({
+  return MessageMapper.fromPartial({
     id: wsMessage.id,
     conversation_id: wsMessage.conversationId,
     workspace_id: workspaceId,
@@ -247,7 +247,7 @@ export function useMessages(conversationId: string | null) {
             else if (data.status === 'failed') newStatus = 'failed';
             
             // Update status by creating new message with updated status
-            const row = {
+            return MessageMapper.fromPartial({
               id: msg.id,
               conversation_id: msg.conversationId,
               workspace_id: msg.workspaceId,
@@ -263,9 +263,7 @@ export function useMessages(conversationId: string | null) {
               reply_to_id: msg.replyToId,
               quoted_message: msg.quotedMessage as unknown as null,
               created_at: msg.createdAt.toISOString(),
-            };
-            
-            return MessageMapper.toDomain(row);
+            });
           }
           return msg;
         })

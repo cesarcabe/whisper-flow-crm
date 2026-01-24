@@ -176,7 +176,7 @@ class OptimisticMessagesStore {
       // Só mostrar mensagens que ainda estão pendentes ou falharam
       if (opt.status === 'sending' || opt.status === 'failed') {
         try {
-          const message = MessageMapper.toDomain({
+          const message = MessageMapper.fromPartial({
             id: opt.clientId,
             conversation_id: opt.conversationId,
             workspace_id: workspaceId,

@@ -660,51 +660,78 @@ export type Database = {
       messages: {
         Row: {
           body: string
+          client_id: string | null
           conversation_id: string
           created_at: string
+          duration_ms: number | null
           error_message: string | null
           external_id: string | null
           id: string
           is_outgoing: boolean | null
+          media_path: string | null
+          media_type: string | null
           media_url: string | null
+          mime_type: string | null
+          provider_reply_id: string | null
           quoted_message: Json | null
           reply_to_id: string | null
           sent_by_user_id: string | null
+          size_bytes: number | null
           status: string | null
+          thumbnail_path: string | null
+          thumbnail_url: string | null
           type: string | null
           whatsapp_number_id: string | null
           workspace_id: string
         }
         Insert: {
           body: string
+          client_id?: string | null
           conversation_id: string
           created_at?: string
+          duration_ms?: number | null
           error_message?: string | null
           external_id?: string | null
           id?: string
           is_outgoing?: boolean | null
+          media_path?: string | null
+          media_type?: string | null
           media_url?: string | null
+          mime_type?: string | null
+          provider_reply_id?: string | null
           quoted_message?: Json | null
           reply_to_id?: string | null
           sent_by_user_id?: string | null
+          size_bytes?: number | null
           status?: string | null
+          thumbnail_path?: string | null
+          thumbnail_url?: string | null
           type?: string | null
           whatsapp_number_id?: string | null
           workspace_id: string
         }
         Update: {
           body?: string
+          client_id?: string | null
           conversation_id?: string
           created_at?: string
+          duration_ms?: number | null
           error_message?: string | null
           external_id?: string | null
           id?: string
           is_outgoing?: boolean | null
+          media_path?: string | null
+          media_type?: string | null
           media_url?: string | null
+          mime_type?: string | null
+          provider_reply_id?: string | null
           quoted_message?: Json | null
           reply_to_id?: string | null
           sent_by_user_id?: string | null
+          size_bytes?: number | null
           status?: string | null
+          thumbnail_path?: string | null
+          thumbnail_url?: string | null
           type?: string | null
           whatsapp_number_id?: string | null
           workspace_id?: string
@@ -1296,27 +1323,27 @@ export type Database = {
         Row: {
           city: string | null
           created_at: string
-          owner_id: string | null
           id: string
           name: string
+          owner_id: string | null
           state: string | null
           updated_at: string
         }
         Insert: {
           city?: string | null
           created_at?: string
-          owner_id?: string | null
           id?: string
           name: string
+          owner_id?: string | null
           state?: string | null
           updated_at?: string
         }
         Update: {
           city?: string | null
           created_at?: string
-          owner_id?: string | null
           id?: string
           name?: string
+          owner_id?: string | null
           state?: string | null
           updated_at?: string
         }

@@ -167,7 +167,7 @@ export class ReceiveIncomingMessageUseCase {
    * Normaliza o DTO para uma entidade Message do domínio
    */
   private normalizeToMessage(dto: IncomingMessageDTO): Message {
-    return MessageMapper.toDomain({
+    return MessageMapper.fromPartial({
       id: dto.id,
       conversation_id: dto.conversationId,
       workspace_id: dto.workspaceId,
