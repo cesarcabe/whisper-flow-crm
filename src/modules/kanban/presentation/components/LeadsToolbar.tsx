@@ -107,61 +107,59 @@ export function LeadsToolbar({
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Pipeline Selector - only visible when in stage view */}
-        {boardType === 'stage' && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground hidden sm:inline">Pipeline:</span>
-            <Select
-              value={activePipeline?.id || ''}
-              onValueChange={(value) => {
-                const pipeline = pipelines.find(p => p.id === value);
-                if (pipeline) onSelectPipeline(pipeline);
-              }}
-            >
-              <SelectTrigger className="w-[160px] h-8 text-sm">
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {pipelines.map((pipeline) => (
-                  <SelectItem key={pipeline.id} value={pipeline.id}>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: pipeline.color || 'hsl(var(--primary))' }}
-                      />
-                      {pipeline.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Pipeline Selector - always visible on the right */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground hidden sm:inline">Pipeline:</span>
+          <Select
+            value={activePipeline?.id || ''}
+            onValueChange={(value) => {
+              const pipeline = pipelines.find(p => p.id === value);
+              if (pipeline) onSelectPipeline(pipeline);
+            }}
+          >
+            <SelectTrigger className="w-[160px] h-8 text-sm">
+              <SelectValue placeholder="Selecione" />
+            </SelectTrigger>
+            <SelectContent>
+              {pipelines.map((pipeline) => (
+                <SelectItem key={pipeline.id} value={pipeline.id}>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: pipeline.color || 'hsl(var(--primary))' }}
+                    />
+                    {pipeline.name}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onCreatePipeline}>
-              <Plus className="h-4 w-4" />
-            </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onCreatePipeline}>
+            <Plus className="h-4 w-4" />
+          </Button>
 
-            {activePipeline && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={handleOpenEditDialog}>
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Editar Pipeline
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={onDeletePipeline} className="text-destructive">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Deletar Pipeline
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-        )}
+          {activePipeline && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleOpenEditDialog}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar Pipeline
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onDeletePipeline} className="text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Deletar Pipeline
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
 
       {/* Edit Pipeline Dialog */}
