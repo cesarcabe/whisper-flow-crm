@@ -1,6 +1,9 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { safeString } from "../utils/extract.ts";
 
+/**
+ * Busca foto de perfil do contato via Evolution API
+ */
 export async function fetchProfilePicture(
   evolutionBaseUrl: string | null,
   evolutionApiKey: string | null,
@@ -48,6 +51,106 @@ export async function fetchProfilePicture(
   }
 }
 
+/**
+ * Resolve ou cria contato baseado no sender.
+ * 
+ * Para grupos sem participant phone válido, cria contato placeholder.
+ * Para DMs ou grupos com phone válido, usa upsertContact.
+ */
+export async function resolveContact(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  senderPhone: string | null,
+  senderJid: string,
+  pushName: string | null,
+  avatarUrl: string | null,
+  isGroup: boolean,
+): Promise<string> {
+  // Em grupos sem participant phone, criar placeholder
+  if (isGroup && !senderPhone) {
+    // Usar prefixo "lid:" para identificar contatos sem phone
+    const placeholderPhone = `lid:${senderJid.replace(/@.*$/, '')}`;
+    
+    console.log('[Edge:evolution-webhook] resolveContact: group placeholder', { 
+      senderJid, 
+      placeholderPhone 
+    });
+    
+    const { data: existing } = await supabase
+      .from("contacts")
+      .select("id, name")
+      .eq("workspace_id", workspaceId)
+      .eq("phone", placeholderPhone)
+      .maybeSingle();
+    
+    if (existing) {
+      // Atualizar nome se melhor disponível
+      if (pushName && existing.name === placeholderPhone) {
+        await supabase
+          .from("contacts")
+          .update({ name: pushName })
+          .eq("id", existing.id);
+      }
+      return existing.id;
+    }
+    
+    // Buscar user_id do workspace
+    const { data: member } = await supabase
+      .from("workspace_members")
+      .select("user_id")
+      .eq("workspace_id", workspaceId)
+      .limit(1)
+      .maybeSingle();
+    
+    const { data: contact, error } = await supabase
+      .from("contacts")
+      .insert({
+        workspace_id: workspaceId,
+        phone: placeholderPhone,
+        name: pushName || 'Participante',
+        user_id: member?.user_id || workspaceId,
+      })
+      .select("id")
+      .single();
+    
+    if (error) {
+      // Pode ser conflict - tentar buscar
+      if (error.message?.toLowerCase().includes('unique') || 
+          error.message?.toLowerCase().includes('duplicate')) {
+        const { data: retry } = await supabase
+          .from("contacts")
+          .select("id")
+          .eq("workspace_id", workspaceId)
+          .eq("phone", placeholderPhone)
+          .maybeSingle();
+        
+        if (retry) return retry.id;
+      }
+      throw new Error("Failed to create placeholder contact: " + error.message);
+    }
+    
+    return contact.id;
+  }
+  
+  // DM ou grupo com phone válido
+  if (!senderPhone) {
+    // Para DMs sem phone (só LID), criar placeholder também
+    const placeholderPhone = `lid:${senderJid.replace(/@.*$/, '')}`;
+    
+    console.log('[Edge:evolution-webhook] resolveContact: DM without phone', { 
+      senderJid, 
+      placeholderPhone 
+    });
+    
+    return await upsertContact(supabase, workspaceId, placeholderPhone, pushName, avatarUrl);
+  }
+  
+  return await upsertContact(supabase, workspaceId, senderPhone, pushName, avatarUrl);
+}
+
+/**
+ * Upsert contato por phone
+ */
 export async function upsertContact(
   supabase: SupabaseClient,
   workspaceId: string,
@@ -70,7 +173,7 @@ export async function upsertContact(
 
   if (existing) {
     const shouldUpdateName = pushName && 
-      (existing.name === phone || existing.name === null || existing.name === '');
+      (existing.name === phone || existing.name === null || existing.name === '' || existing.name.startsWith('lid:'));
     
     const shouldUpdateAvatar = avatarUrl && !existing.avatar_url;
     
@@ -120,6 +223,21 @@ export async function upsertContact(
     .select("id")
     .single();
 
-  if (error) throw new Error("Failed to create contact: " + error.message);
+  if (error) {
+    // Handle conflict - contact may have been created concurrently
+    if (error.message?.toLowerCase().includes('unique') || 
+        error.message?.toLowerCase().includes('duplicate')) {
+      const { data: retry } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("workspace_id", workspaceId)
+        .eq("phone", phone)
+        .maybeSingle();
+      
+      if (retry) return retry.id as string;
+    }
+    throw new Error("Failed to create contact: " + error.message);
+  }
+  
   return c.id as string;
 }
