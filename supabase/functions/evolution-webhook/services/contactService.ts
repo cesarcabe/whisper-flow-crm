@@ -66,11 +66,12 @@ export async function resolveContact(
   avatarUrl: string | null,
   isGroup: boolean,
 ): Promise<string> {
+  // Extrair lid_id do senderJid para uso em placeholders
+  const jidId = senderJid.replace(/@.*$/, '');
+  const placeholderPhone = `lid:${jidId}`;
+  
   // Em grupos sem participant phone, criar placeholder
   if (isGroup && !senderPhone) {
-    // Usar prefixo "lid:" para identificar contatos sem phone
-    const placeholderPhone = `lid:${senderJid.replace(/@.*$/, '')}`;
-    
     console.log('[Edge:evolution-webhook] resolveContact: group placeholder', { 
       senderJid, 
       placeholderPhone 
@@ -132,12 +133,9 @@ export async function resolveContact(
     return contact.id;
   }
   
-  // DM ou grupo com phone válido
+  // DM sem phone (só LID) - criar placeholder também
   if (!senderPhone) {
-    // Para DMs sem phone (só LID), criar placeholder também
-    const placeholderPhone = `lid:${senderJid.replace(/@.*$/, '')}`;
-    
-    console.log('[Edge:evolution-webhook] resolveContact: DM without phone', { 
+    console.log('[Edge:evolution-webhook] dm_lid_placeholder_created', { 
       senderJid, 
       placeholderPhone 
     });
@@ -145,7 +143,111 @@ export async function resolveContact(
     return await upsertContact(supabase, workspaceId, placeholderPhone, pushName, avatarUrl);
   }
   
-  return await upsertContact(supabase, workspaceId, senderPhone, pushName, avatarUrl);
+  // DM ou grupo com phone válido (PN real)
+  // Primeiro, criar/atualizar o contato real
+  const realContactId = await upsertContact(supabase, workspaceId, senderPhone, pushName, avatarUrl);
+  
+  // Verificar se senderJid é LID - se for, tentar merge com placeholder
+  if (senderJid.includes('@lid')) {
+    await mergeLidPlaceholder(supabase, workspaceId, realContactId, placeholderPhone);
+  }
+  
+  return realContactId;
+}
+
+/**
+ * Faz merge de um contato placeholder LID para o contato real PN.
+ * Move todas as conversas do placeholder para o contato real.
+ */
+async function mergeLidPlaceholder(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  realContactId: string,
+  placeholderPhone: string,
+): Promise<void> {
+  // Buscar placeholder contact
+  const { data: placeholder } = await supabase
+    .from("contacts")
+    .select("id, name")
+    .eq("workspace_id", workspaceId)
+    .eq("phone", placeholderPhone)
+    .maybeSingle();
+  
+  if (!placeholder || placeholder.id === realContactId) {
+    // Não existe placeholder ou é o mesmo contato
+    return;
+  }
+  
+  console.log('[Edge:evolution-webhook] dm_lid_placeholder_merged', { 
+    placeholderId: placeholder.id, 
+    realContactId,
+    placeholderPhone 
+  });
+  
+  // 1) Migrar todas as conversas do placeholder para o contato real
+  const { error: convError } = await supabase
+    .from("conversations")
+    .update({ contact_id: realContactId })
+    .eq("workspace_id", workspaceId)
+    .eq("contact_id", placeholder.id);
+  
+  if (convError) {
+    console.log('[Edge:evolution-webhook] merge_conversations_error', { 
+      error: convError.message 
+    });
+  } else {
+    // Count migrated separately
+    const { count } = await supabase
+      .from("conversations")
+      .select("id", { count: 'exact', head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("contact_id", realContactId);
+    console.log('[Edge:evolution-webhook] merge_conversations_migrated', { 
+      count 
+    });
+  }
+  
+  // 2) Migrar cards se existirem
+  await supabase
+    .from("cards")
+    .update({ contact_id: realContactId })
+    .eq("workspace_id", workspaceId)
+    .eq("contact_id", placeholder.id);
+  
+  // 3) Verificar se placeholder ainda tem referências
+  const { data: remainingConvs } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("contact_id", placeholder.id)
+    .limit(1);
+  
+  const { data: remainingCards } = await supabase
+    .from("cards")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("contact_id", placeholder.id)
+    .limit(1);
+  
+  // 4) Se não tem mais referências, deletar placeholder
+  if ((!remainingConvs || remainingConvs.length === 0) && 
+      (!remainingCards || remainingCards.length === 0)) {
+    const { error: deleteError } = await supabase
+      .from("contacts")
+      .delete()
+      .eq("id", placeholder.id)
+      .eq("workspace_id", workspaceId);
+    
+    if (deleteError) {
+      console.log('[Edge:evolution-webhook] delete_placeholder_error', { 
+        error: deleteError.message 
+      });
+    } else {
+      console.log('[Edge:evolution-webhook] placeholder_deleted', { 
+        placeholderId: placeholder.id 
+      });
+    }
+  }
 }
 
 /**

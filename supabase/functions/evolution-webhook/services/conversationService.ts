@@ -38,8 +38,8 @@ export async function resolveConversation(
   
   existing = byJid;
   
-  // 2) Se não achou e é LID, buscar por alias
-  if (!existing && isLid(conversationJid)) {
+  // 2) Se não achou, buscar por alias (para QUALQUER tipo de JID, não só LID)
+  if (!existing) {
     const { data: aliasData } = await supabase
       .from("conversation_aliases")
       .select("conversation_id")
@@ -50,7 +50,8 @@ export async function resolveConversation(
     
     if (aliasData) {
       console.log('[Edge:evolution-webhook] resolveConversation: found via alias', { 
-        conversationId: aliasData.conversation_id 
+        conversationId: aliasData.conversation_id,
+        aliasJid: conversationJid
       });
       existing = { id: aliasData.conversation_id };
     }
