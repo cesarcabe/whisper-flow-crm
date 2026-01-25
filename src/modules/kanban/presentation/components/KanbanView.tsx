@@ -16,6 +16,7 @@ import { DeleteConfirmDialog } from './dialogs/DeleteConfirmDialog';
 import { EditStageDialog } from './dialogs/EditStageDialog';
 import { EditClassDialog } from './dialogs/EditClassDialog';
 import { ContactDetailsDialog } from './dialogs/ContactDetailsDialog';
+import { EditContactSheet } from './dialogs/EditContactSheet';
 import { Tables } from '@/integrations/supabase/types';
 import { Loader2 } from 'lucide-react';
 
@@ -57,7 +58,7 @@ export function KanbanView() {
     createCard,
   } = usePipelines();
   
-  const { contacts, createContact } = useContacts();
+  const { contacts, createContact, updateContact, fetchContacts } = useContacts();
   
   const {
     contactClasses,
@@ -276,6 +277,25 @@ export function KanbanView() {
         onOpenChange={(open) => setDialogOpen('showContactDetails', open)}
         contact={selectedItems.contact}
         contactClasses={contactClasses}
+        onEdit={() => {
+          closeDialog('showContactDetails');
+          handlers.handleEditContact(selectedItems.contact);
+        }}
+      />
+
+      <EditContactSheet
+        open={dialogs.showEditContact}
+        onOpenChange={(open) => setDialogOpen('showEditContact', open)}
+        contact={selectedItems.contact}
+        contactClasses={contactClasses}
+        groupClasses={groupClasses}
+        onSave={async (contactId, updates) => {
+          const success = await updateContact(contactId, updates);
+          if (success) {
+            await fetchContacts();
+          }
+          return success;
+        }}
       />
     </div>
   );

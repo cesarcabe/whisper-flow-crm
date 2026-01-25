@@ -14,6 +14,7 @@ export interface KanbanDialogState {
   showEditStage: boolean;
   showEditClass: boolean;
   showContactDetails: boolean;
+  showEditContact: boolean;
 }
 
 export interface EditStageState {
@@ -48,6 +49,7 @@ const initialDialogState: KanbanDialogState = {
   showEditStage: false,
   showEditClass: false,
   showContactDetails: false,
+  showEditContact: false,
 };
 
 const initialEditStageState: EditStageState = {
@@ -158,6 +160,11 @@ export function useKanbanState() {
     openDialog('showContactDetails');
   }, [openDialog]);
 
+  const handleEditContact = useCallback((contact: any) => {
+    setSelectedItems(prev => ({ ...prev, contact }));
+    openDialog('showEditContact');
+  }, [openDialog]);
+
   const handleDeleteStage = useCallback((stageId: string) => {
     setSelectedItems(prev => ({ ...prev, stageToDelete: stageId }));
     openDialog('showDeleteStage');
@@ -237,6 +244,7 @@ export function useKanbanState() {
       handleEditStage,
       handleEditClass,
       handleContactClick,
+      handleEditContact,
       handleDeleteStage,
       handleGroupClick,
     },

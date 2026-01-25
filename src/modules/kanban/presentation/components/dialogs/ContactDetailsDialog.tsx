@@ -7,6 +7,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Pencil } from 'lucide-react';
 
 interface ContactClass {
   id: string;
@@ -26,6 +27,7 @@ interface ContactDetailsDialogProps {
     contact_class_id?: string | null;
   } | null;
   contactClasses: ContactClass[];
+  onEdit?: () => void;
 }
 
 export function ContactDetailsDialog({
@@ -33,6 +35,7 @@ export function ContactDetailsDialog({
   onOpenChange,
   contact,
   contactClasses,
+  onEdit,
 }: ContactDetailsDialogProps) {
   const getClassName = () => {
     if (!contact?.contact_class_id) return 'Sem classificação';
@@ -77,7 +80,13 @@ export function ContactDetailsDialog({
             </div>
           </div>
         )}
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
+          {onEdit && (
+            <Button variant="outline" onClick={onEdit} className="gap-2">
+              <Pencil className="h-4 w-4" />
+              Editar
+            </Button>
+          )}
           <Button onClick={() => onOpenChange(false)}>Fechar</Button>
         </DialogFooter>
       </DialogContent>
