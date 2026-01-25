@@ -5,6 +5,7 @@ import { useContactsModule } from '../hooks/useContactsModule';
 import { ContactsFilters } from './ContactsFilters';
 import { ContactsList } from './ContactsList';
 import { ContactDetailsSheet } from './ContactDetailsSheet';
+import { EditContactSheet } from './EditContactSheet';
 import { Button } from '@/components/ui/button';
 import { Plus, Users } from 'lucide-react';
 import { CreateContactDialog } from '@/components/kanban/dialogs/CreateContactDialog';
@@ -29,11 +30,12 @@ export function ContactsPage() {
     refetch,
   } = useContactsModule();
 
-  const { createContact } = useContacts();
+  const { createContact, updateContact } = useContacts();
 
   // Dialog states
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
@@ -46,6 +48,26 @@ export function ContactsPage() {
   const handleOpenChat = (contact: Contact) => {
     // Navigate to conversations with contact filter
     navigate(`/conversations?contact=${contact.id}`);
+  };
+
+  const handleEdit = (contact: Contact) => {
+    setSelectedContact(contact);
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async (contactId: string, updates: {
+    name: string;
+    email: string | null;
+    notes: string | null;
+    status: 'active' | 'inactive' | 'blocked';
+    contact_class_id: string | null;
+    group_class_id: string | null;
+  }): Promise<boolean> => {
+    const success = await updateContact(contactId, updates);
+    if (success) {
+      refetch();
+    }
+    return success;
   };
 
   const handleDeleteClick = (contact: Contact) => {
@@ -144,6 +166,16 @@ export function ContactsPage() {
         contactClasses={contactClasses}
         groupClasses={groupClasses}
         onOpenChat={handleOpenChat}
+        onEdit={handleEdit}
+      />
+
+      <EditContactSheet
+        contact={selectedContact}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        contactClasses={contactClasses}
+        groupClasses={groupClasses}
+        onSave={handleSaveEdit}
       />
 
       <CreateContactDialog
