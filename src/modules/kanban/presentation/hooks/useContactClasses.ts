@@ -71,6 +71,8 @@ export function useContactClasses() {
         .from('contacts')
         .select('id, name, phone, email, avatar_url, contact_class_id, workspace_id')
         .eq('workspace_id', workspaceId)
+        .eq('is_visible', true)
+        .eq('is_real', true)
         .order('name', { ascending: true });
 
       if (error) {

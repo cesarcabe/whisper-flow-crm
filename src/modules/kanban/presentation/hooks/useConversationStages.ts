@@ -116,11 +116,13 @@ export function useConversationStages() {
 
       const groupContactIds = new Set((groupConversations || []).map(c => c.contact_id));
 
-      // Fetch ALL contacts (not just those with conversations)
+      // Fetch ALL contacts (not just those with conversations) - only real, visible contacts
       const { data: contactsData, error: contactsError } = await supabase
         .from('contacts')
         .select('id, name, phone, email, avatar_url')
-        .eq('workspace_id', workspaceId);
+        .eq('workspace_id', workspaceId)
+        .eq('is_visible', true)
+        .eq('is_real', true);
 
       if (contactsError) {
         console.error('[ConversationStages] Error fetching contacts:', contactsError);
