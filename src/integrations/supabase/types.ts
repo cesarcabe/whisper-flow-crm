@@ -408,6 +408,58 @@ export type Database = {
           },
         ]
       }
+      conversation_aliases: {
+        Row: {
+          alias_remote_jid: string
+          conversation_id: string
+          created_at: string | null
+          id: string
+          is_primary: boolean | null
+          whatsapp_number_id: string
+          workspace_id: string
+        }
+        Insert: {
+          alias_remote_jid: string
+          conversation_id: string
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          whatsapp_number_id: string
+          workspace_id: string
+        }
+        Update: {
+          alias_remote_jid?: string
+          conversation_id?: string
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          whatsapp_number_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_aliases_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_aliases_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_aliases_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_events: {
         Row: {
           actor_user_id: string | null
@@ -675,6 +727,7 @@ export type Database = {
           provider_reply_id: string | null
           quoted_message: Json | null
           reply_to_id: string | null
+          sender_jid: string | null
           sent_by_user_id: string | null
           size_bytes: number | null
           status: string | null
@@ -701,6 +754,7 @@ export type Database = {
           provider_reply_id?: string | null
           quoted_message?: Json | null
           reply_to_id?: string | null
+          sender_jid?: string | null
           sent_by_user_id?: string | null
           size_bytes?: number | null
           status?: string | null
@@ -727,6 +781,7 @@ export type Database = {
           provider_reply_id?: string | null
           quoted_message?: Json | null
           reply_to_id?: string | null
+          sender_jid?: string | null
           sent_by_user_id?: string | null
           size_bytes?: number | null
           status?: string | null

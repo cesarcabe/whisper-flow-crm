@@ -125,6 +125,7 @@ export class MessageMapper {
       size_bytes: null,
       thumbnail_path: null,
       thumbnail_url: null,
+      sender_jid: null,
     };
   }
 
