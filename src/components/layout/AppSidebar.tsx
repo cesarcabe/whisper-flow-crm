@@ -1,4 +1,4 @@
-import { Home, Kanban, MessageSquare, BarChart3, Settings, Plus, LogOut } from "lucide-react";
+import { Home, Kanban, MessageSquare, BarChart3, Settings, Plus, LogOut, Users } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
@@ -29,6 +29,7 @@ const menuItems = [
   { title: "Início", url: "/", icon: Home },
   { title: "Kanban", url: "/kanban", icon: Kanban },
   { title: "Conversas", url: "/conversations", icon: MessageSquare },
+  { title: "Contatos", url: "/contacts", icon: Users },
   { title: "Relatórios", url: "/reports", icon: BarChart3 },
   { title: "Configurações", url: "/workspace/admin", icon: Settings },
 ];

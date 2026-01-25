@@ -11,6 +11,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Kanban from "./pages/Kanban";
 import Conversations from "./pages/Conversations";
+import Contacts from "./pages/Contacts";
 import Reports from "./pages/Reports";
 import Auth from "./pages/Auth";
 import SetupWorkspace from "./pages/SetupWorkspace";
@@ -116,6 +117,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Conversations />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/contacts"
+        element={
+          <ProtectedRoute>
+            <Contacts />
           </ProtectedRoute>
         }
       />
