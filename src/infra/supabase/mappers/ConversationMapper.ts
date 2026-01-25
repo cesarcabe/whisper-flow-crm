@@ -45,6 +45,7 @@ export class ConversationMapper {
       last_message_at: conversation.lastMessageAt?.toISOString() ?? null,
       unread_count: conversation.unreadCount,
       is_typing: conversation.isTyping,
+      group_remote_jid: conversation.isGroup ? conversation.remoteJid : null,
     };
   }
 

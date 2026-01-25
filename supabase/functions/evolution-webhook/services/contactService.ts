@@ -1,5 +1,6 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { safeString } from "../utils/extract.ts";
+import { isValidPhoneDigits } from "../utils/jidParser.ts";
 
 /**
  * Busca foto de perfil do contato via Evolution API
@@ -52,10 +53,22 @@ export async function fetchProfilePicture(
 }
 
 /**
+ * Determina se um phone é válido para criar contato "real" visível
+ */
+export function isRealContactPhone(phone: string | null): boolean {
+  if (!phone) return false;
+  // Ignora placeholders
+  if (phone.startsWith('lid:') || phone.startsWith('group:')) return false;
+  return isValidPhoneDigits(phone);
+}
+
+/**
  * Resolve ou cria contato baseado no sender.
  * 
- * Para grupos sem participant phone válido, cria contato placeholder.
- * Para DMs ou grupos com phone válido, usa upsertContact.
+ * Regras:
+ * - Grupo sem PN válido do participant: placeholder invisível (is_real=false, is_visible=false)
+ * - DM sem PN válido (só LID): placeholder invisível
+ * - DM/Grupo com PN válido: contato real visível + merge de placeholder se existir
  */
 export async function resolveContact(
   supabase: SupabaseClient,
@@ -69,85 +82,42 @@ export async function resolveContact(
   // Extrair lid_id do senderJid para uso em placeholders
   const jidId = senderJid.replace(/@.*$/, '');
   const placeholderPhone = `lid:${jidId}`;
+  const hasValidPhone = isRealContactPhone(senderPhone);
   
-  // Em grupos sem participant phone, criar placeholder
-  if (isGroup && !senderPhone) {
-    console.log('[Edge:evolution-webhook] resolveContact: group placeholder', { 
+  // CASO 1: Grupo sem phone válido do participant - placeholder invisível
+  if (isGroup && !hasValidPhone) {
+    console.log('[Edge:evolution-webhook] resolveContact: group placeholder (invisible)', { 
       senderJid, 
       placeholderPhone 
     });
     
-    const { data: existing } = await supabase
-      .from("contacts")
-      .select("id, name")
-      .eq("workspace_id", workspaceId)
-      .eq("phone", placeholderPhone)
-      .maybeSingle();
-    
-    if (existing) {
-      // Atualizar nome se melhor disponível
-      if (pushName && existing.name === placeholderPhone) {
-        await supabase
-          .from("contacts")
-          .update({ name: pushName })
-          .eq("id", existing.id);
-      }
-      return existing.id;
-    }
-    
-    // Buscar user_id do workspace
-    const { data: member } = await supabase
-      .from("workspace_members")
-      .select("user_id")
-      .eq("workspace_id", workspaceId)
-      .limit(1)
-      .maybeSingle();
-    
-    const { data: contact, error } = await supabase
-      .from("contacts")
-      .insert({
-        workspace_id: workspaceId,
-        phone: placeholderPhone,
-        name: pushName || 'Participante',
-        user_id: member?.user_id || workspaceId,
-      })
-      .select("id")
-      .single();
-    
-    if (error) {
-      // Pode ser conflict - tentar buscar
-      if (error.message?.toLowerCase().includes('unique') || 
-          error.message?.toLowerCase().includes('duplicate')) {
-        const { data: retry } = await supabase
-          .from("contacts")
-          .select("id")
-          .eq("workspace_id", workspaceId)
-          .eq("phone", placeholderPhone)
-          .maybeSingle();
-        
-        if (retry) return retry.id;
-      }
-      throw new Error("Failed to create placeholder contact: " + error.message);
-    }
-    
-    return contact.id;
+    return await upsertPlaceholderContact(supabase, workspaceId, placeholderPhone, pushName, 'group', senderJid);
   }
   
-  // DM sem phone (só LID) - criar placeholder também
-  if (!senderPhone) {
-    console.log('[Edge:evolution-webhook] dm_lid_placeholder_created', { 
+  // CASO 2: DM sem phone válido (só LID) - placeholder invisível
+  if (!isGroup && !hasValidPhone) {
+    console.log('[Edge:evolution-webhook] resolveContact: dm_lid_placeholder_created (invisible)', { 
       senderJid, 
       placeholderPhone 
     });
     
-    return await upsertContact(supabase, workspaceId, placeholderPhone, pushName, avatarUrl);
+    return await upsertPlaceholderContact(supabase, workspaceId, placeholderPhone, pushName, 'dm', senderJid);
   }
   
-  // DM ou grupo com phone válido (PN real)
+  // CASO 3: DM ou grupo com phone válido (PN real) - contato visível
   // Primeiro, criar/atualizar o contato real
-  const realContactId = await upsertContact(supabase, workspaceId, senderPhone, pushName, avatarUrl);
+  const sourceType = isGroup ? 'group' : 'dm';
+  const realContactId = await upsertRealContact(
+    supabase, 
+    workspaceId, 
+    senderPhone!, 
+    pushName, 
+    avatarUrl, 
+    sourceType,
+    senderJid
+  );
   
-  // Verificar se senderJid é LID - se for, tentar merge com placeholder
+  // Se senderJid é LID, tentar merge com placeholder existente
   if (senderJid.includes('@lid')) {
     await mergeLidPlaceholder(supabase, workspaceId, realContactId, placeholderPhone);
   }
@@ -156,8 +126,190 @@ export async function resolveContact(
 }
 
 /**
+ * Cria ou atualiza contato placeholder (invisível no CRM)
+ */
+async function upsertPlaceholderContact(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  placeholderPhone: string,
+  pushName: string | null,
+  sourceType: 'dm' | 'group',
+  rawJid: string,
+): Promise<string> {
+  const { data: existing } = await supabase
+    .from("contacts")
+    .select("id, name")
+    .eq("workspace_id", workspaceId)
+    .eq("phone", placeholderPhone)
+    .maybeSingle();
+  
+  if (existing) {
+    // Atualizar nome se melhor disponível
+    if (pushName && (existing.name === placeholderPhone || existing.name === 'Contato' || existing.name === 'Participante')) {
+      await supabase
+        .from("contacts")
+        .update({ name: pushName })
+        .eq("id", existing.id);
+    }
+    return existing.id;
+  }
+  
+  // Buscar user_id do workspace
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("user_id")
+    .eq("workspace_id", workspaceId)
+    .limit(1)
+    .maybeSingle();
+  
+  const contactName = pushName || (sourceType === 'group' ? 'Participante' : 'Contato');
+  
+  const { data: contact, error } = await supabase
+    .from("contacts")
+    .insert({
+      workspace_id: workspaceId,
+      phone: placeholderPhone,
+      name: contactName,
+      user_id: member?.user_id || workspaceId,
+      is_real: false,
+      is_visible: false,
+      source_type: sourceType,
+      raw_jid: rawJid,
+    })
+    .select("id")
+    .single();
+  
+  if (error) {
+    // Pode ser conflict - tentar buscar
+    if (error.message?.toLowerCase().includes('unique') || 
+        error.message?.toLowerCase().includes('duplicate')) {
+      const { data: retry } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("workspace_id", workspaceId)
+        .eq("phone", placeholderPhone)
+        .maybeSingle();
+      
+      if (retry) return retry.id;
+    }
+    throw new Error("Failed to create placeholder contact: " + error.message);
+  }
+  
+  return contact.id;
+}
+
+/**
+ * Cria ou atualiza contato real (visível no CRM)
+ */
+async function upsertRealContact(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  phone: string,
+  pushName: string | null,
+  avatarUrl: string | null,
+  sourceType: 'dm' | 'group',
+  rawJid: string,
+): Promise<string> {
+  console.log('[Edge:evolution-webhook] upsertRealContact', { 
+    phone, 
+    pushName, 
+    hasAvatar: !!avatarUrl,
+    sourceType
+  });
+
+  const { data: existing } = await supabase
+    .from("contacts")
+    .select("id, name, avatar_url, is_real, is_visible")
+    .eq("workspace_id", workspaceId)
+    .eq("phone", phone)
+    .maybeSingle();
+
+  if (existing) {
+    const updates: Record<string, unknown> = {};
+    
+    // Sempre garantir que é real e visível
+    if (!existing.is_real) updates.is_real = true;
+    if (!existing.is_visible) updates.is_visible = true;
+    
+    // Atualizar nome se melhor disponível
+    const shouldUpdateName = pushName && 
+      (existing.name === phone || existing.name === null || existing.name === '' || 
+       existing.name.startsWith('lid:') || existing.name === 'Contato');
+    if (shouldUpdateName) updates.name = pushName;
+    
+    // Atualizar avatar se não tiver
+    if (avatarUrl && !existing.avatar_url) updates.avatar_url = avatarUrl;
+    
+    if (Object.keys(updates).length > 0) {
+      console.log('[Edge:evolution-webhook] updateRealContact', { 
+        contactId: existing.id, 
+        updates 
+      });
+      
+      await supabase
+        .from("contacts")
+        .update(updates)
+        .eq("id", existing.id);
+    }
+    
+    return existing.id as string;
+  }
+
+  // Criar novo contato real
+  const { data: member } = await supabase
+    .from("workspace_members")
+    .select("user_id")
+    .eq("workspace_id", workspaceId)
+    .limit(1)
+    .maybeSingle();
+
+  const contactName = pushName || phone;
+  
+  console.log('[Edge:evolution-webhook] createRealContact', { 
+    phone, 
+    name: contactName, 
+    hasAvatar: !!avatarUrl,
+    sourceType
+  });
+
+  const { data: c, error } = await supabase
+    .from("contacts")
+    .insert({
+      workspace_id: workspaceId,
+      phone,
+      name: contactName,
+      avatar_url: avatarUrl,
+      user_id: member?.user_id || workspaceId,
+      is_real: true,
+      is_visible: true,
+      source_type: sourceType,
+      raw_jid: rawJid,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    // Handle conflict - contact may have been created concurrently
+    if (error.message?.toLowerCase().includes('unique') || 
+        error.message?.toLowerCase().includes('duplicate')) {
+      const { data: retry } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("workspace_id", workspaceId)
+        .eq("phone", phone)
+        .maybeSingle();
+      
+      if (retry) return retry.id as string;
+    }
+    throw new Error("Failed to create contact: " + error.message);
+  }
+  
+  return c.id as string;
+}
+
+/**
  * Faz merge de um contato placeholder LID para o contato real PN.
- * Move todas as conversas do placeholder para o contato real.
+ * Move todas as conversas e cards do placeholder para o contato real.
  */
 async function mergeLidPlaceholder(
   supabase: SupabaseClient,
@@ -251,7 +403,8 @@ async function mergeLidPlaceholder(
 }
 
 /**
- * Upsert contato por phone
+ * Upsert contato por phone (legacy - mantido para compatibilidade)
+ * @deprecated Use upsertRealContact or upsertPlaceholderContact
  */
 export async function upsertContact(
   supabase: SupabaseClient,
@@ -260,86 +413,10 @@ export async function upsertContact(
   pushName: string | null = null,
   avatarUrl: string | null = null,
 ): Promise<string> {
-  console.log('[Edge:evolution-webhook] upsertContact', { 
-    phone, 
-    pushName, 
-    hasAvatar: !!avatarUrl 
-  });
-
-  const { data: existing } = await supabase
-    .from("contacts")
-    .select("id, name, avatar_url")
-    .eq("workspace_id", workspaceId)
-    .eq("phone", phone)
-    .maybeSingle();
-
-  if (existing) {
-    const shouldUpdateName = pushName && 
-      (existing.name === phone || existing.name === null || existing.name === '' || existing.name.startsWith('lid:'));
-    
-    const shouldUpdateAvatar = avatarUrl && !existing.avatar_url;
-    
-    if (shouldUpdateName || shouldUpdateAvatar) {
-      const updates: Record<string, unknown> = {};
-      if (shouldUpdateName) updates.name = pushName;
-      if (shouldUpdateAvatar) updates.avatar_url = avatarUrl;
-      
-      console.log('[Edge:evolution-webhook] updateContact', { 
-        contactId: existing.id, 
-        updates 
-      });
-      
-      await supabase
-        .from("contacts")
-        .update(updates)
-        .eq("id", existing.id);
-    }
-    
-    return existing.id as string;
+  // Determinar se é real ou placeholder
+  if (isRealContactPhone(phone)) {
+    return await upsertRealContact(supabase, workspaceId, phone, pushName, avatarUrl, 'dm', phone + '@s.whatsapp.net');
+  } else {
+    return await upsertPlaceholderContact(supabase, workspaceId, phone, pushName, 'dm', phone);
   }
-
-  const { data: member } = await supabase
-    .from("workspace_members")
-    .select("user_id")
-    .eq("workspace_id", workspaceId)
-    .limit(1)
-    .maybeSingle();
-
-  const contactName = pushName || phone;
-  
-  console.log('[Edge:evolution-webhook] createContact', { 
-    phone, 
-    name: contactName, 
-    hasAvatar: !!avatarUrl 
-  });
-
-  const { data: c, error } = await supabase
-    .from("contacts")
-    .insert({
-      workspace_id: workspaceId,
-      phone,
-      name: contactName,
-      avatar_url: avatarUrl,
-      user_id: member?.user_id || workspaceId,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    // Handle conflict - contact may have been created concurrently
-    if (error.message?.toLowerCase().includes('unique') || 
-        error.message?.toLowerCase().includes('duplicate')) {
-      const { data: retry } = await supabase
-        .from("contacts")
-        .select("id")
-        .eq("workspace_id", workspaceId)
-        .eq("phone", phone)
-        .maybeSingle();
-      
-      if (retry) return retry.id as string;
-    }
-    throw new Error("Failed to create contact: " + error.message);
-  }
-  
-  return c.id as string;
 }

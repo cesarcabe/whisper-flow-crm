@@ -37,6 +37,8 @@ export function useContactsModule() {
         .from('contacts')
         .select('*')
         .eq('workspace_id', workspaceId)
+        .eq('is_visible', true)
+        .eq('is_real', true)
         .order('name', { ascending: true });
 
       if (error) {

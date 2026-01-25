@@ -51,6 +51,10 @@ export class ContactMapper {
       notes: contact.notes,
       contact_class_id: contact.contactClassId,
       group_class_id: contact.groupClassId,
+      is_real: true,
+      is_visible: true,
+      source_type: null,
+      raw_jid: null,
     };
   }
 
