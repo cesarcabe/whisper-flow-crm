@@ -1,3 +1,5 @@
+// ============= Full file contents =============
+
 import "jsr:@supabase/functions-js@2.4.1/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -13,7 +15,8 @@ import { insertDelivery, markDelivery } from "./services/deliveryService.ts";
 // Handlers
 import { handleConnection } from "./handlers/handleConnection.ts";
 import { handleQrCode } from "./handlers/handleQrCode.ts";
-import { handleMessage } from "./handlers/handleMessage.ts";
+import { handleMessageUpsert } from "./handlers/handleMessageUpsert.ts";
+import { handleMessageUpdate } from "./handlers/handleMessageUpdate.ts";
 
 // Types
 import type { WebhookContext } from "./types.ts";
@@ -144,8 +147,10 @@ Deno.serve(async (req: Request) => {
         return await handleQrCode(ctx);
       
       case "messages.upsert":
+        return await handleMessageUpsert(ctx);
+      
       case "messages.update":
-        return await handleMessage(ctx);
+        return await handleMessageUpdate(ctx);
       
       default:
         console.log('[Edge:evolution-webhook] unhandled_event', { eventType });
