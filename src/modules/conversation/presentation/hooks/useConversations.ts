@@ -290,25 +290,29 @@ export function useConversations(whatsappNumberId: string | null) {
         async (payload) => {
           const newRow = payload.new as ConversationRow;
           
-          // Fetch contact for new conversation
+          // Fetch contact for new conversation - only include if is_real = true
           const { data: contactRow } = await supabase
             .from('contacts')
             .select('*')
             .eq('id', newRow.contact_id)
+            .eq('is_real', true)
             .single();
+          
+          // Skip if contact is not real (LID or placeholder)
+          if (!contactRow) return;
           
           setConversations((prev) => {
             if (prev.some((c) => c.id === newRow.id)) return prev;
             const newItem: LegacyConversationWithContact = {
               ...newRow,
-              contact: contactRow ? {
+              contact: {
                 id: contactRow.id,
                 name: contactRow.name,
                 phone: contactRow.phone,
                 avatar_url: contactRow.avatar_url,
                 contact_class_id: contactRow.contact_class_id,
                 contact_class: null,
-              } : null,
+              },
               lastMessagePreview: '',
               stage: null,
             };

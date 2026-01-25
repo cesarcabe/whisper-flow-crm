@@ -75,10 +75,12 @@ export class SupabaseConversationRepository implements ConversationRepository {
   }
 
   async findByWhatsappNumberId(whatsappNumberId: string): Promise<Conversation[]> {
+    // Filter conversations to only include those with real contacts (is_real = true)
     const { data, error } = await supabase
       .from('conversations')
-      .select('*')
+      .select('*, contacts!inner(is_real)')
       .eq('whatsapp_number_id', whatsappNumberId)
+      .eq('contacts.is_real', true)
       .order('last_message_at', { ascending: false, nullsFirst: false });
 
     if (error || !data) return [];
