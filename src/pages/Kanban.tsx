@@ -1,16 +1,16 @@
 import { KanbanView } from '@/components/kanban/KanbanView';
 import { Helmet } from 'react-helmet-async';
 
-const Kanban = () => {
+const LeadsClientes = () => {
   return (
     <>
       <Helmet>
-        <title>Kanban - New Flow CRM</title>
-        <meta name="description" content="Gerencie seus pipelines e estágios de vendas no formato Kanban." />
+        <title>Leads e Clientes - New Flow CRM</title>
+        <meta name="description" content="Gerencie seus leads e clientes com visualização em Kanban." />
       </Helmet>
       <KanbanView />
     </>
   );
 };
 
-export default Kanban;
+export default LeadsClientes;

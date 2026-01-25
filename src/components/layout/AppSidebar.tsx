@@ -27,7 +27,7 @@ import logoNewFlow from "@/assets/logo-newflow.png";
 
 const menuItems = [
   { title: "Início", url: "/", icon: Home },
-  { title: "Kanban", url: "/kanban", icon: Kanban },
+  { title: "Leads e Clientes", url: "/kanban", icon: Kanban },
   { title: "Conversas", url: "/conversations", icon: MessageSquare },
   { title: "Contatos", url: "/contacts", icon: Users },
   { title: "Relatórios", url: "/reports", icon: BarChart3 },
