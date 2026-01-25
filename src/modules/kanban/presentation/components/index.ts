@@ -31,6 +31,7 @@ export { GroupCard } from './GroupCard';
 // Header and selectors
 export { PipelineHeader } from './PipelineHeader';
 export { BoardTypeSelector } from './BoardTypeSelector';
+export { LeadsToolbar } from './LeadsToolbar';
 
 // Dialogs
 export { CreatePipelineDialog } from './dialogs/CreatePipelineDialog';

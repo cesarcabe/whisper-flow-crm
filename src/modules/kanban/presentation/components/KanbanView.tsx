@@ -4,10 +4,8 @@ import { useContacts } from '@/hooks/useContacts';
 import { useContactClasses } from '@/hooks/useContactClasses';
 import { useConversationStages } from '@/hooks/useConversationStages';
 import { useGroupClasses } from '@/hooks/useGroupClasses';
-import { useAuth } from '@/contexts/AuthContext';
 import { useKanbanState } from '@/hooks/useKanbanState';
-import { PipelineHeader } from './PipelineHeader';
-import { BoardTypeSelector } from './BoardTypeSelector';
+import { LeadsToolbar } from './LeadsToolbar';
 import { ChatView } from './views/ChatView';
 import { KanbanMainView } from './views/KanbanMainView';
 import { CreatePipelineDialog } from './dialogs/CreatePipelineDialog';
@@ -24,8 +22,6 @@ import { Loader2 } from 'lucide-react';
 type Contact = Tables<'contacts'>;
 
 export function KanbanView() {
-  const { profile, signOut } = useAuth();
-  
   // Centralized state management
   const {
     currentView,
@@ -94,7 +90,7 @@ export function KanbanView() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="h-full flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-muted-foreground">Carregando...</p>
@@ -105,38 +101,21 @@ export function KanbanView() {
 
   // Chat View
   if (currentView === 'chat') {
-    return (
-      <ChatView
-        pipelines={pipelines}
-        activePipeline={activePipeline}
-        onSelectPipeline={setActivePipeline}
-        onCreatePipeline={() => openDialog('showCreatePipeline')}
-        onDeletePipeline={() => openDialog('showDeletePipeline')}
-        onViewChange={setCurrentView}
-        currentView={currentView}
-        userName={profile?.full_name || undefined}
-        onSignOut={signOut}
-      />
-    );
+    return <ChatView />;
   }
 
   // Kanban View
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <PipelineHeader
+    <div className="h-full flex flex-col bg-background">
+      <LeadsToolbar
+        boardType={boardType}
+        onBoardTypeChange={setBoardType}
         pipelines={pipelines}
         activePipeline={activePipeline}
         onSelectPipeline={setActivePipeline}
         onCreatePipeline={() => openDialog('showCreatePipeline')}
-        onEditPipeline={() => {}}
         onDeletePipeline={() => openDialog('showDeletePipeline')}
-        onViewChange={setCurrentView}
-        currentView={currentView}
-        userName={profile?.full_name || undefined}
-        onSignOut={signOut}
       />
-
-      <BoardTypeSelector boardType={boardType} onBoardTypeChange={setBoardType} />
 
       <main className="flex-1 overflow-hidden">
         <KanbanMainView
