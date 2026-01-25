@@ -350,9 +350,13 @@ export type Database = {
           email: string | null
           group_class_id: string | null
           id: string
+          is_real: boolean | null
+          is_visible: boolean | null
           name: string
           notes: string | null
           phone: string
+          raw_jid: string | null
+          source_type: string | null
           status: string | null
           tags: string[] | null
           updated_at: string
@@ -366,9 +370,13 @@ export type Database = {
           email?: string | null
           group_class_id?: string | null
           id?: string
+          is_real?: boolean | null
+          is_visible?: boolean | null
           name: string
           notes?: string | null
           phone: string
+          raw_jid?: string | null
+          source_type?: string | null
           status?: string | null
           tags?: string[] | null
           updated_at?: string
@@ -382,9 +390,13 @@ export type Database = {
           email?: string | null
           group_class_id?: string | null
           id?: string
+          is_real?: boolean | null
+          is_visible?: boolean | null
           name?: string
           notes?: string | null
           phone?: string
+          raw_jid?: string | null
+          source_type?: string | null
           status?: string | null
           tags?: string[] | null
           updated_at?: string
@@ -522,6 +534,7 @@ export type Database = {
         Row: {
           contact_id: string
           created_at: string
+          group_remote_jid: string | null
           id: string
           is_group: boolean | null
           is_typing: boolean | null
@@ -537,6 +550,7 @@ export type Database = {
         Insert: {
           contact_id: string
           created_at?: string
+          group_remote_jid?: string | null
           id?: string
           is_group?: boolean | null
           is_typing?: boolean | null
@@ -552,6 +566,7 @@ export type Database = {
         Update: {
           contact_id?: string
           created_at?: string
+          group_remote_jid?: string | null
           id?: string
           is_group?: boolean | null
           is_typing?: boolean | null

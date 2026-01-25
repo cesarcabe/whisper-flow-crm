@@ -72,10 +72,21 @@ export function parseJid(jid: string | null | undefined): JidInfo | null {
 
 /**
  * Verifica se o JID é um número de telefone válido (PN)
+ * Um PN válido tem entre 8 e 15 dígitos
  */
 export function isPhoneNumber(jidInfo: JidInfo | null): boolean {
   if (!jidInfo) return false;
-  return jidInfo.type === 'pn' && !!jidInfo.digits && jidInfo.digits.length >= 8;
+  return jidInfo.type === 'pn' && !!jidInfo.digits && 
+    jidInfo.digits.length >= 8 && jidInfo.digits.length <= 15;
+}
+
+/**
+ * Verifica se um phone string é válido (8-15 dígitos)
+ */
+export function isValidPhoneDigits(digits: string | null | undefined): boolean {
+  if (!digits) return false;
+  const clean = digits.replace(/\D/g, '');
+  return clean.length >= 8 && clean.length <= 15;
 }
 
 /**
