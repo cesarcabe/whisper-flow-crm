@@ -107,7 +107,7 @@ export function useConversationStages() {
         return;
       }
 
-      // Fetch group conversations to exclude those contacts
+      // First, get contacts that belong to groups (to exclude them)
       const { data: groupConversations } = await supabase
         .from('conversations')
         .select('contact_id')
@@ -116,13 +116,15 @@ export function useConversationStages() {
 
       const groupContactIds = new Set((groupConversations || []).map(c => c.contact_id));
 
-      // Fetch ALL contacts (not just those with conversations) - only real, visible contacts
+      // Fetch ALL real and visible contacts (leads)
+      // This ensures every contact appears in the Stages board
       const { data: contactsData, error: contactsError } = await supabase
         .from('contacts')
         .select('id, name, phone, email, avatar_url')
         .eq('workspace_id', workspaceId)
-        .eq('is_visible', true)
-        .eq('is_real', true);
+        .eq('is_visible', true)    // Only visible contacts
+        .eq('is_real', true)       // Only real contacts (not groups/LIDs)
+        .order('name', { ascending: true });
 
       if (contactsError) {
         console.error('[ConversationStages] Error fetching contacts:', contactsError);
@@ -130,6 +132,7 @@ export function useConversationStages() {
       }
 
       // Fetch conversations for this pipeline (excluding groups)
+      // This is used to get stage_id for each contact via LEFT JOIN
       const { data: conversationsData, error: conversationsError } = await supabase
         .from('conversations')
         .select('id, contact_id, stage_id, pipeline_id, last_message_at, unread_count, is_group')
@@ -148,15 +151,17 @@ export function useConversationStages() {
         conversationsByContact.set(conv.contact_id, conv);
       });
 
-      // Build contact entries with LEFT JOIN logic, excluding group contacts
+      // Build contact entries with LEFT JOIN logic
+      // Each contact gets its stage_id from conversations table
+      // If stage_id is null, contact goes to "Entrada de Leads" (leadInbox)
       const contactEntries: ConversationWithStage[] = (contactsData || [])
-        .filter(contact => !groupContactIds.has(contact.id))
+        .filter(contact => !groupContactIds.has(contact.id)) // Exclude group contacts
         .map(contact => {
           const conversation = conversationsByContact.get(contact.id);
           return {
             id: conversation?.id || null,
             contact_id: contact.id,
-            stage_id: conversation?.stage_id || null,
+            stage_id: conversation?.stage_id || null,  // null if no conversation or no stage assigned
             pipeline_id: conversation?.pipeline_id || null,
             last_message_at: conversation?.last_message_at || null,
             unread_count: conversation?.unread_count || 0,
@@ -164,13 +169,14 @@ export function useConversationStages() {
           };
         });
 
-      // Build stages with contacts
+      // Build stages with contacts assigned to each stage
       const stagesWithConversations: StageWithConversations[] = (stagesData || []).map(stage => ({
         ...stage,
         conversations: contactEntries.filter(entry => entry.stage_id === stage.id),
       }));
 
-      // Create virtual "Entrada de Leads" stage for unassigned contacts
+      // Create virtual "Entrada de Leads" stage for contacts without stage_id
+      // This is the default column (like "Sem Classificação" in Relationship board)
       const unassignedContacts = contactEntries.filter(entry => !entry.stage_id);
       const leadInbox: LeadInboxStage = {
         id: 'lead-inbox',

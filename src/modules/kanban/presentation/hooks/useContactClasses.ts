@@ -58,7 +58,7 @@ export function useContactClasses() {
     if (!user || !workspaceId) return;
 
     try {
-      // First, get contacts that belong to groups
+      // First, get contacts that belong to groups (to exclude them)
       const { data: groupConversations } = await supabase
         .from('conversations')
         .select('contact_id')
@@ -67,12 +67,14 @@ export function useContactClasses() {
 
       const groupContactIds = new Set((groupConversations || []).map(c => c.contact_id));
 
+      // Fetch ALL real and visible contacts (leads)
+      // This ensures every contact appears in the Relationship board
       const { data: contacts, error } = await supabase
         .from('contacts')
         .select('id, name, phone, email, avatar_url, contact_class_id, workspace_id')
         .eq('workspace_id', workspaceId)
-        .eq('is_visible', true)
-        .eq('is_real', true)
+        .eq('is_visible', true)    // Only visible contacts
+        .eq('is_real', true)       // Only real contacts (not groups/LIDs)
         .order('name', { ascending: true });
 
       if (error) {
@@ -80,20 +82,23 @@ export function useContactClasses() {
         return;
       }
 
-      // Group contacts by class, excluding group contacts
+      // Group contacts by contact_class_id
+      // If contact_class_id is null, contact goes to "Sem Classificação" (unclassified)
       const grouped: Record<string, ContactWithClass[]> = {};
       const unclassified: ContactWithClass[] = [];
 
       (contacts || []).forEach((contact) => {
-        // Skip contacts that belong to groups
+        // Skip contacts that belong to groups (they appear in Groups board)
         if (groupContactIds.has(contact.id)) return;
 
         if (contact.contact_class_id) {
+          // Contact has a classification - add to its class column
           if (!grouped[contact.contact_class_id]) {
             grouped[contact.contact_class_id] = [];
           }
           grouped[contact.contact_class_id].push(contact);
         } else {
+          // Contact has no classification - add to "Sem Classificação" column
           unclassified.push(contact);
         }
       });
