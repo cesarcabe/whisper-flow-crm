@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { MessageSquare, Phone, Mail, Calendar, Clock, Tag } from 'lucide-react';
+import { MessageSquare, Phone, Mail, Calendar, Clock, Tag, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -26,6 +26,7 @@ interface ContactDetailsSheetProps {
   contactClasses: ContactClass[];
   groupClasses: ContactClass[];
   onOpenChat: (contact: Contact) => void;
+  onEdit?: (contact: Contact) => void;
 }
 
 export function ContactDetailsSheet({
@@ -35,6 +36,7 @@ export function ContactDetailsSheet({
   contactClasses,
   groupClasses,
   onOpenChat,
+  onEdit,
 }: ContactDetailsSheetProps) {
   if (!contact) return null;
 
@@ -228,6 +230,19 @@ export function ContactDetailsSheet({
               <MessageSquare className="h-4 w-4" />
               Iniciar Conversa
             </Button>
+            {onEdit && (
+              <Button 
+                variant="outline"
+                className="gap-2" 
+                onClick={() => {
+                  onEdit(contact);
+                  onOpenChange(false);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+                Editar
+              </Button>
+            )}
           </div>
         </div>
       </SheetContent>
