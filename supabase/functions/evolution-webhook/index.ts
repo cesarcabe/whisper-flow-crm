@@ -70,7 +70,7 @@ Deno.serve(async (req: Request) => {
     hasApiKey: !!apiKey 
   });
 
-  // Resolve workspace_id by api key
+  // 1) Validate API key exists (security check)
   const { data: wsKey, error: keyErr } = await supabase
     .from("workspace_api_keys")
     .select("workspace_id, is_active")
@@ -87,9 +87,30 @@ Deno.serve(async (req: Request) => {
     return json({ code: 401, message: "Invalid API key" }, 401);
   }
 
-  const workspaceId = wsKey.workspace_id as string;
+  // 2) Resolve EFFECTIVE workspace_id from instance (handles workspace transfers)
+  // The instance's current workspace_id takes precedence over the API key's workspace
+  const { data: waNumber, error: waErr } = await supabase
+    .from("whatsapp_numbers")
+    .select("id, instance_name, status, workspace_id")
+    .eq("instance_name", instanceName)
+    .maybeSingle();
 
-  // 2) Extract provider_event_id
+  if (waErr) {
+    console.log('[Edge:evolution-webhook] instance_lookup_error', { error: waErr.message });
+    return json({ code: 500, message: "Instance lookup failed", details: waErr.message }, 500);
+  }
+
+  // Use instance's workspace_id if found, otherwise fall back to API key's workspace
+  const workspaceId = (waNumber?.workspace_id ?? wsKey.workspace_id) as string;
+
+  console.log('[Edge:evolution-webhook] workspace_resolved', {
+    instanceName,
+    instanceWorkspaceId: waNumber?.workspace_id ?? null,
+    apiKeyWorkspaceId: wsKey.workspace_id,
+    effectiveWorkspaceId: workspaceId,
+  });
+
+  // 3) Extract provider_event_id
   const providerEventId =
     safeString(data?.id) ??
     safeString(data?.messageId) ??
