@@ -1,0 +1,1 @@
+export { useContactsModule } from './useContactsModule';
