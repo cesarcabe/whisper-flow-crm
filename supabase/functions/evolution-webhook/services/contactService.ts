@@ -1,6 +1,7 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { safeString } from "../utils/extract.ts";
 import { isValidPhoneDigits } from "../utils/jidParser.ts";
+import { persistAvatar } from "./avatarService.ts";
 
 /**
  * Busca foto de perfil do contato via Evolution API
@@ -84,6 +85,12 @@ export async function resolveContact(
   const placeholderPhone = `lid:${jidId}`;
   const hasValidPhone = isRealContactPhone(senderPhone);
   
+  // Persistir avatar no Supabase Storage (se disponível e for contato real)
+  let persistedAvatarUrl = avatarUrl;
+  if (hasValidPhone && avatarUrl && senderPhone) {
+    persistedAvatarUrl = await persistAvatar(supabase, workspaceId, senderPhone, avatarUrl);
+  }
+  
   // CASO 1: Grupo sem phone válido do participant - placeholder invisível
   if (isGroup && !hasValidPhone) {
     console.log('[Edge:evolution-webhook] resolveContact: group placeholder (invisible)', { 
@@ -112,7 +119,7 @@ export async function resolveContact(
     workspaceId, 
     senderPhone!, 
     pushName, 
-    avatarUrl, 
+    persistedAvatarUrl, 
     sourceType,
     senderJid
   );
