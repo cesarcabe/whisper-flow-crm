@@ -58,8 +58,13 @@ Deno.serve(async (req) => {
     // Eventos de assinatura suportados
     const supportedEvents = [
       "customer.subscription.created",
-      "customer.subscription.updated", 
+      "customer.subscription.updated",
       "customer.subscription.deleted",
+      "customer.subscription.paused",
+      "customer.subscription.resumed",
+      "customer.subscription.pending_update_applied",
+      "customer.subscription.pending_update_expired",
+      "customer.subscription.trial_will_end",
     ];
 
     if (!supportedEvents.includes(event.type)) {
@@ -95,37 +100,63 @@ Deno.serve(async (req) => {
 
     logStep("Customer details", { customerId, email: customerEmail, name: customer.name });
 
-    // Se for cancelamento, apenas atualiza o status
-    if (event.type === "customer.subscription.deleted") {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-        auth: { persistSession: false },
-      });
-
-      const { error: updateError } = await supabaseAdmin
-        .from("workspaces")
-        .update({
-          subscription_status: "canceled",
-        })
-        .eq("stripe_subscription_id", subscriptionId);
-
-      if (updateError) {
-        logStep("Erro ao cancelar workspace", { error: updateError.message });
-      }
-
-      logStep("Subscription canceled", { subscriptionId });
-      return new Response(JSON.stringify({ success: true, action: "canceled" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Inicializar Supabase Admin
+    // Inicializar Supabase Admin para eventos que precisam atualizar dados
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
+
+    // Mapear status do Stripe para status interno
+    const mapSubscriptionStatus = (stripeStatus: string, eventType: string): string => {
+      if (eventType === "customer.subscription.deleted") return "canceled";
+      if (eventType === "customer.subscription.paused") return "paused";
+      if (eventType === "customer.subscription.resumed") return "active";
+      
+      switch (stripeStatus) {
+        case "active": return "active";
+        case "past_due": return "past_due";
+        case "canceled": return "canceled";
+        case "unpaid": return "unpaid";
+        case "trialing": return "trialing";
+        case "paused": return "paused";
+        default: return stripeStatus;
+      }
+    };
+
+    // Eventos que apenas atualizam status (não criam usuário/workspace)
+    const statusOnlyEvents = [
+      "customer.subscription.deleted",
+      "customer.subscription.paused",
+      "customer.subscription.resumed",
+      "customer.subscription.pending_update_applied",
+      "customer.subscription.pending_update_expired",
+      "customer.subscription.trial_will_end",
+    ];
+
+    if (statusOnlyEvents.includes(event.type)) {
+      const newStatus = mapSubscriptionStatus(subscriptionStatus, event.type);
+      
+      const { error: updateError } = await supabaseAdmin
+        .from("workspaces")
+        .update({
+          subscription_status: newStatus,
+          tier: tier,
+          subscription_ends_at: new Date(subscription.current_period_end * 1000).toISOString(),
+        })
+        .eq("stripe_subscription_id", subscriptionId);
+
+      if (updateError) {
+        logStep("Erro ao atualizar workspace", { error: updateError.message });
+      }
+
+      logStep(`Subscription ${event.type}`, { subscriptionId, newStatus });
+      return new Response(JSON.stringify({ success: true, action: event.type, status: newStatus }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Supabase Admin já foi inicializado acima
 
     // Verificar se já existe usuário com este email
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
