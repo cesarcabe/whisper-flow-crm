@@ -24,7 +24,7 @@ export interface ContactWithClass {
   workspace_id: string | null;
 }
 
-export function useContactClasses() {
+export function useContactClasses(pipelineId?: string | null) {
   const { user } = useAuth();
   const { workspaceId } = useWorkspace();
   const [contactClasses, setContactClasses] = useState<ContactClass[]>([]);
@@ -67,15 +67,20 @@ export function useContactClasses() {
 
       const groupContactIds = new Set((groupConversations || []).map(c => c.contact_id));
 
-      // Fetch ALL real and visible contacts (leads)
-      // This ensures every contact appears in the Relationship board
-      const { data: contacts, error } = await supabase
+      // Build query for contacts
+      let query = supabase
         .from('contacts')
-        .select('id, name, phone, email, avatar_url, contact_class_id, workspace_id')
+        .select('id, name, phone, email, avatar_url, contact_class_id, workspace_id, pipeline_id')
         .eq('workspace_id', workspaceId)
-        .eq('is_visible', true)    // Only visible contacts
-        .eq('is_real', true)       // Only real contacts (not groups/LIDs)
-        .order('name', { ascending: true });
+        .eq('is_visible', true)
+        .eq('is_real', true);
+
+      // Filter by pipeline if provided
+      if (pipelineId) {
+        query = query.eq('pipeline_id', pipelineId);
+      }
+
+      const { data: contacts, error } = await query.order('name', { ascending: true });
 
       if (error) {
         console.error('[ContactClasses] Error fetching contacts:', error);
@@ -83,22 +88,18 @@ export function useContactClasses() {
       }
 
       // Group contacts by contact_class_id
-      // If contact_class_id is null, contact goes to "Sem Classificação" (unclassified)
       const grouped: Record<string, ContactWithClass[]> = {};
       const unclassified: ContactWithClass[] = [];
 
       (contacts || []).forEach((contact) => {
-        // Skip contacts that belong to groups (they appear in Groups board)
         if (groupContactIds.has(contact.id)) return;
 
         if (contact.contact_class_id) {
-          // Contact has a classification - add to its class column
           if (!grouped[contact.contact_class_id]) {
             grouped[contact.contact_class_id] = [];
           }
           grouped[contact.contact_class_id].push(contact);
         } else {
-          // Contact has no classification - add to "Sem Classificação" column
           unclassified.push(contact);
         }
       });
@@ -108,7 +109,7 @@ export function useContactClasses() {
     } catch (err) {
       console.error('[ContactClasses] Exception fetching contacts:', err);
     }
-  }, [user, workspaceId]);
+  }, [user, workspaceId, pipelineId]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);

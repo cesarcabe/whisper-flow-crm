@@ -51,6 +51,7 @@ export class ContactMapper {
       notes: contact.notes,
       contact_class_id: contact.contactClassId,
       group_class_id: contact.groupClassId,
+      pipeline_id: null,
       is_real: true,
       is_visible: true,
       source_type: null,

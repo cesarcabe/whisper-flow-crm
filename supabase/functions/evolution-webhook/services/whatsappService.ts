@@ -9,7 +9,7 @@ export async function ensureWhatsappNumber(
 
   const { data: existing } = await supabase
     .from("whatsapp_numbers")
-    .select("id, instance_name, status, workspace_id")
+    .select("id, instance_name, status, workspace_id, pipeline_preferential_id")
     .eq("instance_name", instanceName)
     .maybeSingle();
 

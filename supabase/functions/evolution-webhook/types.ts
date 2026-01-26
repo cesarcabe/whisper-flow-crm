@@ -5,6 +5,7 @@ export interface WhatsappNumber {
   instance_name: string | null;
   status: string | null;
   workspace_id: string;
+  pipeline_preferential_id: string | null;
 }
 
 export interface WebhookContext {

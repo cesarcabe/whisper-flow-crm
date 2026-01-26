@@ -11,7 +11,7 @@ export interface GroupWithClass extends GroupConversation {
   group_class_id: string | null;
 }
 
-export function useGroupClasses() {
+export function useGroupClasses(pipelineId?: string | null) {
   const { user } = useAuth();
   const { workspaceId } = useWorkspace();
   const [groupClasses, setGroupClasses] = useState<GroupClass[]>([]);
@@ -38,7 +38,7 @@ export function useGroupClasses() {
       }
 
       // Fetch group conversations with contact info
-      const { data: groupsData, error: groupsError } = await supabase
+      let query = supabase
         .from('conversations')
         .select(`
           id,
@@ -52,12 +52,19 @@ export function useGroupClasses() {
             name,
             phone,
             avatar_url,
-            group_class_id
+            group_class_id,
+            pipeline_id
           )
         `)
         .eq('workspace_id', workspaceId)
-        .eq('is_group', true)
-        .order('last_message_at', { ascending: false, nullsFirst: false });
+        .eq('is_group', true);
+
+      // Filter by pipeline if provided
+      if (pipelineId) {
+        query = query.eq('contacts.pipeline_id', pipelineId);
+      }
+
+      const { data: groupsData, error: groupsError } = await query.order('last_message_at', { ascending: false, nullsFirst: false });
 
       if (groupsError) {
         console.error('[GroupClasses] Error fetching groups:', groupsError);
@@ -107,13 +114,13 @@ export function useGroupClasses() {
     } finally {
       setLoading(false);
     }
-  }, [user, workspaceId]);
+  }, [user, workspaceId, pipelineId]);
 
   useEffect(() => {
     if (user && workspaceId) {
       fetchData();
     }
-  }, [user, workspaceId, fetchData]);
+  }, [user, workspaceId, pipelineId, fetchData]);
 
   const moveGroup = useCallback(async (groupId: string, newClassId: string | null): Promise<boolean> => {
     // Find the group to get contact_id

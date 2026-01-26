@@ -116,14 +116,14 @@ export function useConversationStages() {
 
       const groupContactIds = new Set((groupConversations || []).map(c => c.contact_id));
 
-      // Fetch ALL real and visible contacts (leads)
-      // This ensures every contact appears in the Stages board
+      // Fetch contacts filtered by pipeline_id
       const { data: contactsData, error: contactsError } = await supabase
         .from('contacts')
         .select('id, name, phone, email, avatar_url')
         .eq('workspace_id', workspaceId)
-        .eq('is_visible', true)    // Only visible contacts
-        .eq('is_real', true)       // Only real contacts (not groups/LIDs)
+        .eq('is_visible', true)
+        .eq('is_real', true)
+        .eq('pipeline_id', pipelineId)
         .order('name', { ascending: true });
 
       if (contactsError) {

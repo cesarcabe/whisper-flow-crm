@@ -76,6 +76,7 @@ export async function handleMessageUpsert(ctx: WebhookContext): Promise<Response
     envelope.pushName,
     avatarUrl,
     envelope.conversationType === 'group',
+    wa.pipeline_preferential_id,
   );
   
   console.log('[Edge:evolution-webhook] handleMessageUpsert: contact resolved', { 
