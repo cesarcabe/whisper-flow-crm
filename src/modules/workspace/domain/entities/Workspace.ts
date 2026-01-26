@@ -13,6 +13,12 @@ export interface WorkspaceProps {
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
+  // Subscription fields
+  tier: string | null;
+  subscriptionStatus: string | null;
+  subscriptionEndsAt: Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
 }
 
 export class Workspace {
@@ -54,6 +60,26 @@ export class Workspace {
 
   get updatedAt(): Date {
     return this.props.updatedAt;
+  }
+
+  get tier(): string | null {
+    return this.props.tier;
+  }
+
+  get subscriptionStatus(): string | null {
+    return this.props.subscriptionStatus;
+  }
+
+  get subscriptionEndsAt(): Date | null {
+    return this.props.subscriptionEndsAt;
+  }
+
+  get stripeCustomerId(): string | null {
+    return this.props.stripeCustomerId;
+  }
+
+  get stripeSubscriptionId(): string | null {
+    return this.props.stripeSubscriptionId;
   }
 
   // ============ Domain Behavior ============

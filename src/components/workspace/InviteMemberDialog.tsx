@@ -45,9 +45,11 @@ type FormData = z.infer<typeof formSchema>;
 
 interface InviteMemberDialogProps {
   onInvite: (email: string, role: 'admin' | 'agent') => Promise<boolean>;
+  disabled?: boolean;
+  remainingSlots?: number | null;
 }
 
-export function InviteMemberDialog({ onInvite }: InviteMemberDialogProps) {
+export function InviteMemberDialog({ onInvite, disabled, remainingSlots }: InviteMemberDialogProps) {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -73,9 +75,17 @@ export function InviteMemberDialog({ onInvite }: InviteMemberDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
+        <Button 
+          variant="outline" 
+          className="gap-2" 
+          disabled={disabled}
+          title={disabled ? 'Limite de membros atingido. Faça upgrade do plano.' : undefined}
+        >
           <Mail className="h-4 w-4" />
           Convidar por Email
+          {remainingSlots !== null && remainingSlots !== undefined && (
+            <span className="text-xs text-muted-foreground">({remainingSlots})</span>
+          )}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

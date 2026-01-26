@@ -46,9 +46,11 @@ type FormData = z.infer<typeof formSchema>;
 
 interface AddMemberDialogProps {
   onAddMember: (email: string, role: WorkspaceRole) => Promise<boolean>;
+  disabled?: boolean;
+  remainingSlots?: number | null;
 }
 
-export function AddMemberDialog({ onAddMember }: AddMemberDialogProps) {
+export function AddMemberDialog({ onAddMember, disabled, remainingSlots }: AddMemberDialogProps) {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -74,7 +76,11 @@ export function AddMemberDialog({ onAddMember }: AddMemberDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
+        <Button 
+          className="gap-2" 
+          disabled={disabled}
+          title={disabled ? 'Limite de membros atingido. Faça upgrade do plano.' : undefined}
+        >
           <UserPlus className="h-4 w-4" />
           Adicionar Membro
         </Button>
