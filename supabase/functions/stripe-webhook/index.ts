@@ -55,41 +55,70 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Processar apenas checkout.session.completed
-    if (event.type !== "checkout.session.completed") {
+    // Eventos de assinatura suportados
+    const supportedEvents = [
+      "customer.subscription.created",
+      "customer.subscription.updated", 
+      "customer.subscription.deleted",
+    ];
+
+    if (!supportedEvents.includes(event.type)) {
       logStep("Evento ignorado", { type: event.type });
       return new Response(JSON.stringify({ received: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const session = event.data.object as Stripe.Checkout.Session;
-    logStep("Checkout session completed", {
-      sessionId: session.id,
-      customerId: session.customer,
-      customerEmail: session.customer_email,
-      subscriptionId: session.subscription,
-    });
-
-    // Validar dados necessários
-    const customerEmail = session.customer_email || session.customer_details?.email;
-    if (!customerEmail) {
-      throw new Error("Email do cliente não encontrado na sessão");
-    }
-
-    const customerId = session.customer as string;
-    const subscriptionId = session.subscription as string;
-
-    if (!subscriptionId) {
-      throw new Error("Subscription ID não encontrado");
-    }
-
-    // Buscar detalhes da subscription para obter o price_id
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscription = event.data.object as Stripe.Subscription;
+    const customerId = subscription.customer as string;
+    const subscriptionId = subscription.id;
     const priceId = subscription.items.data[0]?.price.id;
     const tier = PRICE_TO_TIER[priceId] || "starter";
+    const subscriptionStatus = subscription.status;
 
-    logStep("Subscription details", { priceId, tier });
+    logStep("Subscription event", {
+      eventType: event.type,
+      subscriptionId,
+      customerId,
+      priceId,
+      tier,
+      status: subscriptionStatus,
+    });
+
+    // Buscar email do cliente no Stripe
+    const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
+    const customerEmail = customer.email;
+    
+    if (!customerEmail) {
+      throw new Error("Email do cliente não encontrado no Stripe");
+    }
+
+    logStep("Customer details", { customerId, email: customerEmail, name: customer.name });
+
+    // Se for cancelamento, apenas atualiza o status
+    if (event.type === "customer.subscription.deleted") {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false },
+      });
+
+      const { error: updateError } = await supabaseAdmin
+        .from("workspaces")
+        .update({
+          subscription_status: "canceled",
+        })
+        .eq("stripe_subscription_id", subscriptionId);
+
+      if (updateError) {
+        logStep("Erro ao cancelar workspace", { error: updateError.message });
+      }
+
+      logStep("Subscription canceled", { subscriptionId });
+      return new Response(JSON.stringify({ success: true, action: "canceled" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Inicializar Supabase Admin
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -120,7 +149,7 @@ Deno.serve(async (req) => {
         password: tempPassword,
         email_confirm: true, // Confirmar email automaticamente
         user_metadata: {
-          full_name: session.customer_details?.name || customerEmail.split("@")[0],
+          full_name: customer.name || customerEmail.split("@")[0],
           stripe_customer_id: customerId,
         },
       });
@@ -166,7 +195,7 @@ Deno.serve(async (req) => {
       logStep("Workspace existente atualizado", { workspaceId, tier });
     } else {
       // Criar novo workspace
-      const workspaceName = session.customer_details?.name || `Workspace ${customerEmail.split("@")[0]}`;
+      const workspaceName = customer.name || `Workspace ${customerEmail.split("@")[0]}`;
       
       const { data: newWorkspace, error: wsError } = await supabaseAdmin
         .from("workspaces")
@@ -245,7 +274,7 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             email: customerEmail,
-            name: session.customer_details?.name || customerEmail.split("@")[0],
+            name: customer.name || customerEmail.split("@")[0],
             tempPassword: tempPassword,
             tier: tier,
           }),
