@@ -32,3 +32,12 @@ verify_jwt = false
 
 [functions.whatsapp-disconnect-instance]
 verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.send-welcome-email]
+verify_jwt = false
+
+[functions.whatsapp-send-video]
+verify_jwt = false
