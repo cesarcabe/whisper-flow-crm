@@ -79,6 +79,7 @@ export async function resolveContact(
   pushName: string | null,
   avatarUrl: string | null,
   isGroup: boolean,
+  pipelineId: string | null = null,
 ): Promise<string> {
   // Extrair lid_id do senderJid para uso em placeholders
   const jidId = senderJid.replace(/@.*$/, '');
@@ -98,7 +99,7 @@ export async function resolveContact(
       placeholderPhone 
     });
     
-    return await upsertPlaceholderContact(supabase, workspaceId, placeholderPhone, pushName, 'group', senderJid);
+    return await upsertPlaceholderContact(supabase, workspaceId, placeholderPhone, pushName, 'group', senderJid, pipelineId);
   }
   
   // CASO 2: DM sem phone válido (só LID) - placeholder invisível
@@ -108,7 +109,7 @@ export async function resolveContact(
       placeholderPhone 
     });
     
-    return await upsertPlaceholderContact(supabase, workspaceId, placeholderPhone, pushName, 'dm', senderJid);
+    return await upsertPlaceholderContact(supabase, workspaceId, placeholderPhone, pushName, 'dm', senderJid, pipelineId);
   }
   
   // CASO 3: DM ou grupo com phone válido (PN real) - contato visível
@@ -121,7 +122,8 @@ export async function resolveContact(
     pushName, 
     persistedAvatarUrl, 
     sourceType,
-    senderJid
+    senderJid,
+    pipelineId
   );
   
   // Se senderJid é LID, tentar merge com placeholder existente
@@ -142,6 +144,7 @@ async function upsertPlaceholderContact(
   pushName: string | null,
   sourceType: 'dm' | 'group',
   rawJid: string,
+  pipelineId: string | null = null,
 ): Promise<string> {
   const { data: existing } = await supabase
     .from("contacts")
@@ -182,6 +185,7 @@ async function upsertPlaceholderContact(
       is_visible: false,
       source_type: sourceType,
       raw_jid: rawJid,
+      pipeline_id: pipelineId,
     })
     .select("id")
     .single();
@@ -216,6 +220,7 @@ async function upsertRealContact(
   avatarUrl: string | null,
   sourceType: 'dm' | 'group',
   rawJid: string,
+  pipelineId: string | null = null,
 ): Promise<string> {
   console.log('[Edge:evolution-webhook] upsertRealContact', { 
     phone, 
@@ -291,6 +296,7 @@ async function upsertRealContact(
       is_visible: true,
       source_type: sourceType,
       raw_jid: rawJid,
+      pipeline_id: pipelineId,
     })
     .select("id")
     .single();

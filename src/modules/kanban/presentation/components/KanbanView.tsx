@@ -69,7 +69,7 @@ export function KanbanView() {
     createContactClass,
     updateContactClass,
     deleteContactClass,
-  } = useContactClasses();
+  } = useContactClasses(activePipeline?.id);
 
   const {
     activePipeline: stagePipeline,
@@ -84,7 +84,7 @@ export function KanbanView() {
     unclassifiedGroups,
     loading: groupsLoading,
     moveGroup,
-  } = useGroupClasses();
+  } = useGroupClasses(activePipeline?.id);
 
   // Loading state
   const loading = pipelinesLoading || classesLoading || stagesLoading || groupsLoading;

@@ -18,7 +18,7 @@ export interface GroupConversation {
   };
 }
 
-export function useGroupConversations() {
+export function useGroupConversations(pipelineId?: string | null) {
   const { user } = useAuth();
   const { workspaceId } = useWorkspace();
   const [groups, setGroups] = useState<GroupConversation[]>([]);
@@ -30,7 +30,7 @@ export function useGroupConversations() {
     try {
       setLoading(true);
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('conversations')
         .select(`
           id,
@@ -43,12 +43,19 @@ export function useGroupConversations() {
             id,
             name,
             phone,
-            avatar_url
+            avatar_url,
+            pipeline_id
           )
         `)
         .eq('workspace_id', workspaceId)
-        .eq('is_group', true)
-        .order('last_message_at', { ascending: false, nullsFirst: false });
+        .eq('is_group', true);
+
+      // Filter by pipeline if provided
+      if (pipelineId) {
+        query = query.eq('contacts.pipeline_id', pipelineId);
+      }
+
+      const { data, error } = await query.order('last_message_at', { ascending: false, nullsFirst: false });
 
       if (error) {
         console.error('[GroupConversations] Error fetching groups:', error);
@@ -76,13 +83,13 @@ export function useGroupConversations() {
     } finally {
       setLoading(false);
     }
-  }, [user, workspaceId]);
+  }, [user, workspaceId, pipelineId]);
 
   useEffect(() => {
     if (user && workspaceId) {
       fetchGroups();
     }
-  }, [user, workspaceId, fetchGroups]);
+  }, [user, workspaceId, pipelineId, fetchGroups]);
 
   return {
     groups,

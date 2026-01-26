@@ -355,6 +355,7 @@ export type Database = {
           name: string
           notes: string | null
           phone: string
+          pipeline_id: string | null
           raw_jid: string | null
           source_type: string | null
           status: string | null
@@ -375,6 +376,7 @@ export type Database = {
           name: string
           notes?: string | null
           phone: string
+          pipeline_id?: string | null
           raw_jid?: string | null
           source_type?: string | null
           status?: string | null
@@ -395,6 +397,7 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string
+          pipeline_id?: string | null
           raw_jid?: string | null
           source_type?: string | null
           status?: string | null
@@ -416,6 +419,13 @@ export type Database = {
             columns: ["group_class_id"]
             isOneToOne: false
             referencedRelation: "group_classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
             referencedColumns: ["id"]
           },
         ]
