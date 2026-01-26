@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
+import { canAddMember, getMemberLimit, getTierConfig } from '@/lib/tier-config';
 
 export type WorkspaceRole = 'owner' | 'admin' | 'agent';
 
@@ -20,12 +21,17 @@ export interface WorkspaceMemberWithProfile {
 }
 
 export function useWorkspaceMembers() {
-  const { workspaceId, workspaceMember } = useWorkspace();
+  const { workspaceId, workspaceMember, workspace } = useWorkspace();
   const [members, setMembers] = useState<WorkspaceMemberWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const isAdmin = workspaceMember?.role === 'owner' || workspaceMember?.role === 'admin';
+  
+  // Tier limits
+  const tierName = workspace?.tier || 'starter';
+  const tierConfig = getTierConfig(tierName);
+  const memberLimit = getMemberLimit(tierName);
 
   const fetchMembers = useCallback(async () => {
     if (!workspaceId) {
@@ -99,6 +105,15 @@ export function useWorkspaceMembers() {
   const addMember = async (email: string, role: WorkspaceRole): Promise<boolean> => {
     if (!workspaceId || !isAdmin) {
       toast.error('Você não tem permissão para adicionar membros');
+      return false;
+    }
+
+    // Verificar limite de membros do tier
+    if (!canAddMember(tierName, members.length)) {
+      const limitMsg = memberLimit 
+        ? `Seu plano ${tierConfig.displayName} permite até ${memberLimit} membros.`
+        : 'Limite de membros atingido.';
+      toast.error(`${limitMsg} Faça upgrade para adicionar mais membros.`);
       return false;
     }
 
@@ -245,5 +260,12 @@ export function useWorkspaceMembers() {
     updateMemberRole,
     removeMember,
     refetch: fetchMembers,
+    // Tier info
+    tierName,
+    tierConfig,
+    memberLimit,
+    memberCount: members.length,
+    canAddMoreMembers: canAddMember(tierName, members.length),
+    remainingSlots: memberLimit === null ? null : Math.max(0, memberLimit - members.length),
   };
 }

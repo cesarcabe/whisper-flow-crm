@@ -9,9 +9,16 @@ const corsHeaders = {
 
 // Mapeamento de price_id para tier
 const PRICE_TO_TIER: Record<string, string> = {
-  "price_1RTv8VE5SkMoSFzluQRDJfqE": "starter",      // R$ 49,90/mês
-  "price_1RTv99E5SkMoSFzlPo5o22YI": "professional", // R$ 79,90/mês
-  "price_1RTv9lE5SkMoSFzlyB1WCX2B": "enterprise",   // R$ 129,90/mês
+  "price_1RTv8VE5SkMoSFzluQRDJfqE": "starter",      // Essencial - R$ 49,90/mês - 3 membros
+  "price_1RTv99E5SkMoSFzlPo5o22YI": "professional", // Avançado - R$ 79,90/mês - 6 membros
+  "price_1RTv9lE5SkMoSFzlyB1WCX2B": "enterprise",   // Premium - R$ 129,90/mês - ilimitado
+};
+
+// Nomes amigáveis dos tiers
+const TIER_DISPLAY_NAMES: Record<string, string> = {
+  starter: "Essencial",
+  professional: "Avançado",
+  enterprise: "Premium",
 };
 
 const logStep = (step: string, details?: unknown) => {
@@ -165,19 +172,15 @@ Deno.serve(async (req) => {
     );
 
     let userId: string;
-    let tempPassword: string | null = null;
     let isNewUser = false;
 
     if (existingUser) {
       userId = existingUser.id;
       logStep("Usuário existente encontrado", { userId, email: customerEmail });
     } else {
-      // Criar novo usuário com senha temporária
-      tempPassword = generateTempPassword();
-      
+      // Criar novo usuário SEM senha (usará Magic Link)
       const { data: newUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
         email: customerEmail,
-        password: tempPassword,
         email_confirm: true, // Confirmar email automaticamente
         user_metadata: {
           full_name: customer.name || customerEmail.split("@")[0],
@@ -192,7 +195,7 @@ Deno.serve(async (req) => {
 
       userId = newUser.user.id;
       isNewUser = true;
-      logStep("Novo usuário criado", { userId, email: customerEmail });
+      logStep("Novo usuário criado (Magic Link)", { userId, email: customerEmail });
     }
 
     // Verificar se usuário já tem workspace
@@ -294,9 +297,11 @@ Deno.serve(async (req) => {
     }
 
     // Enviar email de boas-vindas se for novo usuário
-    if (isNewUser && tempPassword) {
+    if (isNewUser) {
       try {
         const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+        const tierDisplayName = TIER_DISPLAY_NAMES[tier] || "Essencial";
+        
         const response = await fetch(`${supabaseUrl}/functions/v1/send-welcome-email`, {
           method: "POST",
           headers: {
@@ -306,8 +311,9 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             email: customerEmail,
             name: customer.name || customerEmail.split("@")[0],
-            tempPassword: tempPassword,
             tier: tier,
+            tierDisplayName: tierDisplayName,
+            useMagicLink: true, // Indica para usar Magic Link
           }),
         });
 
@@ -315,7 +321,7 @@ Deno.serve(async (req) => {
           const errorText = await response.text();
           logStep("Erro ao enviar email", { status: response.status, error: errorText });
         } else {
-          logStep("Email de boas-vindas enviado", { email: customerEmail });
+          logStep("Email de boas-vindas enviado (Magic Link)", { email: customerEmail });
         }
       } catch (emailError) {
         logStep("Exceção ao enviar email", { error: String(emailError) });
@@ -354,14 +360,6 @@ Deno.serve(async (req) => {
     );
   }
 });
-
-// Gerar senha temporária segura
-function generateTempPassword(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%";
-  const array = new Uint8Array(12);
-  crypto.getRandomValues(array);
-  return Array.from(array, (byte) => chars[byte % chars.length]).join("");
-}
 
 // Gerar API key
 function generateApiKey(): string {

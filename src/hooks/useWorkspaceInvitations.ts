@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
+import { canAddMember, getMemberLimit, getTierConfig } from '@/lib/tier-config';
 
 export interface WorkspaceInvitation {
   id: string;
@@ -16,11 +17,16 @@ export interface WorkspaceInvitation {
 }
 
 export function useWorkspaceInvitations() {
-  const { workspaceId, workspaceMember } = useWorkspace();
+  const { workspaceId, workspaceMember, workspace } = useWorkspace();
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [loading, setLoading] = useState(true);
 
   const isAdmin = workspaceMember?.role === 'owner' || workspaceMember?.role === 'admin';
+  
+  // Tier limits
+  const tierName = workspace?.tier || 'starter';
+  const tierConfig = getTierConfig(tierName);
+  const memberLimit = getMemberLimit(tierName);
 
   const fetchInvitations = useCallback(async () => {
     if (!workspaceId || !isAdmin) {
@@ -57,9 +63,19 @@ export function useWorkspaceInvitations() {
     fetchInvitations();
   }, [fetchInvitations]);
 
-  const sendInvitation = async (email: string, role: 'admin' | 'agent'): Promise<boolean> => {
+  const sendInvitation = async (email: string, role: 'admin' | 'agent', currentMemberCount: number = 0): Promise<boolean> => {
     if (!workspaceId || !isAdmin) {
       toast.error('Você não tem permissão para convidar membros');
+      return false;
+    }
+
+    // Verificar limite de membros do tier (considerando membros atuais + convites pendentes)
+    const totalPending = invitations.length;
+    const totalAfterInvite = currentMemberCount + totalPending + 1;
+    
+    if (memberLimit !== null && totalAfterInvite > memberLimit) {
+      const limitMsg = `Seu plano ${tierConfig.displayName} permite até ${memberLimit} membros.`;
+      toast.error(`${limitMsg} Faça upgrade para adicionar mais membros.`);
       return false;
     }
 
@@ -130,5 +146,9 @@ export function useWorkspaceInvitations() {
     sendInvitation,
     cancelInvitation,
     refetch: fetchInvitations,
+    // Tier info
+    tierName,
+    tierConfig,
+    memberLimit,
   };
 }

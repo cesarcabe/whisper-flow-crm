@@ -24,6 +24,11 @@ export class WorkspaceMapper {
       createdBy: row.owner_id,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
+      tier: row.tier,
+      subscriptionStatus: row.subscription_status,
+      subscriptionEndsAt: row.subscription_ends_at ? new Date(row.subscription_ends_at) : null,
+      stripeCustomerId: row.stripe_customer_id,
+      stripeSubscriptionId: row.stripe_subscription_id,
     };
     return Workspace.create(props);
   }

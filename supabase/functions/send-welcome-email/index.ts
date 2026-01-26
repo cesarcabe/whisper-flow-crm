@@ -1,15 +1,16 @@
 import "jsr:@supabase/functions-js@2.4.1/edge-runtime.d.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const TIER_NAMES: Record<string, string> = {
-  starter: "Starter",
-  professional: "Profissional",
-  enterprise: "Enterprise",
+const TIER_DISPLAY_NAMES: Record<string, string> = {
+  starter: "Essencial",
+  professional: "Avançado",
+  enterprise: "Premium",
 };
 
 const logStep = (step: string, details?: unknown) => {
@@ -32,16 +33,46 @@ Deno.serve(async (req) => {
 
     const resend = new Resend(resendApiKey);
 
-    const { email, name, tempPassword, tier } = await req.json();
+    const { email, name, tier, tierDisplayName, useMagicLink } = await req.json();
 
-    if (!email || !tempPassword) {
-      throw new Error("Email e senha temporária são obrigatórios");
+    if (!email) {
+      throw new Error("Email é obrigatório");
     }
 
-    logStep("Dados recebidos", { email, name, tier });
+    logStep("Dados recebidos", { email, name, tier, useMagicLink });
 
-    const tierName = TIER_NAMES[tier] || "Starter";
-    const loginUrl = "https://whisper-flow-crm.lovable.app/auth";
+    const displayTier = tierDisplayName || TIER_DISPLAY_NAMES[tier] || "Essencial";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    
+    // Gerar Magic Link usando Supabase Admin
+    let magicLinkUrl = `${supabaseUrl.replace('.supabase.co', '.supabase.co')}/auth/v1/magiclink`;
+    let loginUrl = "https://whisper-flow-crm.lovable.app/auth";
+    
+    // Se useMagicLink está habilitado, gerar o link via Supabase
+    if (useMagicLink) {
+      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false },
+      });
+
+      // Gerar Magic Link para o email
+      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'magiclink',
+        email: email,
+        options: {
+          redirectTo: 'https://whisper-flow-crm.lovable.app/dashboard',
+        },
+      });
+
+      if (linkError) {
+        logStep("Erro ao gerar Magic Link", { error: linkError.message });
+        // Fallback: envia email com link de login normal
+      } else if (linkData?.properties?.action_link) {
+        magicLinkUrl = linkData.properties.action_link;
+        loginUrl = magicLinkUrl;
+        logStep("Magic Link gerado com sucesso");
+      }
+    }
 
     const emailHtml = `
 <!DOCTYPE html>
@@ -63,7 +94,7 @@ Deno.serve(async (req) => {
                 🎉 Bem-vindo ao NewFlow CRM!
               </h1>
               <p style="color: #BFDBFE; margin: 10px 0 0; font-size: 16px;">
-                Plano ${tierName}
+                Plano ${displayTier}
               </p>
             </td>
           </tr>
@@ -76,10 +107,10 @@ Deno.serve(async (req) => {
               </p>
               
               <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-                Sua conta foi criada com sucesso! Abaixo estão suas credenciais de acesso:
+                Sua conta foi criada com sucesso! Clique no botão abaixo para acessar sua conta e começar a usar o NewFlow CRM:
               </p>
               
-              <!-- Credentials Box -->
+              <!-- Info Box -->
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #F3F4F6; border-radius: 8px; margin: 25px 0;">
                 <tr>
                   <td style="padding: 25px;">
@@ -92,8 +123,8 @@ Deno.serve(async (req) => {
                       </tr>
                       <tr>
                         <td style="padding: 8px 0;">
-                          <span style="color: #6B7280; font-size: 14px;">Senha temporária:</span><br>
-                          <code style="color: #111827; font-size: 18px; font-weight: 700; background-color: #E5E7EB; padding: 8px 12px; border-radius: 4px; display: inline-block; margin-top: 5px;">${tempPassword}</code>
+                          <span style="color: #6B7280; font-size: 14px;">Plano:</span><br>
+                          <span style="color: #111827; font-size: 16px; font-weight: 600;">${displayTier}</span>
                         </td>
                       </tr>
                     </table>
@@ -113,11 +144,11 @@ Deno.serve(async (req) => {
               </table>
               
               <!-- Security Notice -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 0 8px 8px 0; margin: 25px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #DBEAFE; border-left: 4px solid #3B82F6; border-radius: 0 8px 8px 0; margin: 25px 0;">
                 <tr>
                   <td style="padding: 15px 20px;">
-                    <p style="color: #92400E; font-size: 14px; margin: 0;">
-                      <strong>⚠️ Importante:</strong> Por segurança, recomendamos que você altere sua senha após o primeiro acesso.
+                    <p style="color: #1E40AF; font-size: 14px; margin: 0;">
+                      <strong>ℹ️ Dica:</strong> Este link é seguro e vai te levar direto para o seu painel. Você pode definir uma senha depois nas configurações.
                     </p>
                   </td>
                 </tr>
@@ -148,7 +179,7 @@ Deno.serve(async (req) => {
     const emailResponse = await resend.emails.send({
       from: "NewFlow CRM <noreply@newflow.me>",
       to: [email],
-      subject: `🎉 Bem-vindo ao NewFlow CRM - Plano ${tierName}`,
+      subject: `🎉 Bem-vindo ao NewFlow CRM - Plano ${displayTier}`,
       html: emailHtml,
     });
 

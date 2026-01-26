@@ -18,6 +18,10 @@ export function WorkspaceMembersList() {
     addMember,
     updateMemberRole,
     removeMember,
+    tierConfig,
+    memberLimit,
+    canAddMoreMembers,
+    remainingSlots,
   } = useWorkspaceMembers();
 
   const {
@@ -26,6 +30,11 @@ export function WorkspaceMembersList() {
     sendInvitation,
     cancelInvitation,
   } = useWorkspaceInvitations();
+
+  // Wrapper para passar memberCount no sendInvitation
+  const handleInvite = async (email: string, role: 'admin' | 'agent'): Promise<boolean> => {
+    return sendInvitation(email, role, members.length);
+  };
 
   if (loading) {
     return (
@@ -56,15 +65,24 @@ export function WorkspaceMembersList() {
           <div>
             <h2 className="text-lg font-semibold text-foreground">Membros</h2>
             <p className="text-sm text-muted-foreground">
-              {members.length} {members.length === 1 ? 'membro' : 'membros'} no workspace
+              {members.length}{memberLimit !== null ? `/${memberLimit}` : ''} {members.length === 1 ? 'membro' : 'membros'} 
+              <span className="ml-1 text-xs">({tierConfig.displayName})</span>
             </p>
           </div>
         </div>
 
         {isAdmin && (
           <div className="flex gap-2">
-            <InviteMemberDialog onInvite={sendInvitation} />
-            <AddMemberDialog onAddMember={addMember} />
+            <InviteMemberDialog 
+              onInvite={handleInvite} 
+              disabled={!canAddMoreMembers}
+              remainingSlots={remainingSlots}
+            />
+            <AddMemberDialog 
+              onAddMember={addMember} 
+              disabled={!canAddMoreMembers}
+              remainingSlots={remainingSlots}
+            />
           </div>
         )}
       </div>
