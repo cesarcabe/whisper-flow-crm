@@ -99,6 +99,8 @@ export function useContacts() {
           ...contact,
           user_id: user.id,
           workspace_id: workspaceId,
+          is_visible: true,
+          is_real: true,
         })
         .select()
         .single();
