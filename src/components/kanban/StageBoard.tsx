@@ -10,9 +10,14 @@ import {
   DragStartEvent,
   DragEndEvent,
 } from '@dnd-kit/core';
-import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { PipelineWithConversations, ConversationWithStage, LeadInboxStage } from '@/hooks/useConversationStages';
-import { StageColumn } from './StageColumn';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { PipelineWithConversations, ConversationWithStage, StageWithConversations } from '@/hooks/useConversationStages';
+import { SortableStageColumn } from './SortableStageColumn';
 import { LeadInboxColumn } from './LeadInboxColumn';
 import { StageCard } from './StageCard';
 import { Plus } from 'lucide-react';
@@ -25,6 +30,7 @@ interface StageBoardProps {
   onAddStage: () => void;
   onEditStage: (stageId: string) => void;
   onDeleteStage: (stageId: string) => void;
+  onReorderStages?: (stageIds: string[]) => Promise<boolean>;
 }
 
 export function StageBoard({
@@ -34,8 +40,10 @@ export function StageBoard({
   onAddStage,
   onEditStage,
   onDeleteStage,
+  onReorderStages,
 }: StageBoardProps) {
   const [activeConversation, setActiveConversation] = useState<ConversationWithStage | null>(null);
+  const [activeStage, setActiveStage] = useState<StageWithConversations | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -50,7 +58,20 @@ export function StageBoard({
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    const contactId = active.id as string;
+    const activeId = active.id as string;
+
+    // Check if dragging a stage (column)
+    if (activeId.startsWith('stage-')) {
+      const stageId = activeId.replace('stage-', '');
+      const stage = pipeline.stages.find(s => s.id === stageId);
+      if (stage) {
+        setActiveStage(stage);
+        return;
+      }
+    }
+
+    // Otherwise, it's a conversation (card)
+    const contactId = activeId;
 
     // Check lead inbox first
     const inLeadInbox = pipeline.leadInbox.conversations.find(c => c.contact_id === contactId);
@@ -72,11 +93,36 @@ export function StageBoard({
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveConversation(null);
+    setActiveStage(null);
 
     if (!over) return;
 
-    const contactId = active.id as string;
+    const activeId = active.id as string;
     const overId = over.id as string;
+
+    // Handle stage (column) reordering
+    if (activeId.startsWith('stage-') && overId.startsWith('stage-')) {
+      const activeStageId = activeId.replace('stage-', '');
+      const overStageId = overId.replace('stage-', '');
+
+      if (activeStageId !== overStageId && onReorderStages) {
+        const oldIndex = pipeline.stages.findIndex(s => s.id === activeStageId);
+        const newIndex = pipeline.stages.findIndex(s => s.id === overStageId);
+
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newOrder = arrayMove(
+            pipeline.stages.map(s => s.id),
+            oldIndex,
+            newIndex
+          );
+          await onReorderStages(newOrder);
+        }
+      }
+      return;
+    }
+
+    // Handle conversation (card) movement
+    const contactId = activeId;
 
     // Find existing conversation id - check lead inbox first
     let existingConversationId: string | null = null;
@@ -116,6 +162,9 @@ export function StageBoard({
     }
   };
 
+  // Column IDs for sortable context
+  const columnIds = pipeline.stages.map(s => `stage-${s.id}`);
+
   return (
     <div className="h-full overflow-x-auto scrollbar-thin">
       <DndContext
@@ -125,22 +174,27 @@ export function StageBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-4 p-4 min-h-full">
-          {/* Lead Inbox Column */}
+          {/* Lead Inbox Column - not sortable */}
           <LeadInboxColumn
             leadInbox={pipeline.leadInbox}
             onConversationClick={onConversationClick}
           />
 
-          {/* Regular Stage Columns */}
-          {pipeline.stages.map((stage) => (
-            <StageColumn
-              key={stage.id}
-              stage={stage}
-              onConversationClick={onConversationClick}
-              onEdit={() => onEditStage(stage.id)}
-              onDelete={() => onDeleteStage(stage.id)}
-            />
-          ))}
+          {/* Sortable Stage Columns */}
+          <SortableContext
+            items={columnIds}
+            strategy={horizontalListSortingStrategy}
+          >
+            {pipeline.stages.map((stage) => (
+              <SortableStageColumn
+                key={stage.id}
+                stage={stage}
+                onConversationClick={onConversationClick}
+                onEdit={() => onEditStage(stage.id)}
+                onDelete={() => onDeleteStage(stage.id)}
+              />
+            ))}
+          </SortableContext>
 
           {/* Add Stage Button */}
           <div className="flex-shrink-0 w-72">
@@ -162,6 +216,20 @@ export function StageBoard({
               onClick={() => {}}
               isDragging
             />
+          )}
+          {activeStage && (
+            <div className="flex-shrink-0 w-72 bg-muted/50 rounded-xl flex flex-col max-h-[calc(100vh-200px)] opacity-80 shadow-xl">
+              <div className="p-3 flex items-center gap-2 border-b border-border/30">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: activeStage.color }}
+                />
+                <h3 className="font-semibold text-sm">{activeStage.name}</h3>
+                <span className="text-xs text-muted-foreground bg-background px-2 py-0.5 rounded-full">
+                  {activeStage.conversations.length}
+                </span>
+              </div>
+            </div>
           )}
         </DragOverlay>
       </DndContext>

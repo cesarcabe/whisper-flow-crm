@@ -36,6 +36,7 @@ interface KanbanMainViewProps {
   onAddStage: () => void;
   onEditStage: (stageId: string) => void;
   onDeleteStage: (stageId: string) => void;
+  onReorderStages?: (stageIds: string[]) => Promise<boolean>;
 }
 
 export function KanbanMainView({
@@ -62,6 +63,7 @@ export function KanbanMainView({
   onAddStage,
   onEditStage,
   onDeleteStage,
+  onReorderStages,
 }: KanbanMainViewProps) {
   if (boardType === 'relationship') {
     return (
@@ -102,6 +104,7 @@ export function KanbanMainView({
         onAddStage={onAddStage}
         onEditStage={onEditStage}
         onDeleteStage={onDeleteStage}
+        onReorderStages={onReorderStages}
       />
     );
   }
