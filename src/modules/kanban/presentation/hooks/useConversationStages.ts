@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -48,6 +48,9 @@ export function useConversationStages() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [activePipeline, setActivePipelineState] = useState<PipelineWithConversations | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasFetchedRef = useRef(false);
+  const activePipelineRef = useRef(activePipeline);
+  activePipelineRef.current = activePipeline;
 
   const fetchPipelines = useCallback(async () => {
     if (!user || !workspaceId) return;
@@ -68,7 +71,7 @@ export function useConversationStages() {
       setPipelines(data || []);
 
       // Set first pipeline as active if none selected
-      if (data && data.length > 0 && !activePipeline) {
+      if (data && data.length > 0 && !activePipelineRef.current) {
         await fetchPipelineWithConversations(data[0].id);
       }
     } catch (err) {
@@ -76,7 +79,7 @@ export function useConversationStages() {
     } finally {
       setLoading(false);
     }
-  }, [user, workspaceId, activePipeline]);
+  }, [user, workspaceId]);
 
   const fetchPipelineWithConversations = async (pipelineId: string) => {
     if (!user || !workspaceId) return;
@@ -350,10 +353,16 @@ export function useConversationStages() {
   };
 
   useEffect(() => {
-    if (user && workspaceId) {
+    if (user && workspaceId && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
       fetchPipelines();
     }
   }, [user, workspaceId, fetchPipelines]);
+
+  // Reset fetch flag when workspace changes
+  useEffect(() => {
+    hasFetchedRef.current = false;
+  }, [workspaceId]);
 
   return {
     pipelines,

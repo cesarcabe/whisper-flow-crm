@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
 import { StageWithCards, PipelineWithStages, Card } from '@/types/ui';
@@ -16,6 +16,9 @@ export function usePipelines() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [activePipeline, setActivePipeline] = useState<PipelineWithStages | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasFetchedRef = useRef(false);
+  const activePipelineRef = useRef(activePipeline);
+  activePipelineRef.current = activePipeline;
 
   const fetchPipelines = useCallback(async () => {
     if (!user || !workspaceId) return;
@@ -34,9 +37,9 @@ export function usePipelines() {
       }
 
       setPipelines(data || []);
-      
+
       // Set first pipeline as active if none selected
-      if (data && data.length > 0 && !activePipeline) {
+      if (data && data.length > 0 && !activePipelineRef.current) {
         await fetchPipelineWithStages(data[0].id);
       }
     } catch (err) {
@@ -44,7 +47,7 @@ export function usePipelines() {
     } finally {
       setLoading(false);
     }
-  }, [user, workspaceId, activePipeline]);
+  }, [user, workspaceId]);
 
   const fetchPipelineWithStages = async (pipelineId: string) => {
     if (!user || !workspaceId) return;
@@ -424,10 +427,16 @@ export function usePipelines() {
   };
 
   useEffect(() => {
-    if (user && workspaceId) {
+    if (user && workspaceId && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
       fetchPipelines();
     }
   }, [user, workspaceId, fetchPipelines]);
+
+  // Reset fetch flag when workspace changes
+  useEffect(() => {
+    hasFetchedRef.current = false;
+  }, [workspaceId]);
 
   return {
     pipelines,
