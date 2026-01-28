@@ -78,6 +78,7 @@ export function KanbanView() {
     moveConversation,
     fetchPipelineWithConversations,
     setActivePipeline: setActiveStagePipeline,
+    reorderStages,
   } = useConversationStages();
 
   const {
@@ -210,6 +211,7 @@ export function KanbanView() {
           onAddStage={() => openDialog('showCreateStage')}
           onEditStage={(stageId) => handlers.handleEditStage(stageId, stagePipeline?.stages || [])}
           onDeleteStage={handlers.handleDeleteStage}
+          onReorderStages={reorderStages}
         />
       </main>
 

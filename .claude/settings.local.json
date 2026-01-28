@@ -4,7 +4,8 @@
       "Bash(wc:*)",
       "Bash(tree:*)",
       "Bash(du:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(grep:*)"
     ]
   }
 }

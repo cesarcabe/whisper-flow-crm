@@ -278,6 +278,40 @@ export function usePipelines() {
     }
   };
 
+  /**
+   * Reorders stages by updating their positions.
+   * @param stageIds - Array of stage IDs in the new order
+   * @returns true on success, false on error
+   */
+  const reorderStages = async (stageIds: string[]): Promise<boolean> => {
+    if (!activePipeline) return false;
+
+    try {
+      // Update each stage with its new position
+      const updates = stageIds.map((stageId, index) =>
+        supabase
+          .from('stages')
+          .update({ position: index })
+          .eq('id', stageId)
+      );
+
+      const results = await Promise.all(updates);
+      const hasError = results.some(r => r.error);
+
+      if (hasError) {
+        console.error('[CRM Kanban] Error reordering stages');
+        toast.error('Erro ao reordenar estágios');
+        return false;
+      }
+
+      await fetchPipelineWithStages(activePipeline.id);
+      return true;
+    } catch (err) {
+      console.error('[CRM Kanban] Exception reordering stages:', err);
+      return false;
+    }
+  };
+
   // Card operations
   const moveCard = async (cardId: string, newStageId: string, newPosition: number) => {
     if (!activePipeline) return false;
@@ -407,6 +441,7 @@ export function usePipelines() {
     createStage,
     updateStage,
     deleteStage,
+    reorderStages,
     moveCard,
     createCard,
     updateCard,

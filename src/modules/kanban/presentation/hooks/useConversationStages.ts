@@ -315,6 +315,40 @@ export function useConversationStages() {
     }
   };
 
+  /**
+   * Reorders stages by updating their positions.
+   * @param stageIds - Array of stage IDs in the new order
+   * @returns true on success, false on error
+   */
+  const reorderStages = async (stageIds: string[]): Promise<boolean> => {
+    if (!activePipeline) return false;
+
+    try {
+      // Update each stage with its new position
+      const updates = stageIds.map((stageId, index) =>
+        supabase
+          .from('stages')
+          .update({ position: index })
+          .eq('id', stageId)
+      );
+
+      const results = await Promise.all(updates);
+      const hasError = results.some(r => r.error);
+
+      if (hasError) {
+        console.error('[ConversationStages] Error reordering stages');
+        toast.error('Erro ao reordenar estágios');
+        return false;
+      }
+
+      await fetchPipelineWithConversations(activePipeline.id);
+      return true;
+    } catch (err) {
+      console.error('[ConversationStages] Exception reordering stages:', err);
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (user && workspaceId) {
       fetchPipelines();
@@ -330,5 +364,6 @@ export function useConversationStages() {
     fetchPipelineWithConversations,
     moveConversation,
     updateConversationStage,
+    reorderStages,
   };
 }

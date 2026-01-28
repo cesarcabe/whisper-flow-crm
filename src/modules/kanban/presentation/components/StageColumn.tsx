@@ -3,7 +3,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { StageWithConversations, ConversationWithStage } from '@/hooks/useConversationStages';
 import { StageCard } from './StageCard';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, GripVertical } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,7 @@ interface StageColumnProps {
   onConversationClick: (conversation: ConversationWithStage) => void;
   onEdit: () => void;
   onDelete: () => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
 export function StageColumn({
@@ -23,6 +24,7 @@ export function StageColumn({
   onConversationClick,
   onEdit,
   onDelete,
+  dragHandleProps,
 }: StageColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -37,6 +39,14 @@ export function StageColumn({
       {/* Column Header */}
       <div className="p-3 flex items-center justify-between border-b border-border/30">
         <div className="flex items-center gap-2">
+          {dragHandleProps && (
+            <div
+              {...dragHandleProps}
+              className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+            >
+              <GripVertical className="h-4 w-4" />
+            </div>
+          )}
           <div
             className="w-3 h-3 rounded-full"
             style={{ backgroundColor: stage.color }}
