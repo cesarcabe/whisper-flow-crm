@@ -55,6 +55,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
   // For preserving scroll position when loading older messages
   const scrollHeightBeforeLoadRef = useRef<number>(0);
   const isLoadingMoreRef = useRef(false);
+  const loadedOlderRef = useRef(false);
 
   // Reply state
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -116,6 +117,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
     if (viewport) {
       scrollHeightBeforeLoadRef.current = viewport.scrollHeight;
       isLoadingMoreRef.current = true;
+      loadedOlderRef.current = true;
     }
     loadMore();
   }, [loadMore, getScrollViewport]);
@@ -153,10 +155,14 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
     }
   }, [loading, messages.length, scrollToBottom]);
 
-  // Auto-scroll when new messages arrive
+  // Auto-scroll when new messages arrive (but NOT when loading older messages)
   useEffect(() => {
     if (!isInitialLoadRef.current && messages.length > prevMessagesLengthRef.current) {
-      scrollToBottom('smooth');
+      if (loadedOlderRef.current) {
+        loadedOlderRef.current = false;
+      } else {
+        scrollToBottom('smooth');
+      }
     }
     prevMessagesLengthRef.current = messages.length;
   }, [messages.length, scrollToBottom]);
