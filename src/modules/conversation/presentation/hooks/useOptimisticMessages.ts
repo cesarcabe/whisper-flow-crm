@@ -171,35 +171,37 @@ class OptimisticMessagesStore {
   getOptimisticAsMessages(conversationId: string, workspaceId: string): Message[] {
     const store = this.getConversationStore(conversationId);
     const messages: Message[] = [];
-    
-    for (const opt of store.values()) {
-      // Só mostrar mensagens que ainda estão pendentes ou falharam
-      if (opt.status === 'sending' || opt.status === 'failed') {
-        try {
-          const message = MessageMapper.fromPartial({
-            id: opt.clientId,
-            conversation_id: opt.conversationId,
-            workspace_id: workspaceId,
-            body: opt.content,
-            type: opt.type,
-            is_outgoing: true,
-            status: opt.status,
-            external_id: null,
-            media_url: null,
-            reply_to_id: opt.replyToId ?? null,
-            quoted_message: null,
-            sent_by_user_id: null,
-            whatsapp_number_id: null,
-            error_message: opt.error ?? null,
-            created_at: opt.createdAt.toISOString(),
-          });
-          messages.push(message);
-        } catch (e) {
-          console.error('[OptimisticStore] Failed to create Message entity:', e);
-        }
+
+    // Get and sort optimistic messages by creation time
+    const sortedOptimistic = Array.from(store.values())
+      .filter(opt => opt.status === 'sending' || opt.status === 'failed')
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    for (const opt of sortedOptimistic) {
+      try {
+        const message = MessageMapper.fromPartial({
+          id: opt.clientId,
+          conversation_id: opt.conversationId,
+          workspace_id: workspaceId,
+          body: opt.content,
+          type: opt.type,
+          is_outgoing: true,
+          status: opt.status,
+          external_id: null,
+          media_url: null,
+          reply_to_id: opt.replyToId ?? null,
+          quoted_message: null,
+          sent_by_user_id: null,
+          whatsapp_number_id: null,
+          error_message: opt.error ?? null,
+          created_at: opt.createdAt.toISOString(),
+        });
+        messages.push(message);
+      } catch (e) {
+        console.error('[OptimisticStore] Failed to create Message entity:', e);
       }
     }
-    
+
     return messages;
   }
 

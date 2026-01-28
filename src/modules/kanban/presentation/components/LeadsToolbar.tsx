@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Users, TrendingUp, UsersRound, Plus, Settings, Pencil, Trash2 } from 'lucide-react';
+import { Users, TrendingUp, UsersRound, Plus, Settings, Pencil, Trash2, Search, X } from 'lucide-react';
 import { BoardViewType } from '@/types/ui';
 import { Tables } from '@/integrations/supabase/types';
 import { usePipelines } from '@/hooks/usePipelines';
@@ -40,6 +40,9 @@ interface LeadsToolbarProps {
   onSelectPipeline: (pipeline: Pipeline) => void;
   onCreatePipeline: () => void;
   onDeletePipeline: () => void;
+  // Search
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 export function LeadsToolbar({
@@ -50,6 +53,8 @@ export function LeadsToolbar({
   onSelectPipeline,
   onCreatePipeline,
   onDeletePipeline,
+  searchQuery = '',
+  onSearchChange,
 }: LeadsToolbarProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editName, setEditName] = useState('');
@@ -103,6 +108,28 @@ export function LeadsToolbar({
           <UsersRound className="h-4 w-4" />
           Grupos
         </Button>
+
+        {/* Search */}
+        {onSearchChange && (
+          <div className="relative ml-4">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Buscar contato..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-[180px] h-8 pl-8 pr-8 text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => onSearchChange('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Spacer */}
         <div className="flex-1" />

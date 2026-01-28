@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, ArrowDown, ArrowUp, Users, MoreVertical, WifiOff, User, Archive, Trash2, Tag, Lock } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, ArrowDown, ArrowUp, Users, MoreVertical, WifiOff, User, Tag, Lock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,9 @@ import {
 import { useMessages, Message } from '@/hooks/useMessages';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useConversationStages } from '@/hooks/useConversationStages';
+import { useContactClasses } from '@/hooks/useContactClasses';
+import { useContacts } from '@/hooks/useContacts';
+import { EditContactSheet } from '@/modules/kanban/presentation/components/dialogs/EditContactSheet';
 import { MessageInput } from './MessageInput';
 import { MessageBubble } from './MessageBubble';
 import { ForwardMessageDialog } from './ForwardMessageDialog';
@@ -48,12 +51,21 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isUpdatingStage, setIsUpdatingStage] = useState(false);
   const prevMessagesLengthRef = useRef(0);
+
+  // For preserving scroll position when loading older messages
+  const scrollHeightBeforeLoadRef = useRef<number>(0);
+  const isLoadingMoreRef = useRef(false);
   
   // Reply state
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   
   // Forward state
   const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
+
+  // Contact edit state
+  const [showContactEdit, setShowContactEdit] = useState(false);
+  const { contactClasses } = useContactClasses();
+  const { updateContact } = useContacts();
 
   const name = contact?.name || 'Contato desconhecido';
   
@@ -86,12 +98,42 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
   
   const initials = isGroup ? 'GP' : getInitials(name);
 
+  // Get the actual scrollable viewport from ScrollArea
+  const getScrollViewport = useCallback(() => {
+    return scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+  }, []);
+
   // Scroll to bottom function
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior });
     }
   }, []);
+
+  // Handle load more with scroll position preservation
+  const handleLoadMore = useCallback(() => {
+    const viewport = getScrollViewport();
+    if (viewport) {
+      scrollHeightBeforeLoadRef.current = viewport.scrollHeight;
+      isLoadingMoreRef.current = true;
+    }
+    loadMore();
+  }, [loadMore, getScrollViewport]);
+
+  // Restore scroll position after loading more messages
+  useEffect(() => {
+    if (!loadingMore && isLoadingMoreRef.current) {
+      isLoadingMoreRef.current = false;
+      const viewport = getScrollViewport();
+      if (viewport && scrollHeightBeforeLoadRef.current > 0) {
+        // Calculate new scroll position to maintain view
+        const newScrollHeight = viewport.scrollHeight;
+        const scrollDiff = newScrollHeight - scrollHeightBeforeLoadRef.current;
+        viewport.scrollTop = scrollDiff;
+        scrollHeightBeforeLoadRef.current = 0;
+      }
+    }
+  }, [loadingMore, getScrollViewport]);
 
   // Scroll to a specific message
   const scrollToMessage = useCallback((messageId: string) => {
@@ -175,7 +217,17 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
             </>
           )}
         </Avatar>
-        <div className="flex-1 min-w-0">
+        <div
+          className={cn(
+            "flex-1 min-w-0",
+            !isGroup && contact && "cursor-pointer hover:bg-muted/50 rounded-md p-1 -m-1 transition-colors"
+          )}
+          onClick={() => {
+            if (!isGroup && contact) {
+              setShowContactEdit(true);
+            }
+          }}
+        >
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-foreground">{name}</h3>
             {isGroup && (
@@ -245,21 +297,13 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
               </DropdownMenuSub>
               
               <DropdownMenuSeparator />
-              
-              <DropdownMenuItem onClick={() => toast.info('Funcionalidade em breve')}>
+
+              <DropdownMenuItem
+                onClick={() => setShowContactEdit(true)}
+                disabled={!contact || isGroup}
+              >
                 <User className="h-4 w-4 mr-2" />
                 Ver perfil do contato
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toast.info('Funcionalidade em breve')}>
-                <Archive className="h-4 w-4 mr-2" />
-                Arquivar conversa
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => toast.info('Funcionalidade em breve')}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Limpar conversa
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -275,7 +319,7 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={loadMore}
+                  onClick={handleLoadMore}
                   disabled={loadingMore}
                 >
                   {loadingMore ? (
@@ -356,6 +400,29 @@ export function MessageThread({ conversationId, contact, isGroup, connectionStat
         messageBody={forwardMessage?.body || ''}
         messageType={forwardMessage?.type.getValue() || 'text'}
         currentConversationId={conversationId}
+      />
+
+      {/* Contact Edit Sheet */}
+      <EditContactSheet
+        contact={contact ? {
+          id: contact.id,
+          name: contact.name || '',
+          phone: contact.phone || '',
+          email: contact.email,
+          avatar_url: contact.avatar_url,
+          notes: contact.notes,
+          status: contact.status,
+          contact_class_id: contact.contact_class_id,
+          group_class_id: contact.group_class_id,
+        } : null}
+        open={showContactEdit}
+        onOpenChange={setShowContactEdit}
+        contactClasses={contactClasses}
+        groupClasses={[]}
+        onSave={async (contactId, updates) => {
+          const success = await updateContact(contactId, updates);
+          return success;
+        }}
       />
     </div>
   );

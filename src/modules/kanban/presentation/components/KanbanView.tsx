@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { usePipelines } from '@/hooks/usePipelines';
 import { useContacts } from '@/hooks/useContacts';
@@ -76,6 +77,7 @@ export function KanbanView() {
     loading: stagesLoading,
     moveConversation,
     fetchPipelineWithConversations,
+    setActivePipeline: setActiveStagePipeline,
   } = useConversationStages();
 
   const {
@@ -85,6 +87,62 @@ export function KanbanView() {
     loading: groupsLoading,
     moveGroup,
   } = useGroupClasses(activePipeline?.id);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter contacts by search query
+  const filterBySearch = (items: any[]) => {
+    if (!searchQuery.trim()) return items;
+    const query = searchQuery.toLowerCase();
+    return items.filter((item) => {
+      const name = item.name || item.contact?.name || '';
+      const phone = item.phone || item.contact?.phone || '';
+      return name.toLowerCase().includes(query) || phone.toLowerCase().includes(query);
+    });
+  };
+
+  // Filtered data for boards
+  const filteredContactsByClass = useMemo(() => {
+    if (!searchQuery.trim()) return contactsByClass;
+    const result: Record<string, any[]> = {};
+    for (const [classId, contacts] of Object.entries(contactsByClass)) {
+      result[classId] = filterBySearch(contacts);
+    }
+    return result;
+  }, [contactsByClass, searchQuery]);
+
+  const filteredUnclassifiedContacts = useMemo(() => {
+    return filterBySearch(unclassifiedContacts);
+  }, [unclassifiedContacts, searchQuery]);
+
+  const filteredGroupsByClass = useMemo(() => {
+    if (!searchQuery.trim()) return groupsByClass;
+    const result: Record<string, any[]> = {};
+    for (const [classId, groups] of Object.entries(groupsByClass)) {
+      result[classId] = filterBySearch(groups);
+    }
+    return result;
+  }, [groupsByClass, searchQuery]);
+
+  const filteredUnclassifiedGroups = useMemo(() => {
+    return filterBySearch(unclassifiedGroups);
+  }, [unclassifiedGroups, searchQuery]);
+
+  const filteredStagePipeline = useMemo(() => {
+    if (!stagePipeline || !searchQuery.trim()) return stagePipeline;
+    return {
+      ...stagePipeline,
+      stages: stagePipeline.stages.map(stage => ({
+        ...stage,
+        conversations: filterBySearch(stage.conversations),
+      })),
+      leadInbox: {
+        ...stagePipeline.leadInbox,
+        conversations: filterBySearch(stagePipeline.leadInbox.conversations),
+      },
+    };
+  }, [stagePipeline, searchQuery]);
 
   // Loading state
   const loading = pipelinesLoading || classesLoading || stagesLoading || groupsLoading;
@@ -113,9 +171,15 @@ export function KanbanView() {
         onBoardTypeChange={setBoardType}
         pipelines={pipelines}
         activePipeline={activePipeline}
-        onSelectPipeline={setActivePipeline}
+        onSelectPipeline={(pipeline) => {
+          // Update both hooks to keep them in sync
+          setActivePipeline(pipeline);
+          setActiveStagePipeline(pipeline);
+        }}
         onCreatePipeline={() => openDialog('showCreatePipeline')}
         onDeletePipeline={() => openDialog('showDeletePipeline')}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       <main className="flex-1 overflow-hidden">
@@ -123,8 +187,8 @@ export function KanbanView() {
           boardType={boardType}
           // Relationship
           contactClasses={contactClasses}
-          contactsByClass={contactsByClass}
-          unclassifiedContacts={unclassifiedContacts}
+          contactsByClass={filteredContactsByClass}
+          unclassifiedContacts={filteredUnclassifiedContacts}
           onMoveContact={moveContact}
           onContactClick={handlers.handleContactClick}
           onAddClass={() => openDialog('showCreateClass')}
@@ -132,12 +196,12 @@ export function KanbanView() {
           onDeleteClass={deleteContactClass}
           // Groups
           groupClasses={groupClasses}
-          groupsByClass={groupsByClass}
-          unclassifiedGroups={unclassifiedGroups}
+          groupsByClass={filteredGroupsByClass}
+          unclassifiedGroups={filteredUnclassifiedGroups}
           onMoveGroup={moveGroup}
           onGroupClick={handlers.handleGroupClick}
           // Stage
-          stagePipeline={stagePipeline}
+          stagePipeline={filteredStagePipeline}
           onMoveConversation={moveConversation}
           onConversationClick={(conv) => {
             const contact = contacts.find((c) => c.id === conv.contact_id);
@@ -169,6 +233,8 @@ export function KanbanView() {
             await createContactClass(name, color);
           } else if (activePipeline) {
             await createStage(activePipeline.id, name, color);
+            // Also refresh the conversation stages view
+            await fetchPipelineWithConversations(activePipeline.id);
           }
         }}
       />
@@ -216,9 +282,11 @@ export function KanbanView() {
         title="Deletar Estágio?"
         description="Esta ação não pode ser desfeita."
         onConfirm={async () => {
-          if (selectedItems.stageToDelete) {
+          if (selectedItems.stageToDelete && activePipeline) {
             await deleteStage(selectedItems.stageToDelete);
             clearStageToDelete();
+            // Also refresh the conversation stages view
+            await fetchPipelineWithConversations(activePipeline.id);
           }
         }}
       />

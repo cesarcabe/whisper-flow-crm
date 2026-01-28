@@ -7,6 +7,8 @@ import { usePipelines } from '@/hooks/usePipelines';
 import { MessageThread } from '@/components/whatsapp/MessageThread';
 import { ConversationItem } from '@/components/whatsapp/ConversationItem';
 import { NewConversationDialog } from '@/components/whatsapp/NewConversationDialog';
+import { CreateContactDialog } from '@/modules/kanban/presentation/components/dialogs/CreateContactDialog';
+import { useContacts } from '@/hooks/useContacts';
 import { 
   ConversationFilters, 
   FilterState, 
@@ -26,10 +28,12 @@ export function CRMLayout() {
   const { numbers, loading: numbersLoading } = useWhatsappNumbers();
   const { contactClasses } = useContactClasses();
   const { activePipeline } = usePipelines();
+  const { createContact } = useContacts();
   const [selectedNumberId, setSelectedNumberId] = useState<string | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [newConversationOpen, setNewConversationOpen] = useState(false);
+  const [createContactOpen, setCreateContactOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     type: 'direct',
     contactClassIds: [],
@@ -70,6 +74,12 @@ export function CRMLayout() {
   const handleNewConversationCreated = (conversationId: string) => {
     setSelectedConversationId(conversationId);
     refetch();
+  };
+
+  const handleCreateContact = async (contact: any) => {
+    await createContact(contact);
+    // After contact is created, open the new conversation dialog
+    setNewConversationOpen(true);
   };
   // Get stages from active pipeline
   const stages = useMemo(() => {
@@ -311,6 +321,14 @@ export function CRMLayout() {
         onOpenChange={setNewConversationOpen}
         whatsappNumberId={activeNumberId}
         onConversationCreated={handleNewConversationCreated}
+        onCreateContact={() => setCreateContactOpen(true)}
+      />
+
+      {/* Create Contact Dialog */}
+      <CreateContactDialog
+        open={createContactOpen}
+        onOpenChange={setCreateContactOpen}
+        onSubmit={handleCreateContact}
       />
     </div>
   );

@@ -17,6 +17,12 @@ dist
 dist-ssr
 *.local
 
+# Windows reserved names (nul, con, prn, aux, com1-9, lpt1-9)
+/nul
+/con
+/prn
+/aux
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

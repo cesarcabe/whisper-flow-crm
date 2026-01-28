@@ -147,7 +147,45 @@ export async function handleMessageUpsert(ctx: WebhookContext): Promise<Response
     }
   }
   
-  // 7) Inserir mensagem com sender_jid
+  // 7) Preparar quoted_message se for uma resposta
+  let quotedMessageData: Record<string, unknown> | null = null;
+  let replyToId: string | null = null;
+
+  if (envelope.quotedMessage) {
+    // Tentar encontrar a mensagem original pelo external_id (stanzaId)
+    const { data: originalMsg } = await supabase
+      .from("messages")
+      .select("id, is_outgoing")
+      .eq("conversation_id", conversationId)
+      .eq("external_id", envelope.quotedMessage.stanzaId)
+      .maybeSingle();
+
+    if (originalMsg) {
+      replyToId = originalMsg.id;
+      quotedMessageData = {
+        id: originalMsg.id,
+        body: envelope.quotedMessage.body || '',
+        type: envelope.quotedMessage.type,
+        is_outgoing: originalMsg.is_outgoing,
+      };
+    } else {
+      // Mensagem original não encontrada, mas ainda assim salvamos a citação
+      quotedMessageData = {
+        id: envelope.quotedMessage.stanzaId,
+        body: envelope.quotedMessage.body || '',
+        type: envelope.quotedMessage.type,
+        is_outgoing: envelope.quotedMessage.fromMe,
+      };
+    }
+
+    console.log('[Edge:evolution-webhook] handleMessageUpsert: quoted message', {
+      stanzaId: envelope.quotedMessage.stanzaId,
+      foundOriginal: !!originalMsg,
+      replyToId,
+    });
+  }
+
+  // 8) Inserir mensagem com sender_jid e quoted_message
   const { error: msgErr } = await supabase.from("messages").insert({
     workspace_id: workspaceId,
     conversation_id: conversationId,
@@ -158,7 +196,9 @@ export async function handleMessageUpsert(ctx: WebhookContext): Promise<Response
     type: messageType,
     media_url: mediaUrl,
     status: envelope.fromMe ? "sent" : "delivered",
-    sender_jid: envelope.senderJid, // NOVO: salvar JID do autor real
+    sender_jid: envelope.senderJid,
+    reply_to_id: replyToId,
+    quoted_message: quotedMessageData,
   });
   
   if (msgErr) {
@@ -172,7 +212,7 @@ export async function handleMessageUpsert(ctx: WebhookContext): Promise<Response
     console.log('[Edge:evolution-webhook] handleMessageUpsert: duplicate message ignored');
   }
   
-  // 8) Atualizar timestamp da conversa
+  // 9) Atualizar timestamp da conversa
   await supabase
     .from("conversations")
     .update({

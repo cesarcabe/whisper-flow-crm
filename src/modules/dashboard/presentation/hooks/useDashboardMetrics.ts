@@ -61,33 +61,53 @@ export function useDashboardMetrics() {
     setError(null);
 
     try {
-      // 1. Fetch new leads (conversations without stage, last 24h)
+      // 1. Fetch new leads (valid contacts created in last 24h)
       const last24h = new Date();
       last24h.setHours(last24h.getHours() - 24);
 
-      const { data: leadsData, error: leadsError } = await supabase
-        .from('conversations')
-        .select(`
-          id,
-          created_at,
-          contact:contacts(id, name, phone, avatar_url),
-          whatsapp_number:whatsapp_numbers(id, internal_name)
-        `)
+      // First get new contacts from last 24h
+      const { data: newContactsData, error: contactsError } = await supabase
+        .from('contacts')
+        .select('id, name, phone, avatar_url, created_at')
         .eq('workspace_id', workspaceId)
-        .is('stage_id', null)
+        .eq('is_visible', true)
+        .eq('is_real', true)
         .gte('created_at', last24h.toISOString())
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (leadsError) throw leadsError;
+      if (contactsError) throw contactsError;
 
-      const newLeads: NewLead[] = (leadsData || []).map((conv: any) => ({
-        id: conv.id,
-        contactName: conv.contact?.name || 'Desconhecido',
-        contactPhone: conv.contact?.phone || '',
-        contactAvatar: conv.contact?.avatar_url,
-        createdAt: conv.created_at,
-        whatsappNumberName: conv.whatsapp_number?.internal_name || null,
+      // Get conversation info for these contacts
+      const contactIds = (newContactsData || []).map(c => c.id);
+      let conversationsMap: Record<string, { id: string; whatsappName: string | null }> = {};
+
+      if (contactIds.length > 0) {
+        const { data: convData } = await supabase
+          .from('conversations')
+          .select(`
+            id,
+            contact_id,
+            whatsapp_number:whatsapp_numbers(internal_name)
+          `)
+          .eq('workspace_id', workspaceId)
+          .in('contact_id', contactIds);
+
+        (convData || []).forEach((conv: any) => {
+          conversationsMap[conv.contact_id] = {
+            id: conv.id,
+            whatsappName: conv.whatsapp_number?.internal_name || null,
+          };
+        });
+      }
+
+      const newLeads: NewLead[] = (newContactsData || []).map((contact: any) => ({
+        id: conversationsMap[contact.id]?.id || contact.id,
+        contactName: contact.name || 'Desconhecido',
+        contactPhone: contact.phone || '',
+        contactAvatar: contact.avatar_url,
+        createdAt: contact.created_at,
+        whatsappNumberName: conversationsMap[contact.id]?.whatsappName || null,
       }));
 
       // 2. Fetch unread summary by WhatsApp number

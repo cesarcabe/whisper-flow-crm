@@ -13,20 +13,31 @@ import { safeString } from './extract.ts';
 
 export type ConversationType = 'dm' | 'group';
 
+export interface QuotedMessageInfo {
+  /** ID da mensagem citada no provider */
+  stanzaId: string;
+  /** Corpo da mensagem citada */
+  body: string | null;
+  /** Tipo da mensagem citada */
+  type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'unknown';
+  /** Se a mensagem citada foi enviada pelo usuário */
+  fromMe: boolean;
+}
+
 export interface NormalizedEnvelope {
   /** JID da conversa (remoteJid) */
   conversationJid: string;
   /** Tipo da conversa */
   conversationType: ConversationType;
-  
+
   /** JID do remetente real (participant em grupos, remoteJid em DMs) */
   senderJid: string;
   /** Dígitos do telefone do sender (se PN) */
   senderPhone: string | null;
-  
+
   /** JID alternativo (para aliasing PN ↔ LID em DMs) */
   remoteJidAlt: string | null;
-  
+
   /** ID da mensagem no provider */
   providerMessageId: string | null;
   /** Se a mensagem foi enviada pelo usuário */
@@ -35,13 +46,16 @@ export interface NormalizedEnvelope {
   pushName: string | null;
   /** Timestamp da mensagem (epoch ms) */
   timestamp: number | null;
-  
+
   /** Tipo da mensagem */
   messageType: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'unknown';
   /** Texto da mensagem */
   text: string;
   /** Se a mensagem tem mídia */
   hasMedia: boolean;
+
+  /** Informação da mensagem citada (se for uma resposta) */
+  quotedMessage: QuotedMessageInfo | null;
 }
 
 /**
@@ -159,7 +173,10 @@ export function normalizeEvolutionEnvelope(
   
   // 9) Detectar tipo de mídia
   const { messageType, hasMedia } = detectMessageType(message);
-  
+
+  // 10) Extrair mensagem citada (reply)
+  const quotedMessage = extractQuotedMessage(message);
+
   return {
     conversationJid: remoteJid,
     conversationType,
@@ -173,6 +190,80 @@ export function normalizeEvolutionEnvelope(
     messageType,
     text,
     hasMedia,
+    quotedMessage,
+  };
+}
+
+/**
+ * Extrai informações da mensagem citada (reply)
+ */
+function extractQuotedMessage(
+  message: Record<string, unknown> | undefined
+): QuotedMessageInfo | null {
+  if (!message) return null;
+
+  // contextInfo pode estar em diferentes locais dependendo do tipo de mensagem
+  const extendedText = message.extendedTextMessage as Record<string, unknown> | undefined;
+  const imageMsg = message.imageMessage as Record<string, unknown> | undefined;
+  const videoMsg = message.videoMessage as Record<string, unknown> | undefined;
+  const audioMsg = message.audioMessage as Record<string, unknown> | undefined;
+  const documentMsg = message.documentMessage as Record<string, unknown> | undefined;
+
+  const contextInfo = (
+    extendedText?.contextInfo ??
+    imageMsg?.contextInfo ??
+    videoMsg?.contextInfo ??
+    audioMsg?.contextInfo ??
+    documentMsg?.contextInfo
+  ) as Record<string, unknown> | undefined;
+
+  if (!contextInfo) return null;
+
+  const stanzaId = safeString(contextInfo.stanzaId);
+  if (!stanzaId) return null;
+
+  // Extrair dados da mensagem citada
+  const quotedMessage = contextInfo.quotedMessage as Record<string, unknown> | undefined;
+
+  // Determinar tipo e corpo da mensagem citada
+  let quotedType: QuotedMessageInfo['type'] = 'text';
+  let quotedBody: string | null = null;
+
+  if (quotedMessage) {
+    if (quotedMessage.conversation) {
+      quotedType = 'text';
+      quotedBody = safeString(quotedMessage.conversation);
+    } else if (quotedMessage.extendedTextMessage) {
+      quotedType = 'text';
+      quotedBody = safeString((quotedMessage.extendedTextMessage as Record<string, unknown>)?.text);
+    } else if (quotedMessage.imageMessage) {
+      quotedType = 'image';
+      quotedBody = safeString((quotedMessage.imageMessage as Record<string, unknown>)?.caption) || '📷 Imagem';
+    } else if (quotedMessage.videoMessage) {
+      quotedType = 'video';
+      quotedBody = safeString((quotedMessage.videoMessage as Record<string, unknown>)?.caption) || '🎬 Vídeo';
+    } else if (quotedMessage.audioMessage) {
+      quotedType = 'audio';
+      quotedBody = '🎤 Áudio';
+    } else if (quotedMessage.documentMessage) {
+      quotedType = 'document';
+      quotedBody = safeString((quotedMessage.documentMessage as Record<string, unknown>)?.fileName) || '📄 Documento';
+    } else if (quotedMessage.stickerMessage) {
+      quotedType = 'sticker';
+      quotedBody = '🎨 Sticker';
+    }
+  }
+
+  // Determinar se a mensagem citada foi enviada pelo usuário
+  const participant = safeString(contextInfo.participant);
+  // Se não tem participant, assume que foi enviada pelo usuário (fromMe)
+  const quotedFromMe = !participant;
+
+  return {
+    stanzaId,
+    body: quotedBody,
+    type: quotedType,
+    fromMe: quotedFromMe,
   };
 }
 

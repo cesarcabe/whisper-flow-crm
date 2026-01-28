@@ -22,7 +22,14 @@ import { Loader2 } from "lucide-react";
 import { WebSocketTestPanel } from "@/components/test/WebSocketTestPanel";
 
 // QueryClient instance - stable reference
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60, // 1 minute
+    },
+  },
+});
 
 // Protected Route wrapper (requires auth + workspace)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
