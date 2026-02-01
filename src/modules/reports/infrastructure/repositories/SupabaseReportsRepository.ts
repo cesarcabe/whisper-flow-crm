@@ -66,9 +66,14 @@ interface AdTableRow {
   automated_greeting_shown: boolean | null;
 }
 
-// Type assertion helper for RPC calls
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rpc = (name: string, params: Record<string, unknown>) => supabase.rpc(name as any, params as any);
+/**
+ * Type assertion helper for Supabase RPC calls.
+ * Supabase's auto-generated types don't include custom RPCs,
+ * so we need to cast the function name and params.
+ */
+const rpc = (name: string, params: Record<string, unknown>) =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase.rpc(name as any, params as any);
 
 export class SupabaseReportsRepository implements ReportsRepository {
   

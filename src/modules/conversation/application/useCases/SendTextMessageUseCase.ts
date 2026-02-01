@@ -1,38 +1,23 @@
-/**
- * SendTextMessageUseCase
- * 
- * Use case para enviar mensagens de texto.
- * Suporta envio via WebSocket (quando disponível) com fallback para Edge Function.
- */
+import { success, failure } from '@/core/either';
+import type { Result } from '@/core/either';
+import { ValidationError, InfrastructureError } from '@/core/errors';
+import type { AppError } from '@/core/errors';
+import type { IWhatsAppProvider } from '../ports/IWhatsAppProvider';
 
-/**
- * DTO para envio de mensagem de texto
- */
 export interface SendTextMessageDTO {
-  /** ID da conversa */
   conversationId: string;
-  /** Conteúdo da mensagem */
   content: string;
-  /** ID da mensagem sendo respondida (opcional) */
   replyToId?: string | null;
-  /** ID do cliente para a mensagem (para otimistic updates) */
   clientMessageId?: string;
 }
 
-/**
- * Resultado do envio
- */
 export interface SendMessageResult {
-  success: boolean;
-  messageId?: string;
-  error?: Error;
+  messageId: string;
+  externalId?: string;
 }
 
-/**
- * Configuração do use case
- */
 export interface SendTextMessageConfig {
-  /** Cliente WebSocket (opcional) */
+  whatsAppProvider: IWhatsAppProvider;
   websocketClient?: {
     isConnected: () => boolean;
     sendMessage: (input: {
@@ -42,65 +27,57 @@ export interface SendTextMessageConfig {
       replyToMessageId?: string;
     }) => void;
   };
-  /** Função de fallback para Edge Function */
-  fallbackSend?: (input: SendTextMessageDTO) => Promise<SendMessageResult>;
 }
 
-/**
- * Use case para enviar mensagens de texto
- */
 export class SendTextMessageUseCase {
   constructor(private readonly config: SendTextMessageConfig) {}
 
-  /**
-   * Envia uma mensagem de texto
-   * 
-   * @param dto - Dados da mensagem a enviar
-   * @returns Resultado do envio
-   */
-  async execute(dto: SendTextMessageDTO): Promise<SendMessageResult> {
-    try {
-      const clientMessageId = dto.clientMessageId ?? this.generateClientMessageId();
+  async execute(dto: SendTextMessageDTO): Promise<Result<SendMessageResult, AppError>> {
+    const clientMessageId = dto.clientMessageId ?? this.generateClientMessageId();
+    const content = dto.content.trim();
 
-      // 1. Tentar enviar via WebSocket se disponível
-      if (this.config.websocketClient?.isConnected()) {
+    if (!content) {
+      return failure(new ValidationError('Message content cannot be empty', 'content'));
+    }
+
+    if (!dto.conversationId) {
+      return failure(new ValidationError('Conversation ID is required', 'conversationId'));
+    }
+
+    // 1. Try WebSocket first (faster, real-time)
+    if (this.config.websocketClient?.isConnected()) {
+      try {
         this.config.websocketClient.sendMessage({
           conversationId: dto.conversationId,
-          content: dto.content,
+          content,
           messageId: clientMessageId,
           replyToMessageId: dto.replyToId ?? undefined,
         });
 
-        console.log('[SendTextMessage] Sent via WebSocket:', clientMessageId);
-        return {
-          success: true,
-          messageId: clientMessageId,
-        };
+        return success({ messageId: clientMessageId });
+      } catch (err) {
+        // Fall through to provider
       }
-
-      // 2. Fallback para Edge Function
-      if (this.config.fallbackSend) {
-        console.log('[SendTextMessage] Using fallback (Edge Function):', clientMessageId);
-        return await this.config.fallbackSend({
-          ...dto,
-          clientMessageId,
-        });
-      }
-
-      // 3. Nenhum método disponível
-      throw new Error('No send method available (WebSocket disconnected and no fallback configured)');
-    } catch (error) {
-      console.error('[SendTextMessage] Error sending message:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error : new Error('Unknown error'),
-      };
     }
+
+    // 2. Fallback to WhatsApp provider (Edge Function)
+    const result = await this.config.whatsAppProvider.sendText({
+      conversationId: dto.conversationId,
+      message: content,
+      clientMessageId,
+      replyToId: dto.replyToId ?? undefined,
+    });
+
+    if (!result.ok) {
+      return failure(new InfrastructureError(result.error.message, result.error));
+    }
+
+    return success({
+      messageId: result.value.messageId,
+      externalId: result.value.externalId,
+    });
   }
 
-  /**
-   * Gera um ID único para a mensagem do cliente
-   */
   private generateClientMessageId(): string {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
       return crypto.randomUUID();

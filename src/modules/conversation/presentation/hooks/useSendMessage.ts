@@ -1,52 +1,34 @@
 /**
  * useSendMessage - Hook para envio de mensagens
- * 
- * Permite envio de múltiplas mensagens em paralelo sem bloqueio.
- * Usa optimistic updates para feedback instantâneo na UI.
+ *
+ * Usa o IWhatsAppProvider (via EvolutionAPIAdapter) em vez de chamar
+ * supabase.functions.invoke diretamente. Mantém optimistic updates.
  */
 
 import { useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { getContainer } from '@/config/di-container';
 import { useOptimisticMessages, createClientMessageId } from './useOptimisticMessages';
 
 interface SendMessageInput {
   conversationId: string;
   message: string;
   replyToId?: string | null;
-  /** ID do cliente (gerado automaticamente se não fornecido) */
   clientMessageId?: string;
 }
 
-type SendMessageResult = 
-  | { success: true; clientMessageId: string } 
+type SendMessageResult =
+  | { success: true; clientMessageId: string }
   | { success: false; error: Error; clientMessageId: string };
 
 interface UseSendMessageReturn {
-  /**
-   * Envia uma mensagem de texto.
-   * NÃO bloqueia - múltiplas mensagens podem ser enviadas em paralelo.
-   * A mensagem aparece imediatamente na UI com status 'sending'.
-   */
   sendMessage: (input: SendMessageInput) => Promise<SendMessageResult>;
-  
-  /**
-   * Reenvia uma mensagem que falhou.
-   * @param clientMessageId - ID do cliente da mensagem que falhou
-   */
   retrySend: (clientMessageId: string) => Promise<SendMessageResult | null>;
-  
-  /**
-   * Hook de mensagens otimistas (para acesso direto se necessário)
-   */
   optimistic: ReturnType<typeof useOptimisticMessages>;
 }
 
 export function useSendMessage(): UseSendMessageReturn {
   const optimistic = useOptimisticMessages();
 
-  /**
-   * Executa o envio real da mensagem via Edge Function (webhook)
-   */
   const executeRealSend = useCallback(async (
     conversationId: string,
     content: string,
@@ -54,28 +36,23 @@ export function useSendMessage(): UseSendMessageReturn {
     replyToId?: string | null
   ): Promise<{ success: boolean; error?: Error }> => {
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-send', {
-        body: {
-          conversationId,
-          message: content,
-          clientMessageId,
-          replyToId: replyToId ?? undefined,
-        },
+      const { whatsAppProvider } = getContainer();
+      const result = await whatsAppProvider.sendText({
+        conversationId,
+        message: content,
+        clientMessageId,
+        replyToId: replyToId ?? undefined,
       });
 
-      if (error) {
-        throw error;
-      }
-
-      if (!data?.ok) {
-        throw new Error(data?.message || 'Erro ao enviar mensagem');
+      if (!result.ok) {
+        return { success: false, error: new Error(result.error.message) };
       }
 
       return { success: true };
     } catch (err) {
-      return { 
-        success: false, 
-        error: err instanceof Error ? err : new Error('Erro ao enviar mensagem') 
+      return {
+        success: false,
+        error: err instanceof Error ? err : new Error('Erro ao enviar mensagem')
       };
     }
   }, []);
@@ -92,7 +69,7 @@ export function useSendMessage(): UseSendMessageReturn {
       };
     }
 
-    // 1. Adicionar mensagem otimista IMEDIATAMENTE (antes de enviar)
+    // 1. Add optimistic message immediately
     optimistic.addOptimisticMessage({
       clientId: clientMessageId,
       conversationId: input.conversationId,
@@ -101,8 +78,7 @@ export function useSendMessage(): UseSendMessageReturn {
       replyToId: input.replyToId,
     });
 
-    // 2. Enviar em background (não bloqueia)
-    // Não usamos await aqui para não travar - fire and forget com tratamento
+    // 2. Send in background (fire and forget with error handling)
     executeRealSend(
       input.conversationId,
       content,
@@ -110,17 +86,15 @@ export function useSendMessage(): UseSendMessageReturn {
       input.replyToId
     ).then(result => {
       if (result.success) {
-        // Marcar como enviada - será removida quando a mensagem real chegar
         optimistic.confirmMessage(clientMessageId);
       } else {
-        // Marcar como falha
         optimistic.failMessage(clientMessageId, result.error?.message || 'Erro ao enviar');
       }
     }).catch(err => {
       optimistic.failMessage(clientMessageId, err.message || 'Erro ao enviar');
     });
 
-    // 3. Retornar sucesso imediato (optimistic)
+    // 3. Return immediate optimistic success
     return {
       success: true,
       clientMessageId,
@@ -133,7 +107,6 @@ export function useSendMessage(): UseSendMessageReturn {
       return null;
     }
 
-    // Reenviar a mensagem
     const result = await executeRealSend(
       message.conversationId,
       message.content,
@@ -146,10 +119,10 @@ export function useSendMessage(): UseSendMessageReturn {
       return { success: true, clientMessageId };
     } else {
       optimistic.failMessage(clientMessageId, result.error?.message || 'Erro ao reenviar');
-      return { 
-        success: false, 
-        error: result.error || new Error('Erro ao reenviar'), 
-        clientMessageId 
+      return {
+        success: false,
+        error: result.error || new Error('Erro ao reenviar'),
+        clientMessageId
       };
     }
   }, [optimistic, executeRealSend]);

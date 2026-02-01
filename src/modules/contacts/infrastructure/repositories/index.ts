@@ -1,0 +1,1 @@
+export { SupabaseContactsQueryRepository } from './SupabaseContactsQueryRepository';

@@ -1,28 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
+import {
+  SupabaseContactClassRepository,
+  type ContactClass,
+  type ContactWithClass,
+} from '../../infrastructure/repositories/SupabaseContactClassRepository';
 
-export interface ContactClass {
-  id: string;
-  workspace_id: string;
-  name: string;
-  color: string;
-  position: number;
-  created_at: string;
-  updated_at: string;
-}
+export type { ContactClass, ContactWithClass };
 
-export interface ContactWithClass {
-  id: string;
-  name: string;
-  phone: string;
-  email: string | null;
-  avatar_url: string | null;
-  contact_class_id: string | null;
-  workspace_id: string | null;
-}
+const contactClassRepository = new SupabaseContactClassRepository();
 
 export function useContactClasses(pipelineId?: string | null) {
   const { user } = useAuth();
@@ -34,76 +22,19 @@ export function useContactClasses(pipelineId?: string | null) {
 
   const fetchContactClasses = useCallback(async () => {
     if (!user || !workspaceId) return;
-
     try {
-      const { data, error } = await supabase
-        .from('contact_classes')
-        .select('*')
-        .eq('workspace_id', workspaceId)
-        .order('position', { ascending: true });
-
-      if (error) {
-        console.error('[ContactClasses] Error fetching classes:', error);
-        toast.error('Erro ao carregar classificações');
-        return;
-      }
-
-      setContactClasses(data || []);
+      const data = await contactClassRepository.fetchContactClasses(workspaceId);
+      setContactClasses(data);
     } catch (err) {
       console.error('[ContactClasses] Exception fetching classes:', err);
+      toast.error('Erro ao carregar classificações');
     }
   }, [user, workspaceId]);
 
   const fetchContactsByClass = useCallback(async () => {
     if (!user || !workspaceId) return;
-
     try {
-      // First, get contacts that belong to groups (to exclude them)
-      const { data: groupConversations } = await supabase
-        .from('conversations')
-        .select('contact_id')
-        .eq('workspace_id', workspaceId)
-        .eq('is_group', true);
-
-      const groupContactIds = new Set((groupConversations || []).map(c => c.contact_id));
-
-      // Build query for contacts
-      let query = supabase
-        .from('contacts')
-        .select('id, name, phone, email, avatar_url, contact_class_id, workspace_id, pipeline_id')
-        .eq('workspace_id', workspaceId)
-        .eq('is_visible', true)
-        .eq('is_real', true);
-
-      // Filter by pipeline if provided
-      if (pipelineId) {
-        query = query.eq('pipeline_id', pipelineId);
-      }
-
-      const { data: contacts, error } = await query.order('name', { ascending: true });
-
-      if (error) {
-        console.error('[ContactClasses] Error fetching contacts:', error);
-        return;
-      }
-
-      // Group contacts by contact_class_id
-      const grouped: Record<string, ContactWithClass[]> = {};
-      const unclassified: ContactWithClass[] = [];
-
-      (contacts || []).forEach((contact) => {
-        if (groupContactIds.has(contact.id)) return;
-
-        if (contact.contact_class_id) {
-          if (!grouped[contact.contact_class_id]) {
-            grouped[contact.contact_class_id] = [];
-          }
-          grouped[contact.contact_class_id].push(contact);
-        } else {
-          unclassified.push(contact);
-        }
-      });
-
+      const { grouped, unclassified } = await contactClassRepository.fetchContactsByClass(workspaceId, pipelineId);
       setContactsByClass(grouped);
       setUnclassifiedContacts(unclassified);
     } catch (err) {
@@ -119,23 +50,13 @@ export function useContactClasses(pipelineId?: string | null) {
 
   const createContactClass = async (name: string, color?: string) => {
     if (!workspaceId) return null;
-
     try {
       const maxPosition = contactClasses.reduce((max, c) => Math.max(max, c.position), -1);
+      const data = await contactClassRepository.createContactClass(
+        workspaceId, name, color || '#6B7280', maxPosition + 1
+      );
 
-      const { data, error } = await supabase
-        .from('contact_classes')
-        .insert({
-          workspace_id: workspaceId,
-          name,
-          color: color || '#6B7280',
-          position: maxPosition + 1,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('[ContactClasses] Error creating class:', error);
+      if (!data) {
         toast.error('Erro ao criar classificação');
         return null;
       }
@@ -151,13 +72,8 @@ export function useContactClasses(pipelineId?: string | null) {
 
   const updateContactClass = async (id: string, updates: Partial<ContactClass>) => {
     try {
-      const { error } = await supabase
-        .from('contact_classes')
-        .update(updates)
-        .eq('id', id);
-
-      if (error) {
-        console.error('[ContactClasses] Error updating class:', error);
+      const success = await contactClassRepository.updateContactClass(id, updates);
+      if (!success) {
         toast.error('Erro ao atualizar classificação');
         return false;
       }
@@ -173,13 +89,8 @@ export function useContactClasses(pipelineId?: string | null) {
 
   const deleteContactClass = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('contact_classes')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        console.error('[ContactClasses] Error deleting class:', error);
+      const success = await contactClassRepository.deleteContactClass(id);
+      if (!success) {
         toast.error('Erro ao deletar classificação');
         return false;
       }
@@ -195,13 +106,8 @@ export function useContactClasses(pipelineId?: string | null) {
 
   const moveContact = async (contactId: string, newClassId: string | null) => {
     try {
-      const { error } = await supabase
-        .from('contacts')
-        .update({ contact_class_id: newClassId })
-        .eq('id', contactId);
-
-      if (error) {
-        console.error('[ContactClasses] Error moving contact:', error);
+      const success = await contactClassRepository.moveContact(contactId, newClassId);
+      if (!success) {
         toast.error('Erro ao mover contato');
         return false;
       }

@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { DashboardRepository, DashboardPeriod, PaginationParams } from '../../domain/ports/DashboardRepository';
 import type { AgentDashboardMetrics, PendingReply } from '../../domain/entities/AgentDashboardMetrics';
 
-class SupabaseDashboardRepositoryImpl implements DashboardRepository {
+export class SupabaseDashboardRepository implements DashboardRepository {
   async getAgentMetrics(
     workspaceId: string,
     userId: string,
@@ -49,7 +49,7 @@ class SupabaseDashboardRepositoryImpl implements DashboardRepository {
       throw error;
     }
 
-    return (data ?? []).map((row: any) => ({
+    return (data ?? []).map((row: Record<string, unknown>) => ({
       conversationId: row.conversation_id,
       contactName: row.contact_name ?? 'Desconhecido',
       remoteJid: row.remote_jid ?? '',
@@ -60,4 +60,4 @@ class SupabaseDashboardRepositoryImpl implements DashboardRepository {
   }
 }
 
-export const dashboardRepository = new SupabaseDashboardRepositoryImpl();
+export const dashboardRepository = new SupabaseDashboardRepository();
