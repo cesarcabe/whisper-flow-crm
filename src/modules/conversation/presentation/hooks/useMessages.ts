@@ -144,11 +144,11 @@ export function useMessages(conversationId: string | null) {
         offset
       );
       
-      if (!result.success) {
-        throw (result as { success: false; error: Error }).error;
+      if (!result.ok) {
+        throw new Error(result.error.message);
       }
 
-      const moduleMessages = result.data;
+      const moduleMessages = result.value;
       const domainMessages = moduleMessages.map(mapModuleToCoreMessage);
       
       // Update offset for next page
