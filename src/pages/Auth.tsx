@@ -114,146 +114,190 @@ export default function Auth() {
         <meta name="description" content="Acesse sua conta do New Flow CRM. Gestão inteligente de conversas e vendas." />
       </Helmet>
       
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background p-4">
-        <Card className="w-full max-w-md shadow-xl border-border/50">
-          <CardHeader className="text-center space-y-4">
-            <div className="mx-auto flex flex-col items-center gap-2">
-              <img 
-                src="/logo-newflow.png" 
-                alt="New Flow CRM" 
-                className="h-12 w-12 object-contain"
-                onError={(e) => {
-                  // Fallback to icon if image fails
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-              <MessageSquare className="h-8 w-8 text-primary hidden" />
-            </div>
-            <div>
-              <CardTitle className="text-2xl font-bold tracking-wide">NEW FLOW</CardTitle>
-              <CardDescription className="mt-2">
-                Gestão inteligente de conversas
-              </CardDescription>
-            </div>
-          </CardHeader>
+      <div className="min-h-screen grid lg:grid-cols-2">
+        {/* Lado Esquerdo - Formulário */}
+        <div className="flex items-center justify-center p-4 sm:p-8 bg-background">
+          <Card className="w-full max-w-md shadow-xl border-border/50">
+            <CardHeader className="text-center space-y-4">
+              <div className="mx-auto lg:hidden">
+                <img 
+                  src="/logo-newflow.png" 
+                  alt="New Flow CRM" 
+                  className="h-12 w-12 object-contain mx-auto"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              </div>
+              <div>
+                <CardTitle className="text-2xl font-bold tracking-wide">
+                  <span className="lg:hidden">NEW FLOW</span>
+                  <span className="hidden lg:inline">Bem-vindo de volta</span>
+                </CardTitle>
+                <CardDescription className="mt-2">
+                  <span className="lg:hidden">Gestão inteligente de conversas</span>
+                  <span className="hidden lg:inline">Entre na sua conta para continuar</span>
+                </CardDescription>
+              </div>
+            </CardHeader>
+            
+            <CardContent>
+              <Tabs defaultValue="login" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsTrigger value="login">Entrar</TabsTrigger>
+                  <TabsTrigger value="signup">Criar conta</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="login">
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="login-email">Email</Label>
+                      <Input
+                        id="login-email"
+                        type="email"
+                        placeholder="seu@email.com"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="login-password">Senha</Label>
+                      <Input
+                        id="login-password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Entrando...
+                        </>
+                      ) : (
+                        'Entrar'
+                      )}
+                    </Button>
+                  </form>
+                </TabsContent>
+                
+                <TabsContent value="signup">
+                  <form onSubmit={handleSignup} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-name">Nome completo</Label>
+                      <Input
+                        id="signup-name"
+                        type="text"
+                        placeholder="Seu nome"
+                        value={signupName}
+                        onChange={(e) => setSignupName(e.target.value)}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-email">Email</Label>
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        placeholder="seu@email.com"
+                        value={signupEmail}
+                        onChange={(e) => setSignupEmail(e.target.value)}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-password">Senha</Label>
+                      <Input
+                        id="signup-password"
+                        type="password"
+                        placeholder="Mínimo 6 caracteres"
+                        value={signupPassword}
+                        onChange={(e) => setSignupPassword(e.target.value)}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-confirm">Confirmar senha</Label>
+                      <Input
+                        id="signup-confirm"
+                        type="password"
+                        placeholder="Repita a senha"
+                        value={signupConfirmPassword}
+                        onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                    
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Criando conta...
+                        </>
+                      ) : (
+                        'Criar conta'
+                      )}
+                    </Button>
+                  </form>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Lado Direito - Branding (oculto em mobile) */}
+        <div className="hidden lg:flex flex-col items-center justify-center bg-gradient-to-br from-sidebar to-primary p-12 relative overflow-hidden">
+          {/* Padrão decorativo de fundo */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-20 left-20 w-32 h-32 border border-white/20 rounded-full" />
+            <div className="absolute bottom-32 right-16 w-48 h-48 border border-white/20 rounded-full" />
+            <div className="absolute top-1/2 left-10 w-24 h-24 border border-white/20 rounded-full" />
+          </div>
           
-          <CardContent>
-            <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="login">Entrar</TabsTrigger>
-                <TabsTrigger value="signup">Criar conta</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="login">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email">Email</Label>
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      required
-                      disabled={isLoading}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password">Senha</Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      required
-                      disabled={isLoading}
-                    />
-                  </div>
-                  
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Entrando...
-                      </>
-                    ) : (
-                      'Entrar'
-                    )}
-                  </Button>
-                </form>
-              </TabsContent>
-              
-              <TabsContent value="signup">
-                <form onSubmit={handleSignup} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Nome completo</Label>
-                    <Input
-                      id="signup-name"
-                      type="text"
-                      placeholder="Seu nome"
-                      value={signupName}
-                      onChange={(e) => setSignupName(e.target.value)}
-                      required
-                      disabled={isLoading}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      value={signupEmail}
-                      onChange={(e) => setSignupEmail(e.target.value)}
-                      required
-                      disabled={isLoading}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Senha</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="Mínimo 6 caracteres"
-                      value={signupPassword}
-                      onChange={(e) => setSignupPassword(e.target.value)}
-                      required
-                      disabled={isLoading}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-confirm">Confirmar senha</Label>
-                    <Input
-                      id="signup-confirm"
-                      type="password"
-                      placeholder="Repita a senha"
-                      value={signupConfirmPassword}
-                      onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                      required
-                      disabled={isLoading}
-                    />
-                  </div>
-                  
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Criando conta...
-                      </>
-                    ) : (
-                      'Criar conta'
-                    )}
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+          <div className="relative z-10 flex flex-col items-center text-center">
+            <img 
+              src="/logo-newflow.png" 
+              alt="New Flow CRM" 
+              className="h-24 w-24 object-contain mb-8"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                if (fallback) fallback.style.display = 'flex';
+              }}
+            />
+            <div className="hidden items-center justify-center h-24 w-24 mb-8 bg-white/10 rounded-2xl">
+              <MessageSquare className="h-12 w-12 text-white" />
+            </div>
+            
+            <h1 className="text-4xl font-bold text-white mb-4 tracking-wide">
+              NEW FLOW
+            </h1>
+            
+            <p className="text-xl text-white/90 max-w-sm leading-relaxed">
+              Transforme conversas em resultados
+            </p>
+            
+            <div className="mt-12 flex items-center gap-2 text-white/60 text-sm">
+              <MessageSquare className="h-4 w-4" />
+              <span>Gestão inteligente de conversas</span>
+            </div>
+          </div>
+        </div>
       </div>
     </>
   );
