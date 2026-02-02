@@ -114,7 +114,7 @@ export default function Auth() {
         <meta name="description" content="Acesse sua conta do New Flow CRM. Gestão inteligente de conversas e vendas." />
       </Helmet>
       
-      <div className="min-h-screen grid lg:grid-cols-2">
+      <div className="min-h-screen grid lg:grid-cols-[40%_60%]">
         {/* Lado Esquerdo - Formulário */}
         <div className="flex items-center justify-center p-4 sm:p-8 bg-background">
           <Card className="w-full max-w-md shadow-xl border-border/50">
@@ -261,39 +261,40 @@ export default function Auth() {
         </div>
         
         {/* Lado Direito - Branding (oculto em mobile) */}
-        <div className="hidden lg:flex flex-col items-center justify-center bg-gradient-to-br from-sidebar to-primary p-12 relative overflow-hidden">
+        <div className="hidden lg:flex flex-col items-center justify-center p-12 relative overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_hsl(var(--sidebar-primary))_0%,_hsl(var(--sidebar))_35%,_hsl(220_25%_10%)_100%)]">
           {/* Padrão decorativo de fundo */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-20 left-20 w-32 h-32 border border-white/20 rounded-full" />
-            <div className="absolute bottom-32 right-16 w-48 h-48 border border-white/20 rounded-full" />
-            <div className="absolute top-1/2 left-10 w-24 h-24 border border-white/20 rounded-full" />
+          <div className="absolute inset-0">
+            <div className="absolute top-20 left-20 w-64 h-64 border border-white/10 rounded-full" />
+            <div className="absolute bottom-20 right-10 w-96 h-96 border border-white/5 rounded-full" />
+            <div className="absolute top-1/3 right-1/4 w-48 h-48 border border-white/10 rounded-full" />
+            <div className="absolute bottom-1/3 left-1/4 w-32 h-32 bg-white/5 rounded-full blur-xl" />
           </div>
           
           <div className="relative z-10 flex flex-col items-center text-center">
             <img 
               src="/logo-newflow.png" 
               alt="New Flow CRM" 
-              className="h-24 w-24 object-contain mb-8"
+              className="h-72 w-72 object-contain mb-10 drop-shadow-2xl"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
                 const fallback = e.currentTarget.nextElementSibling as HTMLElement;
                 if (fallback) fallback.style.display = 'flex';
               }}
             />
-            <div className="hidden items-center justify-center h-24 w-24 mb-8 bg-white/10 rounded-2xl">
-              <MessageSquare className="h-12 w-12 text-white" />
+            <div className="hidden items-center justify-center h-72 w-72 mb-10 bg-white/10 rounded-3xl backdrop-blur-sm">
+              <MessageSquare className="h-36 w-36 text-white" />
             </div>
             
-            <h1 className="text-4xl font-bold text-white mb-4 tracking-wide">
+            <h1 className="text-5xl font-bold text-white mb-6 tracking-wide">
               NEW FLOW
             </h1>
             
-            <p className="text-xl text-white/90 max-w-sm leading-relaxed">
+            <p className="text-2xl text-white/90 max-w-md leading-relaxed font-light">
               Transforme conversas em resultados
             </p>
             
-            <div className="mt-12 flex items-center gap-2 text-white/60 text-sm">
-              <MessageSquare className="h-4 w-4" />
+            <div className="mt-16 flex items-center gap-3 text-white/50 text-base">
+              <MessageSquare className="h-5 w-5" />
               <span>Gestão inteligente de conversas</span>
             </div>
           </div>
