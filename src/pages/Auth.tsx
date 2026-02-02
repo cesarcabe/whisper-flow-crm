@@ -289,14 +289,14 @@ export default function Auth() {
               NEW FLOW
             </h1>
             
-            <p className="text-2xl text-white/90 max-w-md leading-relaxed font-light">
-              Transforme conversas em resultados
-            </p>
-            
-            <div className="mt-16 flex items-center gap-3 text-white/50 text-base">
-              <MessageSquare className="h-5 w-5" />
-              <span>Gestão inteligente de conversas</span>
+            <div className="flex items-center gap-3 text-white/90 text-2xl max-w-md leading-relaxed font-light">
+              <MessageSquare className="h-6 w-6" />
+              <span>Transforme conversas em resultados</span>
             </div>
+            
+            <p className="mt-6 text-white/50 text-base">
+              Gestão inteligente de conversas
+            </p>
           </div>
         </div>
       </div>
