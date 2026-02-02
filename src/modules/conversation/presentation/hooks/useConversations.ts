@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { isFailure } from '@/core/either';
 import { useConversationService, Conversation as DomainConversation } from '@/modules/conversation';
 import { useWebSocketContext } from '../../infrastructure/websocket/WebSocketContext';
 import { WebSocketConversation } from '../../infrastructure/websocket/types';
@@ -99,7 +100,7 @@ export function useConversations(whatsappNumberId: string | null) {
     try {
       const result = await conversationService.listConversations(whatsappNumberId);
 
-      if (!result.ok) {
+      if (isFailure(result)) {
         throw new Error(result.error.message);
       }
 

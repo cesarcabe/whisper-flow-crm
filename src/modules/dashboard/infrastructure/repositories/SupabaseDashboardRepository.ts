@@ -49,7 +49,7 @@ export class SupabaseDashboardRepository implements DashboardRepository {
       throw error;
     }
 
-    return (data ?? []).map((row: Record<string, unknown>) => ({
+    return (data ?? []).map((row) => ({
       conversationId: row.conversation_id,
       contactName: row.contact_name ?? 'Desconhecido',
       remoteJid: row.remote_jid ?? '',

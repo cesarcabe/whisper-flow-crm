@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { isFailure } from '@/core/either';
 import { useConversation } from '../contexts/ConversationContext';
 import { useWebSocketContext } from '../../infrastructure/websocket/WebSocketContext';
 import { WebSocketMessage, WebSocketMessageStatus } from '../../infrastructure/websocket/types';
@@ -144,7 +145,7 @@ export function useMessages(conversationId: string | null) {
         offset
       );
       
-      if (!result.ok) {
+      if (isFailure(result)) {
         throw new Error(result.error.message);
       }
 

@@ -29,7 +29,7 @@ export class CreateWorkspaceUseCase {
           name: dto.name.trim(),
           city: dto.city?.trim() || null,
           state: dto.state?.trim() || null,
-          created_by: dto.userId,
+          owner_id: dto.userId,
         })
         .select()
         .single();
@@ -56,10 +56,10 @@ export class CreateWorkspaceUseCase {
         name: data.name,
         city: data.city,
         state: data.state,
-        createdBy: data.created_by,
+        createdBy: data.owner_id,
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at),
-        subscriptionTier: data.subscription_tier,
+        tier: data.tier,
         subscriptionStatus: data.subscription_status,
         subscriptionEndsAt: data.subscription_ends_at ? new Date(data.subscription_ends_at) : null,
         stripeCustomerId: data.stripe_customer_id,

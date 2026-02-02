@@ -6,6 +6,7 @@
  */
 
 import { useCallback } from 'react';
+import { isFailure } from '@/core/either';
 import { getContainer } from '@/config/di-container';
 import { useOptimisticMessages, createClientMessageId } from './useOptimisticMessages';
 
@@ -44,7 +45,7 @@ export function useSendMessage(): UseSendMessageReturn {
         replyToId: replyToId ?? undefined,
       });
 
-      if (!result.ok) {
+      if (isFailure(result)) {
         return { success: false, error: new Error(result.error.message) };
       }
 

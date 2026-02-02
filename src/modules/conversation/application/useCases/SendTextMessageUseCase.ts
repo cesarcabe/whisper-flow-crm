@@ -1,4 +1,4 @@
-import { success, failure } from '@/core/either';
+import { success, failure, isFailure } from '@/core/either';
 import type { Result } from '@/core/either';
 import { ValidationError, InfrastructureError } from '@/core/errors';
 import type { AppError } from '@/core/errors';
@@ -68,7 +68,7 @@ export class SendTextMessageUseCase {
       replyToId: dto.replyToId ?? undefined,
     });
 
-    if (!result.ok) {
+    if (isFailure(result)) {
       return failure(new InfrastructureError(result.error.message, result.error));
     }
 
