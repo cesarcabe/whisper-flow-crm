@@ -87,9 +87,9 @@ Adicionar coluna `business_type` na tabela `workspaces`:
 
 ### Sprint 1: Tipo de Negócio
 - [x] Definir estágios por tipo de negócio
-- [ ] Migração: adicionar `business_type` em workspaces
-- [ ] Criar templates de estágios (domain layer)
-- [ ] Atualizar trigger `handle_new_pipeline` ou edge function
+- [x] Migração: adicionar `business_type` em workspaces
+- [x] Criar templates de estágios (domain layer)
+- [x] Atualizar trigger `handle_new_pipeline` para usar business_type
 - [ ] Modal de seleção no onboarding
 - [ ] Opção em configurações
 
