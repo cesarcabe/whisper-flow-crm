@@ -47,13 +47,14 @@ Deno.serve(async (req) => {
   // payload opcional
   const body = await req.json().catch(() => ({}));
   const workspaceName = (body?.name ?? "Meu Workspace").toString();
+  const businessType = body?.business_type ?? null;
 
-  console.log(`Creating workspace "${workspaceName}" for user ${userId}`);
+  console.log(`Creating workspace "${workspaceName}" (type: ${businessType}) for user ${userId}`);
 
   // 2) cria workspace
   const { data: ws, error: wsErr } = await supabaseAdmin
     .from("workspaces")
-    .insert({ name: workspaceName })
+    .insert({ name: workspaceName, business_type: businessType })
     .select("id")
     .single();
 
@@ -91,7 +92,7 @@ Deno.serve(async (req) => {
     console.error("Error creating API key:", apiKeyErr);
   }
 
-  // 5) seed mínimo de pipeline/stages
+  // 5) seed mínimo de pipeline com stages baseados no tipo de negócio
   const { data: pipe, error: pipelineErr } = await supabaseAdmin
     .from("pipelines")
     .insert({ workspace_id: workspaceId, name: "Entrada" })
@@ -101,18 +102,12 @@ Deno.serve(async (req) => {
   if (pipelineErr) {
     console.error("Error creating pipeline:", pipelineErr);
   } else if (pipe?.id) {
-    const { error: stagesErr } = await supabaseAdmin.from("stages").insert([
-      { workspace_id: workspaceId, pipeline_id: pipe.id, name: "Novo", position: 1 },
-      { workspace_id: workspaceId, pipeline_id: pipe.id, name: "Em atendimento", position: 2 },
-      { workspace_id: workspaceId, pipeline_id: pipe.id, name: "Fechado", position: 3 },
-    ]);
-
-    if (stagesErr) {
-      console.error("Error creating stages:", stagesErr);
-    }
+    // Stages são criados automaticamente pelo trigger handle_new_pipeline
+    // baseado no business_type do workspace
+    console.log(`Pipeline ${pipe.id} created - stages will be created by trigger`);
   }
 
-  console.log(`Workspace ${workspaceId} created successfully`);
+  console.log(`Workspace ${workspaceId} created successfully with business_type: ${businessType}`);
 
   return json({ ok: true, workspace_id: workspaceId });
 });
