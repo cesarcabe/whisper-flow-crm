@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings, Users, Smartphone } from 'lucide-react';
+import { ArrowLeft, Settings, Users, Smartphone, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { WorkspaceMembersList } from '@/components/workspace/WorkspaceMembersList';
 import { WhatsappSettingsTab } from '@/components/whatsapp/WhatsappSettingsTab';
+import { WorkspaceSettingsTab } from '@/components/workspace/WorkspaceSettingsTab';
 
 export default function WorkspaceAdmin() {
   const { workspace } = useWorkspace();
@@ -46,8 +47,12 @@ export default function WorkspaceAdmin() {
 
         {/* Content */}
         <main className="container max-w-4xl mx-auto px-4 py-8">
-          <Tabs defaultValue="members" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
+          <Tabs defaultValue="settings" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsTrigger value="settings" className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                Geral
+              </TabsTrigger>
               <TabsTrigger value="members" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
                 Membros
@@ -57,6 +62,9 @@ export default function WorkspaceAdmin() {
                 WhatsApp
               </TabsTrigger>
             </TabsList>
+            <TabsContent value="settings">
+              <WorkspaceSettingsTab />
+            </TabsContent>
             <TabsContent value="members">
               <WorkspaceMembersList />
             </TabsContent>
