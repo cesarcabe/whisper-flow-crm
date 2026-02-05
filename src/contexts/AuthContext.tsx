@@ -22,35 +22,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+    let isMounted = true;
 
-        // Defer profile fetch with setTimeout to avoid deadlock
-        if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id);
-          }, 0);
-        } else {
-          setProfile(null);
-        }
+    const clearInvalidSession = async () => {
+      try {
+        // Clear local storage even if the session is already invalid on the server
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (err) {
+        console.warn('[CRM Auth] Failed to sign out locally:', err);
       }
-    );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+    };
+
+    // Set up auth state listener FIRST
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
+
+      // Defer profile fetch with setTimeout to avoid deadlock
       if (session?.user) {
-        fetchProfile(session.user.id);
+        setTimeout(() => {
+          fetchProfile(session.user.id);
+        }, 0);
+      } else {
+        setProfile(null);
       }
-      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // THEN validate the stored session (prevents ghost sessions after user deletion)
+    (async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!isMounted) return;
+
+        if (!session) {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+
+        const { data, error } = await supabase.auth.getUser();
+
+        if ((error as any)?.code === 'user_not_found') {
+          console.warn('[CRM Auth] Invalid session detected (user_not_found). Clearing...');
+          await clearInvalidSession();
+          setLoading(false);
+          return;
+        }
+
+        setSession(session);
+        setUser(data?.user ?? session.user ?? null);
+
+        const effectiveUserId = data?.user?.id ?? session.user?.id;
+        if (effectiveUserId) {
+          fetchProfile(effectiveUserId);
+        }
+
+        setLoading(false);
+      } catch (err) {
+        console.error('[CRM Auth] Failed to validate session:', err);
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchProfile = async (userId: string) => {
