@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +22,7 @@ export default function AcceptInvitation() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const { refetchWorkspace } = useWorkspace();
   
   const [invitation, setInvitation] = useState<InvitationData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,10 +126,13 @@ export default function AcceptInvitation() {
       setSuccess(true);
       toast.success(response.data?.message || 'Convite aceito com sucesso!');
       
-      // Redirect to main page after 2 seconds
+      // Refetch workspaces to include the new one, then redirect
+      await refetchWorkspace();
+      
+      // Small delay to ensure state is updated, then redirect
       setTimeout(() => {
-        navigate('/');
-      }, 2000);
+        navigate('/', { replace: true });
+      }, 1500);
     } catch (err) {
       console.error('[AcceptInvitation] Error accepting:', err);
       toast.error('Erro inesperado ao aceitar convite');
