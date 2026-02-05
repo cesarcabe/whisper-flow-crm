@@ -49,7 +49,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const repository = new SupabaseWorkspaceRepository();
 
-  const fetchWorkspaces = useCallback(async () => {
+  const fetchWorkspaces = useCallback(async (forceRefetch = false) => {
     if (!user) {
       setWorkspaces([]);
       setActiveWorkspaceId(null);
@@ -149,7 +149,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         
         // State
         loading,
-        refetchWorkspace: fetchWorkspaces,
+        refetchWorkspace: () => fetchWorkspaces(true),
       }}
     >
       {children}
