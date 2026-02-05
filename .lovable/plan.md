@@ -1,123 +1,171 @@
-# Plano: Tipo de Negócio e CRM com IA
 
-## Fase 1: Classificação por Tipo de Negócio
 
-### 1.1 Migração do Banco de Dados
-Adicionar coluna `business_type` na tabela `workspaces`:
-- `wholesale_clothing` (Atacado de Roupas)
-- `retail_clothing` (Varejo de Roupas)
-- `clinic` (Clínica)
-- `other` (Outros)
+# Plano de Correção: Fluxos de Autenticação e Convites
 
-### 1.2 Estágios por Tipo de Negócio
+## Diagnóstico dos Problemas
 
-| Tipo de Negócio | Estágios (em ordem) |
-|-----------------|---------------------|
-| **Atacado de Roupas** | Novo Lead → Qualificação → Catalogo Enviado → Negociação → Pedido Fechado → Venda Realizada |
-| **Varejo de Roupas** | Novo Lead → Interesse → Atendimento → Pedido escolhido → Venda Realizada |
-| **Clínica** | Novo Lead → Triagem → Agendamento → Consulta → Retorno |
-| **Outros** | Novo Lead → Qualificação → Proposta → Negociação → Fechado |
+### Problema 1: Convites por email retornando "non-2xx status code"
 
-### 1.3 Cores Sugeridas por Estágio
+**Causa identificada nos logs:**
+```
+AuthSessionMissingError: Auth session missing!
+```
 
-| Estágio | Cor |
-|---------|-----|
-| Novo Lead | `#6B7280` (cinza) |
-| Qualificação / Interesse / Triagem | `#F59E0B` (amarelo) |
-| Catalogo Enviado / Atendimento / Agendamento | `#3B82F6` (azul) |
-| Negociação / Pedido escolhido / Consulta | `#8B5CF6` (roxo) |
-| Pedido Fechado / Proposta | `#06B6D4` (ciano) |
-| Venda Realizada / Fechado / Retorno | `#10B981` (verde) |
+O problema está na edge function `send-invitation`. Mesmo com `verify_jwt = false`, a função tenta obter o usuário via `supabase.auth.getUser()` usando um cliente criado com a anon key e o Authorization header do usuário. Isso falha porque:
+1. A sessão do usuário expirou
+2. O token não está sendo passado corretamente para a edge function
 
-### 1.4 Interface de Seleção
-
-**Onboarding (novo workspace):**
-- Modal com 4 opções visuais (cards com ícone)
-- Seleção obrigatória antes de continuar
-- Criação automática dos estágios
-
-**Configurações (workspace existente):**
-- Opção em Settings > Workspace
-- Aviso: "Trocar o tipo de negócio não altera estágios existentes"
+**Evidência:** O código verifica a sessão antes de chamar (`getSession()`), mas o token pode não estar chegando corretamente à edge function.
 
 ---
 
-## Fase 2: Preenchimento do CRM com IA
+### Problema 2: Link de confirmação de email redireciona para localhost
 
-### 2.1 Arquitetura
-
+**Causa identificada nos logs:**
 ```
-┌─────────────────┐     ┌──────────────────────┐     ┌─────────────────┐
-│   Conversas     │────▶│  Edge Function       │────▶│  Lovable AI     │
-│   (messages)    │     │  analyze-conversation│     │  Gateway        │
-└─────────────────┘     └──────────────────────┘     └─────────────────┘
-                                   │
-                                   ▼
-                        ┌──────────────────────┐
-                        │  Atualizar contato   │
-                        │  e/ou conversa       │
-                        └──────────────────────┘
+referer: "http://localhost:3000"
 ```
 
-### 2.2 Campos que a IA Preencherá
+O signUp no `AuthContext.tsx` usa `window.location.origin` para definir o `emailRedirectTo`:
+```javascript
+const redirectUrl = `${window.location.origin}/`;
+```
 
-| Campo | Tabela | Descrição |
-|-------|--------|-----------|
-| `contact_class_id` | contacts | Classificação do contato |
-| `stage_id` | conversations | Estágio atual no funil |
-| `notes` | contacts | Observações extraídas |
-| Tags | contact_tags | Tags relevantes |
-
-### 2.3 Modos de Operação
-
-1. **Manual**: Botão "Analisar conversa" na interface
-2. **Sugestão**: IA sugere, usuário aprova
-3. **Automático**: IA aplica diretamente (configurável)
-
-### 2.4 Implementação
-
-1. Habilitar Lovable AI Gateway
-2. Criar Edge Function `analyze-conversation`
-3. Criar UI para exibir sugestões da IA
-4. Implementar aprovação/rejeição de sugestões
+Quando o usuário está no ambiente de preview do Lovable, `window.location.origin` retorna `http://localhost:xxxx` ou a URL do iframe, não o domínio publicado.
 
 ---
 
-## Ordem de Implementação
+### Problema 3: Email sem personalização (padrão Supabase)
 
-### Sprint 1: Tipo de Negócio
-- [x] Definir estágios por tipo de negócio
-- [x] Migração: adicionar `business_type` em workspaces
-- [x] Criar templates de estágios (domain layer)
-- [x] Atualizar trigger `handle_new_pipeline` para usar business_type
-- [ ] Modal de seleção no onboarding
-- [ ] Opção em configurações
+Os emails de confirmação de conta são enviados diretamente pelo Supabase Auth, não pela nossa aplicação. O Supabase usa templates padrão a menos que sejam personalizados no dashboard.
 
-### Sprint 2: CRM com IA
-- [ ] Habilitar Lovable AI Gateway
-- [ ] Edge Function `analyze-conversation`
-- [ ] UI para sugestões da IA
-- [ ] Modo manual (botão)
-- [ ] Modo sugestão (aprovar/rejeitar)
-- [ ] Modo automático (opcional)
+**Solução:** Configurar os templates de email no Supabase Dashboard ou usar um Custom SMTP com Resend.
 
 ---
 
-## Notas Técnicas
+## Plano de Implementação
 
-### Trigger de Criação de Estágios
-Atualizar a função `handle_new_pipeline` para receber o `business_type` do workspace e criar os estágios corretos:
+### Fase 1: Corrigir Edge Function de Convites
 
-```sql
--- Exemplo: buscar business_type do workspace
-SELECT business_type FROM workspaces WHERE id = NEW.workspace_id;
+**Arquivo:** `supabase/functions/send-invitation/index.ts`
 
--- Criar estágios baseado no tipo
-CASE business_type
-  WHEN 'wholesale_clothing' THEN
-    -- 6 estágios do atacado
-  WHEN 'retail_clothing' THEN
-    -- 5 estágios do varejo
-  ...
-END;
+1. Melhorar o tratamento de autenticação para ser mais robusto
+2. Usar `getClaims()` em vez de `getUser()` para validar o token
+3. Adicionar logs mais detalhados para debugging
+
+```text
+Mudanças:
+- Extrair e validar o JWT manualmente
+- Usar service_role para operações que precisam de acesso admin
+- Manter validação de autorização do usuário
 ```
+
+---
+
+### Fase 2: Corrigir Redirect de Confirmação de Email
+
+**Arquivo:** `src/contexts/AuthContext.tsx`
+
+1. Usar o domínio publicado fixo em vez de `window.location.origin`
+2. O domínio deve ser `https://crm.newflow.me`
+
+```text
+ANTES:
+const redirectUrl = `${window.location.origin}/`;
+
+DEPOIS:
+const redirectUrl = 'https://crm.newflow.me/';
+```
+
+---
+
+### Fase 3: Configurar Templates de Email Customizados
+
+**Opção A - Templates no Supabase Dashboard:**
+- Acessar: Supabase Dashboard > Authentication > Email Templates
+- Personalizar templates de: Confirmação, Reset de Senha, Magic Link, etc.
+- Adicionar branding NewFlow CRM
+
+**Opção B - SMTP Personalizado com Resend:**
+- Configurar Resend como SMTP provider no Supabase
+- Todos os emails de auth usarão o domínio verificado
+
+Recomendação: **Opção A** é mais simples e rápida.
+
+---
+
+## Detalhes Técnicos
+
+### Correção da Edge Function send-invitation
+
+```typescript
+// Validar token usando getClaims em vez de getUser
+const token = authHeader.replace('Bearer ', '');
+const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
+
+if (claimsError || !claims?.claims?.sub) {
+  console.error("[send-invitation] Invalid token:", claimsError);
+  return new Response(
+    JSON.stringify({ error: "Token inválido ou expirado" }),
+    { status: 401, headers: corsHeaders }
+  );
+}
+
+const userId = claims.claims.sub;
+```
+
+### Correção do AuthContext
+
+```typescript
+// Usar domínio fixo para produção
+const signUp = async (email: string, password: string, fullName: string) => {
+  try {
+    // Usar domínio publicado fixo para garantir redirecionamento correto
+    const redirectUrl = 'https://crm.newflow.me/';
+    
+    const { error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: fullName.trim(),
+        },
+      },
+    });
+    // ...
+  }
+};
+```
+
+---
+
+## Checklist de Implementação
+
+1. **Edge Function send-invitation**
+   - [ ] Atualizar para usar validação de token mais robusta
+   - [ ] Adicionar fallback com service_role para operações críticas
+   - [ ] Manter logs detalhados
+
+2. **AuthContext.tsx**
+   - [ ] Alterar `emailRedirectTo` para usar domínio fixo `https://crm.newflow.me/`
+
+3. **Templates de Email (Manual)**
+   - [ ] Acessar Supabase Dashboard
+   - [ ] Personalizar template de confirmação com branding NewFlow
+   - [ ] Personalizar template de reset de senha
+   - [ ] Configurar remetente (From) como `noreply@newflow.me` ou similar
+
+4. **Testes**
+   - [ ] Testar envio de convite
+   - [ ] Testar criação de conta e clique no link de confirmação
+   - [ ] Verificar aparência do email recebido
+
+---
+
+## Links Úteis para Configuração
+
+- **Email Templates:** https://supabase.com/dashboard/project/tiaojwumxgdnobknlyqp/auth/templates
+- **SMTP Settings:** https://supabase.com/dashboard/project/tiaojwumxgdnobknlyqp/settings/auth
+- **Edge Function Logs:** https://supabase.com/dashboard/project/tiaojwumxgdnobknlyqp/functions/send-invitation/logs
+
