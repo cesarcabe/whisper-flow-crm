@@ -26,27 +26,29 @@ serve(async (req: Request): Promise<Response> => {
 
     // Get authorization header
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      console.error("[send-invitation] No authorization header");
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.error("[send-invitation] No authorization header or invalid format");
       return new Response(
         JSON.stringify({ error: "Não autorizado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Create Supabase client with user's token
+    // Create Supabase client with user's token for RLS-protected queries
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    // Extract token and validate user
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
     if (userError || !user) {
-      console.error("[send-invitation] User error:", userError);
+      console.error("[send-invitation] Invalid token or user not found:", userError);
       return new Response(
-        JSON.stringify({ error: "Usuário não autenticado" }),
+        JSON.stringify({ error: "Token inválido ou expirado. Faça login novamente." }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
