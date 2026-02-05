@@ -44,42 +44,39 @@ export default function AcceptInvitation() {
       }
 
       try {
-        // Fetch invitation details
-        const { data, error: fetchError } = await supabase
-          .from('workspace_invitations')
-          .select('id, email, role, expires_at, workspace_id')
-          .eq('token', token)
-          .is('accepted_at', null)
-          .maybeSingle();
+        // Use edge function to validate invitation (bypasses RLS for unauthenticated users)
+        const response = await supabase.functions.invoke('validate-invitation', {
+          body: { token },
+        });
 
-        if (fetchError || !data) {
+        if (response.error) {
+          console.error('[AcceptInvitation] Edge function error:', response.error);
+          setError('Erro ao validar convite');
+          setLoading(false);
+          return;
+        }
+
+        if (response.data?.error) {
+          setError(response.data.error);
+          setLoading(false);
+          return;
+        }
+
+        if (!response.data?.valid || !response.data?.invitation) {
           setError('Convite não encontrado ou já foi utilizado');
           setLoading(false);
           return;
         }
 
-        // Check if expired
-        if (new Date(data.expires_at) < new Date()) {
-          setError('Este convite expirou');
-          setLoading(false);
-          return;
-        }
-
-        // Get workspace name
-        const { data: workspace } = await supabase
-          .from('workspaces')
-          .select('name')
-          .eq('id', data.workspace_id)
-          .single();
-
+        const inv = response.data.invitation;
         setInvitation({
-          id: data.id,
-          email: data.email,
-          role: data.role,
-          workspace_name: workspace?.name || 'Workspace',
-          expires_at: data.expires_at,
+          id: inv.id,
+          email: inv.email,
+          role: inv.role,
+          workspace_name: inv.workspace_name,
+          expires_at: inv.expires_at,
         });
-        setEmail(data.email);
+        setEmail(inv.email);
       } catch (err) {
         console.error('[AcceptInvitation] Error:', err);
         setError('Erro ao carregar convite');

@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.whatsapp-send-video]
 verify_jwt = false
+
+[functions.validate-invitation]
+verify_jwt = false
