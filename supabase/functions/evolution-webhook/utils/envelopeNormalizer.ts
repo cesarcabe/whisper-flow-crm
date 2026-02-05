@@ -24,6 +24,29 @@ export interface QuotedMessageInfo {
   fromMe: boolean;
 }
 
+export interface AdContext {
+  /** Click-to-WhatsApp Click ID */
+  ctwaClid: string | null;
+  /** Conversion source (e.g. 'ctwa', 'ig_ads') */
+  conversionSource: string | null;
+  /** Entry point app */
+  entryPointApp: string | null;
+  /** Entry point source */
+  entryPointSource: string | null;
+  /** Ad title */
+  adTitle: string | null;
+  /** Ad source ID */
+  adSourceId: string | null;
+  /** Ad media type (0=none, 1=image, 2=video) */
+  adMediaType: number | null;
+  /** Whether to show ad attribution */
+  showAdAttribution: boolean | null;
+  /** Whether automated greeting was shown */
+  automatedGreetingShown: boolean | null;
+  /** Whether this message is from an ad lead */
+  isAdLead: boolean;
+}
+
 export interface NormalizedEnvelope {
   /** JID da conversa (remoteJid) */
   conversationJid: string;
@@ -56,6 +79,9 @@ export interface NormalizedEnvelope {
 
   /** Informação da mensagem citada (se for uma resposta) */
   quotedMessage: QuotedMessageInfo | null;
+
+  /** Ad attribution context (Click-to-WhatsApp, Facebook/Instagram ads) */
+  adContext: AdContext | null;
 }
 
 /**
@@ -177,6 +203,9 @@ export function normalizeEvolutionEnvelope(
   // 10) Extrair mensagem citada (reply)
   const quotedMessage = extractQuotedMessage(message);
 
+  // 11) Extrair contexto de anúncio (Click-to-WhatsApp, FB/IG ads)
+  const adContext = extractAdContext(data, message);
+
   return {
     conversationJid: remoteJid,
     conversationType,
@@ -191,6 +220,111 @@ export function normalizeEvolutionEnvelope(
     text,
     hasMedia,
     quotedMessage,
+    adContext,
+  };
+}
+
+/**
+ * Extracts ad attribution context from the webhook payload.
+ * WhatsApp includes contextInfo with ad data when a message originates from
+ * a Click-to-WhatsApp ad (Facebook/Instagram).
+ */
+function extractAdContext(
+  data: Record<string, unknown>,
+  message: Record<string, unknown> | undefined
+): AdContext | null {
+  // contextInfo can be at different locations depending on message type
+  const extendedText = message?.extendedTextMessage as Record<string, unknown> | undefined;
+  const imageMsg = message?.imageMessage as Record<string, unknown> | undefined;
+  const videoMsg = message?.videoMessage as Record<string, unknown> | undefined;
+  const audioMsg = message?.audioMessage as Record<string, unknown> | undefined;
+  const documentMsg = message?.documentMessage as Record<string, unknown> | undefined;
+
+  // IMPORTANT: In Evolution API webhook, contextInfo is a SEPARATE field at data level,
+  // not nested inside message. Check data.contextInfo first (where CTWA data lives).
+  const contextInfo = (
+    data?.contextInfo ??
+    message?.contextInfo ??
+    extendedText?.contextInfo ??
+    imageMsg?.contextInfo ??
+    videoMsg?.contextInfo ??
+    audioMsg?.contextInfo ??
+    documentMsg?.contextInfo
+  ) as Record<string, unknown> | undefined;
+
+  // Also check for externalAdReply at message level (some Evolution API versions)
+  const externalAdReply = (
+    contextInfo?.externalAdReply ??
+    message?.externalAdReply ??
+    data?.externalAdReply
+  ) as Record<string, unknown> | undefined;
+
+  // ctwa_clid can be at data level, in contextInfo, or inside externalAdReply
+  const ctwaClid = safeString(
+    data?.ctwa_clid ??
+    data?.ctwaClid ??
+    contextInfo?.ctwa_clid ??
+    contextInfo?.ctwaClid ??
+    externalAdReply?.ctwaClid ??
+    externalAdReply?.ctwa_clid
+  );
+
+  // Conversion source / entry point
+  const conversionSource = safeString(
+    contextInfo?.conversionSource ??
+    contextInfo?.conversionData?.conversionSource ??
+    data?.conversionSource
+  );
+  const entryPointApp = safeString(
+    contextInfo?.entryPointConversionApp ??
+    contextInfo?.entryPointApp ??
+    data?.entryPointConversionApp
+  );
+  const entryPointSource = safeString(
+    contextInfo?.entryPointConversionSource ??
+    contextInfo?.entryPointSource ??
+    data?.entryPointConversionSource
+  );
+
+  // Ad reply info
+  const adTitle = safeString(
+    externalAdReply?.title ??
+    contextInfo?.adTitle
+  );
+  const adSourceId = safeString(
+    externalAdReply?.sourceId ??
+    contextInfo?.adSourceId ??
+    externalAdReply?.sourceUrl
+  );
+  const rawAdMediaType = externalAdReply?.mediaType ?? contextInfo?.adMediaType;
+  const adMediaType = typeof rawAdMediaType === 'number' ? rawAdMediaType : null;
+  const showAdAttribution = (
+    externalAdReply?.showAdAttribution ??
+    contextInfo?.showAdAttribution
+  ) as boolean | null ?? null;
+  const automatedGreetingShown = (
+    contextInfo?.automatedGreetingMessageShown ??
+    data?.automatedGreetingMessageShown
+  ) as boolean | null ?? null;
+
+  // Determine if this is an ad lead
+  const isAdLead = !!(ctwaClid || conversionSource || adTitle || adSourceId || showAdAttribution);
+
+  if (!isAdLead) {
+    return null;
+  }
+
+  return {
+    ctwaClid,
+    conversionSource,
+    entryPointApp,
+    entryPointSource,
+    adTitle,
+    adSourceId,
+    adMediaType,
+    showAdAttribution,
+    automatedGreetingShown,
+    isAdLead,
   };
 }
 
