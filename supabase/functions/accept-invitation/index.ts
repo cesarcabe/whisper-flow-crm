@@ -62,14 +62,45 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // Find invitation by token using admin client (to bypass RLS)
-    const { data: invitation, error: inviteError } = await adminClient
+    // First try to find pending invitation
+    let { data: invitation, error: inviteError } = await adminClient
       .from("workspace_invitations")
       .select("*")
       .eq("token", token)
       .is("accepted_at", null)
       .maybeSingle();
 
-    if (inviteError || !invitation) {
+    // If no pending invitation, check if it was already accepted
+    if (!invitation) {
+      const { data: acceptedInvitation } = await adminClient
+        .from("workspace_invitations")
+        .select("*, workspaces(name)")
+        .eq("token", token)
+        .not("accepted_at", "is", null)
+        .maybeSingle();
+
+      if (acceptedInvitation) {
+        // Check if user is already a member of this workspace
+        const { data: existingMember } = await adminClient
+          .from("workspace_members")
+          .select("id")
+          .eq("workspace_id", acceptedInvitation.workspace_id)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (existingMember) {
+          console.log("[accept-invitation] User already member, invitation was already accepted");
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: "Você já faz parte deste workspace!",
+              workspace: acceptedInvitation.workspaces
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
       console.error("[accept-invitation] Invitation not found:", inviteError);
       return new Response(
         JSON.stringify({ error: "Convite não encontrado ou já foi aceito" }),
