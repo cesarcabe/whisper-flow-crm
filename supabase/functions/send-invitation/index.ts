@@ -151,9 +151,9 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log("[send-invitation] Invitation created:", invitation.id);
 
-    // Build invitation URL
-    const appUrl = req.headers.get("origin") || "https://tiaojwumxgdnobknlyqp.lovableproject.com";
-    const inviteUrl = `${appUrl}/invite/${invitation.token}`;
+    // Build invitation URL - always use published domain
+    const publishedDomain = "https://crm.newflow.me";
+    const inviteUrl = `${publishedDomain}/invite/${invitation.token}`;
 
     const inviterName = inviterProfile?.full_name || inviterProfile?.email || "Um administrador";
     const workspaceName = workspace?.name || "Workspace";
