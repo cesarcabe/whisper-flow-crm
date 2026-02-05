@@ -93,7 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
-      const redirectUrl = `${window.location.origin}/`;
+      // Usar domínio publicado fixo para garantir redirecionamento correto
+      const redirectUrl = 'https://crm.newflow.me/';
       
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
