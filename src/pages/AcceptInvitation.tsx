@@ -38,6 +38,11 @@ export default function AcceptInvitation() {
   const [authLoading2, setAuthLoading2] = useState(false);
 
   useEffect(() => {
+    // Store the invite token in sessionStorage so ProtectedRoute can redirect back here
+    if (token) {
+      sessionStorage.setItem('pending_invite_token', token);
+    }
+
     const fetchInvitation = async () => {
       if (!token) {
         setError('Link de convite inválido');
@@ -125,6 +130,9 @@ export default function AcceptInvitation() {
 
       setSuccess(true);
       toast.success(response.data?.message || 'Convite aceito com sucesso!');
+      
+      // Clear the pending invite token from sessionStorage
+      sessionStorage.removeItem('pending_invite_token');
       
       // Refetch workspaces to include the new one, then redirect
       await refetchWorkspace();

@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { WorkspaceProvider, useWorkspace } from "@/contexts/WorkspaceContext";
@@ -35,6 +35,7 @@ const queryClient = new QueryClient({
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const { workspaceId, loading: workspaceLoading } = useWorkspace();
+  const location = useLocation();
 
   if (authLoading || workspaceLoading) {
     return (
@@ -49,7 +50,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   // If user has no workspace, redirect to setup
+  // But preserve the original destination if coming from invite
   if (!workspaceId) {
+    // Check if there's a pending invite in session storage
+    const pendingInvite = sessionStorage.getItem('pending_invite_token');
+    if (pendingInvite) {
+      return <Navigate to={`/invite/${pendingInvite}`} replace />;
+    }
     return <Navigate to="/setup-workspace" replace />;
   }
 
@@ -60,6 +67,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function SetupRoute({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const { workspaceId, loading: workspaceLoading } = useWorkspace();
+  const location = useLocation();
 
   if (authLoading || workspaceLoading) {
     return (
